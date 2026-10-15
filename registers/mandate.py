@@ -104,42 +104,9 @@ def componi(ws, fase, state=None, tasks_doc=None):
     # Dove si lavora: il repository che contiene il workspace, se c'e' — il codice sta li'.
     radici = activate.radici(ws)
     radice_lavoro = next((r for nome, r in radici if nome == "repository"), ws.root)
-    # La PRIMA cosa che il prompt dice non e' cosa fare: e' che sta andando. Finche' non e'
-    # depositata la presa, per la piattaforma non e' partito niente — e chi apre la pagina vede
-    # «in attesa di un esecutore» mentre il lavoro e' gia' cominciato. Questa riga e' l'unica
-    # istruzione che deve venire prima di tutte le altre.
-    occorrenza = _occorrenza_per(ws, fase)
+    # La busta (la «prima istruzione») la mette `per()`: qui c'e' solo il CORPO del prompt, cosi' la
+    # stessa busta vale per il composto, per il quaderno e per un ordine gia' congelato.
     righe = [
-        "════ PRIMA ISTRUZIONE — DICHIARA CHE STAI LAVORANDO, PRIMA DI QUALUNQUE ALTRA COSA ════",
-        f"Questa fase e' {fase} e la stai prendendo TU: deposita la presa adesso, sul registro.",
-        "",
-        f"Scrivi il file {ws.transitions_dir}/<timestamp>-<tua-corsia>.yaml con DENTRO:",
-        "",
-        f"    schema: project-console-transition/1.0",
-        f"    requested_by: <la tua corsia>",
-        f"    requested_at: '<adesso, ISO>'",
-        f"    file: {ws.state}",
-        f'    anchor: "- task_id: {fase}"',
-        f"    occurrence: {occorrenza}      # l'occorrenza di QUESTA voce nel registro",
-        f"    field: status",
-        f"    text: taken",
-        "",
-        "SE LA VOCE HA GIA' UN `released_at` (una presa precedente chiusa), azzeralo con una",
-        f"seconda richiesta sulla stessa occorrenza (`field: released_at`, `text: ''`): senza,",
-        "la fase risulta rilasciata e la pagina continua a dire «in attesa».",
-        "",
-        f"e subito dopo, nella stessa voce, due richieste: `taken_by: <la tua corsia>` e",
-        "`taken_at: '<adesso>'`. Poi fallo applicare al coordinamento:",
-        f"    python3 registers/apply_transitions.py --workspace {ws.root} --dir {ws.transitions_dir}",
-        "",
-        "Se il registro dice che la fase e' GIA' presa da un altro, FERMATI e dillo: due esecutori",
-        "sugli stessi byte sono il difetto piu' caro. Alla fine del lavoro deposita il rilascio",
-        "(`status: released` e `released_at` INSIEME): cosi' la pagina sa che hai finito.",
-        "",
-        "L'effetto che vedrai: appena la presa e' applicata, la pagina passa da «in attesa di un",
-        "esecutore» a «in corso», col tuo nome e l'ora.",
-        "══════════════════════════════════════════════════════════════════════════════════════",
-        "",
         f"Lavora in {radice_lavoro}. Sei un agente di {ruolo}: non coordinare, non dispatchare",
         "figli, non chiedere conferme.",
         "",
@@ -208,7 +175,13 @@ def componi(ws, fase, state=None, tasks_doc=None):
 
 
 def per(ws, fase, state=None):
-    """Il prompt della fase: prima il quaderno, che e' scritto a mano e vale di piu'.
+    """Il prompt della fase: la BUSTA che dichiara il lavoro davanti al corpo.
+
+    Il corpo viene dal quaderno (scritto a mano: vale di piu') o, se il quaderno tace, composto dal
+    registro. La busta e' SEMPRE la stessa e sta davanti a entrambi — e davanti anche a un ordine
+    vecchio, dove il testo era stato congelato senza: «nei prompt nuovi non vedo la prima
+    istruzione» (segnalato dall'utente) era esattamente questo, una busta che stava solo dentro il
+    composto.
 
     `state` si passa gia' caricato quando c'e': evita di rileggere un registro da 1,9 MB per ogni
     riga della pagina.
@@ -221,15 +194,79 @@ def per(ws, fase, state=None):
     dal_quaderno = activate.prompt_per(ws, fase)
     if dal_quaderno and dal_quaderno.get("text"):
         esito = {
-            "source": dal_quaderno["source"],
+            "source": f"{dal_quaderno['source']} (corpo)",
             "role": None,
             "text": dal_quaderno["text"],
             "missing": [],
         }
     else:
         esito = componi(ws, fase, state=state)
+    esito = {**esito, "text": con_busta(ws, fase, esito["text"]), "envelope": True}
     _CACHE[chiave] = esito
     return esito
+
+
+def busta(ws, fase):
+    """La PRIMA ISTRUZIONE: dichiara che il lavoro sta andando, col deposito pronto da fare.
+
+    Finche' la presa non e' applicata, per la piattaforma non e' partito niente e la pagina continua
+    a dire «in attesa di un esecutore» mentre il lavoro e' gia' cominciato — e una seconda copia
+    dello stesso prompt non trova nessun ostacolo. Per questo e' la PRIMA riga, e per questo la
+    mette il coordinatore invece di sperare che chi scrive il prompt se ne ricordi.
+    """
+    occorrenza = _occorrenza_per(ws, fase)
+    return "\n".join(
+        [
+            "════ PRIMA ISTRUZIONE — DICHIARA CHE STAI LAVORANDO, PRIMA DI QUALUNQUE ALTRA COSA ════",
+            f"Questa fase e' {fase} e la stai prendendo TU: deposita la presa adesso, sul registro.",
+            "",
+            f"Scrivi il file {ws.transitions_dir}/<timestamp>-<tua-corsia>.yaml con DENTRO:",
+            "",
+            "    schema: project-console-transition/1.0",
+            "    requested_by: <la tua corsia>",
+            "    requested_at: '<adesso, ISO>'",
+            f"    file: {ws.state}",
+            f'    anchor: "- task_id: {fase}"',
+            f"    occurrence: {occorrenza}      # l'occorrenza di QUESTA voce nel registro",
+            "    field: status",
+            "    text: taken",
+            "",
+            "SE LA VOCE HA GIA' UN released_at (una presa precedente chiusa), azzeralo con una seconda",
+            "richiesta sulla stessa occorrenza (field: released_at, text: ''): senza, la fase risulta",
+            "rilasciata e la pagina continua a dire «in attesa».",
+            "",
+            "e subito dopo, nella stessa voce, due richieste: taken_by: <la tua corsia> e",
+            "taken_at: '<adesso>'. Poi fallo applicare al coordinamento:",
+            f"    python3 registers/apply_transitions.py --workspace {ws.root} --dir {ws.transitions_dir}",
+            "",
+            "Se il registro dice che la fase e' GIA' presa da un altro, FERMATI e dillo: due esecutori",
+            "sugli stessi byte sono il difetto piu' caro. Alla fine del lavoro deposita il rilascio",
+            "(status: released e released_at INSIEME): cosi' la pagina sa che hai finito.",
+            "",
+            "L'effetto che vedrai: appena la presa e' applicata, la pagina passa da «in attesa di un",
+            "esecutore» a «in corso», col tuo nome e l'ora.",
+            "══════════════════════════════════════════════════════════════════════════════════════",
+        ]
+    )
+
+
+def con_busta(ws, fase, testo):
+    """Il testo con la busta davanti, una volta sola: se c'e' gia', non si raddoppia."""
+    corpo = str(testo or "").strip()
+    if corpo.startswith("════ PRIMA ISTRUZIONE"):
+        return corpo + "\n"
+    return busta(ws, fase) + "\n\n" + corpo + "\n"
+
+
+def senza_busta(testo):
+    """Il CORPO, tolta la busta. Serve a confrontare due prompt senza che la differenza sia
+    soltanto l'involucro (che cambia quando cambia la busta, non il mandato)."""
+    corpo = str(testo or "")
+    if corpo.startswith("════ PRIMA ISTRUZIONE"):
+        riga = corpo.find("══════════════════════════════════════")
+        if riga != -1:
+            return corpo[corpo.find("\n", riga) :].strip()
+    return corpo.strip()
 
 
 def impronta(testo):

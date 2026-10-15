@@ -796,12 +796,16 @@ def build_handler(state):
                     if congelato:
                         esito = {
                             **esito,
-                            "text": congelato["text"],
-                            "source": f"ordine {congelato['file']} (congelato)",
+                            # La busta si mette anche davanti al corpo congelato: un ordine nato
+                            # prima della busta non deve arrivare all'esecutore senza la
+                            # dichiarazione del lavoro.
+                            "text": mandate.con_busta(state.workspace, target, congelato["text"]),
+                            "source": f"ordine {congelato['file']} (corpo congelato)",
                             "order": congelato["file"],
                             "order_prompt_sha256": congelato["sha256"],
+                            # Il confronto e' fra CORPI: la busta cambia quando cambia, il mandato no.
                             "diverges_from_registry": congelato["sha256"]
-                            != mandate.impronta(esito["text"]),
+                            != mandate.impronta(mandate.senza_busta(esito["text"])),
                         }
                     return self._json(200, {"phase": target, **esito})
                 except Exception as error:  # noqa: BLE001
