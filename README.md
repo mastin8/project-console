@@ -1,102 +1,231 @@
 # Project Console
 
-Il coordinatore dei progetti: una pagina locale che legge i registri di un progetto e mostra, in
-un colpo d'occhio, **a che punto e'**, **cosa aspetta te** e **cosa si puo' far partire adesso**.
-Dove serve scrivere — rispondere a una domanda, chiudere una decisione di governo, depositare un
-ordine di lavoro — scrive passando dal lock e dalla validazione dei registri.
+Il coordinatore dei progetti: una pagina locale che legge i registri di un progetto e mostra, in un
+colpo d'occhio, **a che punto e'**, **cosa aspetta te** e **cosa si puo' far partire adesso**. Dove
+serve scrivere — rispondere a una domanda, chiudere una decisione di governo, depositare un ordine
+di lavoro — scrive passando dal lock e dalla validazione dei registri.
 
-Non conosce nessun progetto. Un **workspace** e' una cartella di dati; il coordinatore ne serve
-quanti vuoi, anche contemporaneamente, senza sapere niente di nessuno di essi.
+Non conosce nessun progetto: un **workspace** e' una cartella di dati, e il coordinatore ne serve
+quanti vuoi, anche contemporaneamente.
 
-## Avvio in trenta secondi
+Serve Python 3.11+ e PyYAML. Nessuna rete in uscita, nessun servizio esterno.
+
+---
+
+# ISTRUZIONI
+
+## In trenta secondi, per vedere com'e' fatto
 
 ```bash
 python3 scaffold.py /tmp/prova --project "Prova" --esempio   # crea un workspace d'esempio
 python3 console/server.py --workspace /tmp/prova             # http://127.0.0.1:8899
 ```
 
-Senza `--workspace` il coordinatore usa `$CONSOLE_WORKSPACE`, o la cartella corrente.
+Senza `--workspace` il coordinatore usa `$CONSOLE_WORKSPACE`, o la cartella corrente. Il workspace
+d'esempio `examples/demo` e' nel repo: `python3 console/server.py --workspace examples/demo`.
 
 ## Il primo giorno di un progetto vero
 
+Parti da un'idea e vuoi la vista accesa, coi TUOI blocchi e i TUOI nomi. Sono quattro passi.
+
+### Passo 1 — la cartella dei registri
+
 ```bash
-python3 scaffold.py /percorso/vattelappesca --project "Vattelappesca"   # la cartella dei registri
-# scrivi la mappa del lavoro in tasks.yaml e il primo prompt in PARALLEL-PROMPTS.md
-python3 registers/sync_phases.py --workspace /percorso/vattelappesca --apply   # apre le fasi
-python3 console/server.py --workspace /percorso/vattelappesca
+python3 scaffold.py /percorso/mio-progetto --project "Nome del progetto"
 ```
 
-Da li' in poi il coordinatore mostra tutto da solo: gli agenti prendono le fasi depositando una
-transizione, consegnano scrivendo un file in `reports/`, e la pagina ne ricava lo stato senza che
-nessuno lo aggiorni a mano.
+Crea i registri vuoti, i quattro ruoli degli agenti e il quaderno. Mettila **dentro il repository
+del progetto** (per esempio `.coord/`): cosi' la riga dei commit funziona e mostra quali commit
+toccano i path che dichiari.
 
-## Cosa si vede
+Accendendo subito la vista vedi il vuoto detto bene: *0 di 0 unita' accettate*, *nessuna data da
+disegnare*, *nessun prompt nel quaderno*. Non e' un errore: e' un progetto che non ha ancora
+scritto niente.
 
-1. **Il percorso nel tempo** — blocchi, unita', fasi, con le barre datate da cio' che gli artefatti
-   DICHIARANO (`published_at`) o, in mancanza, dall'mtime; e la riga dei commit del repository, con
-   i commit che toccano i path dichiarati da ogni blocco. Nessuna previsione: solo misure.
-2. **Cosa aspetta te** — le domande di un task e le decisioni di governo, con il controllo per
-   rispondere. La risposta si scrive nei registri e appende una decisione.
-3. **I prossimi prompt da eseguire** — i prompt del quaderno, raggruppati per stato d'azione
-   (da lanciare, in azione, consegna respinta, gia' consegnati) e con il testo da copiare.
-4. **Percorso per blocchi** — una scheda per blocco: unita', risultato atteso, fasi che aprono il
-   report, respinte in verifica, e i commit che toccano i path dichiarati dal blocco.
+### Passo 2 — la mappa del lavoro: `tasks.yaml`
 
-## Come si comanda
+Qui nascono i tuoi blocchi. Un blocco e' un'area del lavoro (il nome lo scegli tu: sono le schede
+in fondo alla pagina), e contiene unita'; ogni unita' attraversa le fasi del ciclo.
+
+```yaml
+units:
+- id: CAT01
+  domain: catalogo                 # <-- il nome del BLOCCO, come lo vuoi tu
+  title: "Schede prodotto con foto e prezzi"
+  deliverable: "Una scheda prodotto pubblicabile dal pannello"
+  requirement_ids: [R001]          # facoltativo
+  depends_on_units: []             # facoltativo: chi deve essere chiuso prima
+- id: ORD01
+  domain: ordini                   # <-- un altro blocco, un altro nome
+  title: "Carrello e conferma ordine"
+  deliverable: "Ordine confermato con email al cliente"
+  depends_on_units: [CAT01]        # l'unita' mostrera' «in attesa di CAT01»
+  requirement_ids: [R002]
+tasks:
+- id: CAT01A
+  unit_id: CAT01
+  kind: analysis
+  title: "Analisi: quali campi servono a una scheda"
+- id: CAT01E
+  unit_id: CAT01
+  kind: implementation
+  title: "Esecuzione: pannello e pubblicazione"
+- id: CAT01T
+  unit_id: CAT01
+  kind: independent_verification
+  title: "Verifica indipendente: campi mancanti, foto sbagliate"
+- id: CAT01R
+  unit_id: CAT01
+  kind: functional_acceptance
+  title: "Accettazione"
+```
+
+Le regole che il coordinatore usa davvero:
+
+- **il blocco e' `domain`**: nome libero, diventa la scheda in fondo alla pagina. Lo stesso
+  `domain` su piu' unita' le tiene insieme;
+- **la fase e' un `task` con `unit_id`**: e' `unit_id` a legarla all'unita' (non il prefisso
+  dell'id);
+- **l'id della fase comincia con l'id dell'unita'** (`CAT01` + `A`): serve a mostrare la lettera
+  giusta nei tastini, quindi vale la pena rispettarlo;
+- **i suffissi non devono essere A/E/T/R**: sono i tuoi. Le fasi del ciclo si dichiarano in
+  `console.yaml` (`phases:`), e l'ultima e' quella che ratifica l'unita';
+- **`kind` e' un'etichetta libera** (per convenzione `analysis`, `implementation`,
+  `independent_verification`, `functional_acceptance`), e finisce nel report che si apre cliccando;
+- **gli id sono unici** in tutto il file.
+
+### Passo 3 — aprire le fasi nel registro
+
+```bash
+python3 registers/sync_phases.py --workspace /percorso/mio-progetto --apply
+```
+
+Senza questo, il primo agente che prova a prendere una fase viene **rifiutato** («ancora non
+trovata»): `tasks.yaml` dice quali fasi esistono, ma e' `state.yaml#tasks` che ne tiene lo stato, e
+su un progetto nuovo e' vuoto. Il comando apre solo le voci mancanti, con `status: pending`, e non
+tocca quelle che esistono.
+
+Gia' da qui la vista mostra i blocchi, con le unita' «da fare» e i tastini della fase.
+
+### Passo 4 — il primo prompt: `PARALLEL-PROMPTS.md`
+
+Una sezione numerata per prompt. Perche' il coordinatore lo riconosca servono tre cose:
+
+````
+## 1 — CAT01A — DA FARE
+
+```
+Lavora in /percorso/mio-progetto. Sei un agente di esecuzione: non coordinare, non chiedere conferme.
+
+REGISTRO: in state.yaml esiste la voce di claim CAT01A. Deposita la presa in pending-transitions/
+prima del primo byte, e il rilascio alla fine.
+
+CONSEGNA: reports/CAT01A/attempt-1.yaml (verifica che NON esista) e il puntatore reports/CAT01A.yaml.
+```
+````
+
+1. **il codice di riconoscimento**: il nome della voce di claim (o dell'obbligo) nel testo, che deve
+   esistere nel registro. E' cosi' che la pagina sa a quale fase appartiene quel prompt;
+2. **la consegna**: la riga `CONSEGNA:` col file che il prompt deve pubblicare (sotto il prefisso
+   `deliverable_prefix`, per convenzione `reports/`);
+3. il **titolo scritto a mano**, che viene confrontato con la misura: se dice «fatto» e la consegna
+   non esiste, la pagina te lo segnala invece di crederci.
+
+Da qui in poi la pagina e' viva: *da lanciare* finche' nessuno prende, *in azione* quando la presa
+e' nel registro, *fatto* quando la consegna esiste, *consegna respinta* se il verdetto dice di no.
+
+### Il vocabolario degli stati
+
+Il coordinatore non indovina: conosce queste parole, e le altre le mostra come sono.
+
+| Dove | Stato | Cosa significa per la vista |
+| --- | --- | --- |
+| `state.yaml#tasks` | `accepted` | la fase e' chiusa: e' l'unico stato che CHIUDE |
+| `state.yaml#tasks` | tutto il resto | la fase e' aperta (qualunque parola tu usi) |
+| `state.yaml#tasks` | `needs_changes`, `failed` | respinta in verifica: torna a chi l'esegue |
+| `state.yaml#active_claims` | `active`, `taken`, `ready`, `pre_registered`, `active_extension` | presa viva, se `released_at` e' assente |
+
+### Cosa e' obbligatorio e cosa no
+
+| File | Obbligatorio? | A cosa serve |
+| --- | --- | --- |
+| `tasks.yaml` | si' | i blocchi, le unita', le fasi: e' la mappa |
+| `state.yaml` | si' (lo crea lo scaffold) | lo stato delle fasi e le prese vive |
+| `PARALLEL-PROMPTS.md` | per la sezione dei prompt | il lavoro da far partire |
+| `console.yaml` | no | nome, marchio, comandi di verifica, nomi dei file |
+| `questions.yaml` | no | le domande che aspettano l'utente |
+| `user_decisions.yaml` | no | le decisioni che appartengono solo all'utente |
+| `reports/` | no (lo crea lo scaffold) | le consegne e i puntatori |
+| `agents/` | no | i ruoli e la mappa degli agenti |
+| `brand/logo.png` | no | il marchio nell'intestazione |
+
+### Gli agenti
+
+I ruoli sono gia' copiati in `agents/roles/` (coordinatore, analista, esecutore, verificatore).
+Quello che personalizzi e' `agents/agents.yaml`: un ruolo per voce, con la missione e il perimetro.
+Il prompt operativo di un agente e' la somma di tre cose: il suo ruolo, il suo mandato, e il quaderno
+dove sta il lavoro da fare.
+
+La regola che tiene insieme tutto: **un agente prende la fase prima di scrivere** (una voce di claim
+nel registro, depositata come transizione) e **la rilascia quando consegna**. Senza questa regola
+due corsie lavorano sugli stessi byte e la vista mostra due titolari sulla stessa fase.
+
+## Comandi
 
 ```bash
 python3 console/server.py --workspace <progetto> [--port 8899] [--host 127.0.0.1]
 python3 scaffold.py <cartella> --project "Nome" [--esempio]
-python3 registers/sync_phases.py --workspace <progetto> [--apply]   # apre le fasi dichiarate e non ancora registrate
+python3 registers/sync_phases.py --workspace <progetto> [--apply]   # apre le fasi non ancora registrate
 python3 registers/validate_registries.py --workspace <progetto>
 python3 registers/next_prompts.py --workspace <progetto> [--json|--explain]
-python3 registers/static_view.py --workspace <progetto>          # la stessa cosa, in una pagina statica
+python3 registers/static_view.py --workspace <progetto>             # la stessa cosa, in una pagina statica
 python3 registers/apply_transitions.py --workspace <progetto> --dir <progetto>/pending-transitions
 ```
+
+## Cosa si vede, e cosa puoi fare
+
+1. **Il percorso nel tempo** — blocchi, unita', fasi, con le barre datate da cio' che gli artefatti
+   DICHIARANO (`published_at`) o, in mancanza, dall'mtime; e la riga dei commit del repository, con i
+   commit che toccano i path dichiarati da ogni blocco. Nessuna previsione: solo misure. Un progetto
+   al primo giorno resta disegnato, senza barre: «nessuna data: non ancora iniziata».
+2. **Cosa aspetta te** — le domande di un task e le decisioni di governo, col controllo per
+   rispondere. La risposta si scrive nei registri e appende una decisione.
+3. **I prossimi prompt da eseguire** — i prompt del quaderno, raggruppati per stato d'azione (da
+   lanciare, in azione, consegna respinta, gia' consegnati) e col testo da copiare.
+4. **Percorso per blocchi** — una scheda per blocco: unita', risultato atteso, fasi che aprono il
+   report, respinte in verifica, e i commit che toccano i path dichiarati dal blocco.
+
+Nell'intestazione: il marchio (dal tuo `brand/`, o un monogramma), il nome del progetto, quattro
+tastini coi conteggi — aperte, respinte, in corso, per te — e il filtro condiviso dalle due viste.
+Il tastino delle respinte filtra e atterra sulla prima fase `needs_changes`.
 
 ## Il contratto di un workspace
 
 Tutto quello che il coordinatore legge ha un nome dichiarabile in `console.yaml`; i valori
-predefiniti sono la convenzione e un workspace scritto a mano funziona senza configurazione.
+predefiniti sono la convenzione, e un workspace scritto a mano funziona senza configurazione.
 
 | Cosa | Default | A cosa serve |
 | --- | --- | --- |
+| `project` / `surface` | — | il nome in testa e il nome della vista |
 | `state.yaml` | `state.yaml` | lo stato delle fasi, le prese vive, i report |
 | `tasks.yaml` | `tasks.yaml` | i blocchi e le unita', con le fasi del ciclo |
 | `questions.yaml` | `questions.yaml` | le domande che aspettano l'utente |
 | `decisions.yaml` | `decisions.yaml` | le decisioni prese, in ordine |
-| `user_decisions.yaml` | `user_decisions.yaml` | le decisioni di governo, che appartengono all'utente |
-| `reports/` | `reports/` | le consegne: `reports/<id>/attempt-N.yaml` e il puntatore `reports/<id>.yaml` |
-| `PARALLEL-PROMPTS.md` | idem | il quaderno dei prompt, con i codici di riconoscimento |
+| `user_decisions.yaml` | idem | le decisioni di governo, che appartengono all'utente |
+| `reports/` | idem | le consegne: `reports/<id>/attempt-N.yaml` e il puntatore `reports/<id>.yaml` |
+| `PARALLEL-PROMPTS.md` | idem | il quaderno dei prompt, coi codici di riconoscimento |
 | `pending-transitions/` | idem | la coda delle scritture sui registri |
-| `brand/` | `brand/` | `logo.svg` o `logo.png`: l'intestazione li usa senza toccare codice |
+| `brand/` | idem | `logo.svg` o `logo.png`: l'intestazione li usa senza toccare codice |
 | `verify` | vuoto | i comandi di verifica del progetto, mostrati nella vista statica |
 
-Il significato dei campi, la forma di ogni registro e le regole che rendono un prompt riconoscibile
-sono in [`docs/contratto-workspace.md`](docs/contratto-workspace.md). Il modello pronto da copiare
-e' in [`templates/workspace/`](templates/workspace/).
-
-## Gli agenti
-
-Il coordinatore non esegue: mostra. Il lavoro lo fanno gli agenti, che sono chat separate a cui si
-incolla un prompt del quaderno. Perche' funzioni su un progetto qualunque servono tre cose, e sono
-tutte file:
-
-1. i **registri** (chi fa cosa, a che punto e');
-2. il **quaderno** (`PARALLEL-PROMPTS.md`), col codice di riconoscimento in ogni sezione;
-3. i **ruoli** (`agents/roles/*.md`) e la **mappa** (`agents/agents.yaml`), che dicono come lavora
-   un agente e quale perimetro ha.
-
-La regola che tiene insieme il resto: un agente prende la fase PRIMA di scrivere (una voce di claim
-nel registro), la rilascia quando consegna, e non tocca i registri con una riscrittura libera —
-deposita una transizione. Senza questa regola due corsie lavorano sugli stessi byte e nessuno se ne
-accorge. Dettagli in [`agents/README.md`](agents/README.md).
+Il significato di ogni campo, la forma di ogni registro e le regole che rendono un prompt
+riconoscibile sono in **[docs/contratto-workspace.md](docs/contratto-workspace.md)**. Il modello
+pronto da copiare e' in **[templates/workspace/](templates/workspace/)**.
 
 ## Stato
 
-Estratto il 2026-10-15 dal primo progetto che ha usato questo strumento, e reso agnostico: il
+Estratto il 2026-10-15 dal primo progetto che ha usato questo strumento e reso agnostico: il
 progetto e' diventato un workspace, i comandi di verifica una voce di configurazione, il nome e il
-marchio due caselle. La prova che funziona su altro: `examples/demo` e' un workspace creato da zero
-con lo scaffolder, e il coordinatore lo serve senza una riga di codice in piu'.
-
-Serve solo Python 3.11+ e PyYAML. Nessuna rete in uscita, nessun servizio esterno.
+marchio due caselle. Le prove che funziona su altro sono nel repo: `examples/demo` creato dallo
+scaffolder, e due progetti veri (uno con blocchi `catalogo`/`ordini`) usati per scrivere queste
+istruzioni.
