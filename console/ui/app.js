@@ -1462,14 +1462,22 @@ function unitRow(unit) {
             { class: "intervene" },
             stalled.map((phase) => {
               const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });
-              const relaunch = h("button", {
-                type: "button",
-                class: phase.while_unit_accepted ? "linkish" : "ghost",
-                text: phase.while_unit_accepted
-                  ? "Prepara comunque il rilancio"
-                  : "Prepara il rilancio",
-                onclick: () => draft(phase, relaunch, message),
-              });
+              // Se l'ordine c'e' gia', il pulsante non chiede di depositarlo di nuovo: prenota la
+              // fase e riusa quell'ordine. Prima offriva un rilancio che il server rifiutava, e la
+              // pagina rispondeva «Non depositato» senza dire cosa fare.
+              const stato = phaseState(phase.id);
+              const rilascio = stato.claim
+                ? activationButton(phase.id, "release", "Rilascia la prenotazione", message, false)
+                : stato.orders.length
+                  ? activationButton(phase.id, "activate", "Prenota la fase", message, false)
+                  : h("button", {
+                      type: "button",
+                      class: phase.while_unit_accepted ? "linkish" : "ghost",
+                      text: phase.while_unit_accepted
+                        ? "Prepara comunque il rilancio"
+                        : "Prepara il rilancio",
+                      onclick: () => draft(phase, rilascio, message),
+                    });
               const acceptance = unit.phases.find(
                 (p) => p.id === phase.while_unit_accepted
               );
@@ -1485,9 +1493,9 @@ function unitRow(unit) {
                           acceptance ? acceptance.report : ""
                         ),
                     }),
-                    relaunch,
+                    rilascio,
                   ]
-                : [relaunch];
+                : [rilascio];
               return h("div", { class: "stall" }, [
                 h("p", { class: "why" }, [
                   h("b", {
@@ -1504,6 +1512,23 @@ function unitRow(unit) {
                       ),
                     ])
                   : null,
+                stato.claim
+                  ? h("p", { class: "why" }, [
+                      h("b", { text: "Prenotata, in attesa di un esecutore: " }),
+                      document.createTextNode(
+                        `ordine ${stato.orders[stato.orders.length - 1] || "—"}${
+                          stato.claim.since ? ` · dal ${stato.claim.since}` : ""
+                        }. Nessuno la sta eseguendo: chi la prende la porta a «taken» col proprio nome.`
+                      ),
+                    ])
+                  : stato.orders.length
+                    ? h("p", { class: "why" }, [
+                        h("b", { text: "Ordine gia' depositato: " }),
+                        document.createTextNode(
+                          `${stato.orders[stato.orders.length - 1]} — «Prenota la fase» la riserva e riusa questo ordine, senza depositarne un secondo.`
+                        ),
+                      ])
+                    : null,
                 h("div", { class: "row" }, [...actions, message]),
               ]);
             })
@@ -1536,6 +1561,19 @@ function phaseButton(phase) {
   );
 }
 
+/* Lo stato di attivazione di una fase, dal carico dello stato: serve a non offrire un pulsante che
+   verrebbe rifiutato. Tre casi, tre pulsanti diversi — e nessuno dei tre e' un vicolo cieco:
+   gia' prenotata (si rilascia), respinta con ordine pronto (si prenota e si usa quello),
+   respinta senza ordine (si prepara l'ordine). */
+function phaseState(phaseId) {
+  const tutte = [...((snapshot && snapshot.activatable) || []), ...((snapshot && snapshot.activated) || [])];
+  const voce = tutte.find((v) => v.phase === phaseId);
+  if (!voce) return { orders: [], claim: null };
+  const ordini = voce.orders || (voce.order ? [voce.order] : []);
+  const prenotata = ["pre_registered", "ready"].includes(voce.status);
+  return { orders: ordini, claim: prenotata ? voce : null };
+}
+
 async function draft(phase, button, message) {
   button.disabled = true;
   message.className = "msg show pending";
@@ -1547,12 +1585,28 @@ async function draft(phase, button, message) {
       body: JSON.stringify({ task_id: phase.id }),
     });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || `errore ${response.status}`);
+    if (!response.ok) {
+      // Tre modi di non riuscire, e ognuno dice cosa fare. Prima qui c'era «Non depositato» e
+      // basta: un vicolo cieco, e l'utente non poteva fare niente (segnalato il 2026-10-15).
+      if (payload.code === "not_stalled") {
+        message.className = "msg show err";
+        message.textContent = `${payload.task_id} ora e' «${payload.current_status}» nel registro: non e' piu' una fase respinta, quindi non c'e' niente da rilanciare. Aggiorno la pagina.`;
+        setTimeout(load, 1500);
+        return;
+      }
+      if (/ordine aperto/i.test(payload.error || "")) {
+        const file = (payload.error.match(/[\w.\-T]+-[\w.\-]+-relaunch\.yaml/) || [])[0] || "in dispatch-queue/";
+        message.className = "msg show err";
+        message.textContent = `L'ordine per ${phase.id} esiste GIA': ${file}. Un ordine per fase, finche' quello non e' chiuso — non ne deposito un secondo. Per farla partire adesso usa «Attiva» in «Cosa puoi attivare»: prenota la fase e riusa questo ordine.`;
+        return;
+      }
+      throw new Error(payload.error || `errore ${response.status}`);
+    }
     message.className = "msg show ok";
     message.textContent = `Ordine depositato in ${payload.file}: chi riprende la fase lo trova su disco, con l'esito che l'ha respinta e la revisione congelata.`;
   } catch (error) {
     message.className = "msg show err";
-    message.textContent = `Non depositato: ${error.message}`;
+    message.textContent = `Non depositato: ${error.message}. Se il problema resta, la fase si puo' attivare da «Cosa puoi attivare» qui in alto.`;
   } finally {
     button.disabled = false;
   }

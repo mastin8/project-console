@@ -74,6 +74,37 @@ def fasi(tasks_doc):
     ]
 
 
+def ordini_aperti(ws):
+    """Gli ordini depositati e non ancora chiusi, per fase.
+
+    Riconosce i due schemi che convivono nella coda (`project-console-work-order/1.0` e
+    `binche.ux-dispatch-order/1.0`, il rilancio di una fase respinta): chi legge un ordine non deve
+    sapere da quale porta e' entrato.
+
+    Serve a una cosa sola: NON depositarne un secondo. La pagina poteva chiedere un rilancio per una
+    fase che aveva gia' il suo ordine, e l'unica risposta era «Non depositato» — un vicolo cieco,
+    segnalato dall'utente.
+    """
+    fuori = {}
+    coda = ws.path("dispatch-queue")
+    if not coda.is_dir():
+        return fuori
+    for percorso in sorted(coda.glob("*.yaml")):
+        try:
+            documento = yaml.safe_load(percorso.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError:
+            continue
+        if not isinstance(documento, dict):
+            continue
+        fase = documento.get("code") or documento.get("task_id")
+        if not fase:
+            continue
+        if documento.get("fulfilled_status") or documento.get("superseded_by") or documento.get("done_at"):
+            continue
+        fuori.setdefault(str(fase), []).append(str(percorso.relative_to(ws.root)))
+    return fuori
+
+
 def attivabili(ws, state=None, tasks_doc=None):
     """Cosa si puo' far partire adesso, e perche' — misurato, non indovinato.
 
@@ -84,6 +115,7 @@ def attivabili(ws, state=None, tasks_doc=None):
     tasks_doc = tasks_doc if tasks_doc is not None else (yaml.safe_load(ws.path(ws.tasks).read_text(encoding="utf-8")) or {})
     registrate = state.get("tasks") or {}
     vive = prese(state)
+    ordini = ordini_aperti(ws)
     unita = {str(u.get("id")): u for u in tasks_doc.get("units") or [] if u.get("id")}
     accettate = {
         uid
@@ -116,6 +148,9 @@ def attivabili(ws, state=None, tasks_doc=None):
                 "status": stato,
                 "rework": stato in STALLED,
                 "waiting_on": attese,
+                # Se un ordine c'e' gia', la pagina lo mostra invece di offrire un pulsante che
+                # verrebbe rifiutato.
+                "orders": ordini.get(fase, []),
                 # Il file di consegna e' il PROSSIMO tentativo, non sempre il primo: un rifacimento
                 # che chiedesse `attempt-1` chiederebbe di riscrivere un artefatto consegnato.
                 "deliverable": f"{ws.deliverable_prefix}{fase}/attempt-{prossimo_tentativo(state, fase)}.yaml",
@@ -315,11 +350,16 @@ def attiva(ws, fase, dry_run=False):
             )
         raise apply_transitions.TransitionError(f"fase non attivabile o inesistente: {fase}")
     ordine = costruisci_ordine(ws, voce, state, prompt_per(ws, fase))
-    percorso = _order_path(ws, fase)
+    # Un ordine per fase: se ce n'e' gia' uno aperto si usa QUELLO, non se ne scrive un secondo.
+    esistenti = voce.get("orders") or []
+    percorso = (ws.root / esistenti[-1]) if esistenti else _order_path(ws, fase)
     if dry_run:
         return {"order": str(percorso), "order_body": ordine, "applied": []}
-    percorso.parent.mkdir(parents=True, exist_ok=True)
-    percorso.write_text(yaml.safe_dump(ordine, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    if not esistenti:
+        percorso.parent.mkdir(parents=True, exist_ok=True)
+        percorso.write_text(
+            yaml.safe_dump(ordine, allow_unicode=True, sort_keys=False), encoding="utf-8"
+        )
     ancora, occorrenza = _ultima_ancora(state)
     richiesta = {
         "schema": apply_transitions.SCHEMA,
@@ -344,8 +384,10 @@ def attiva(ws, fase, dry_run=False):
     except Exception:
         # Un ordine senza riserva e' un ordine che qualcun altro puo' raccogliere mentre la fase
         # resta libera: si toglie invece di lasciarlo sul disco (misurato al primo giro, quando un
-        # ancora ambigua ha lasciato un ordine orfano).
-        percorso.unlink(missing_ok=True)
+        # ancora ambigua ha lasciato un ordine orfano). Se l'ordine c'era GIA' — un rilancio
+        # depositato prima — non si tocca: non e' mio.
+        if not esistenti:
+            percorso.unlink(missing_ok=True)
         raise
     return {
         "order": str(percorso.relative_to(ws.root)),
