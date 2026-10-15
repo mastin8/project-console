@@ -195,6 +195,9 @@ strumenti: pulsanti che falliscono, nessun modo di far partire una fase. E' succ
 Il rimedio e' un **inoltro**, non una copia: il vecchio file diventa dieci righe che chiamano il
 coordinatore nuovo sul proprio workspace.
 
+Il modello pronto e' **[templates/entrypoint-forward.py](templates/entrypoint-forward.py)**: si
+copia al posto del vecchio comando e si cambia una riga (`CONSOLE_PATH`).
+
 ```python
 CONSOLE = Path("/percorso/project-console")
 WORKSPACE = Path(__file__).resolve().parents[1]
