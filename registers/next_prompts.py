@@ -43,7 +43,7 @@ import html
 import json
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -209,12 +209,51 @@ def deliverables_of(section):
     return out
 
 
+def _momento(valore):
+    """Una data del registro, normalizzata in UTC. `None` se non e' leggibile."""
+    if isinstance(valore, datetime):
+        return valore.astimezone(timezone.utc) if valore.tzinfo else valore.replace(tzinfo=timezone.utc)
+    testo = str(valore or "").strip().strip("'\"")
+    if not testo:
+        return None
+    for candidato in (testo, testo.replace(" ", "T", 1)):
+        try:
+            momento = datetime.fromisoformat(candidato)
+        except ValueError:
+            continue
+        return momento.astimezone(timezone.utc) if momento.tzinfo else momento.replace(tzinfo=timezone.utc)
+    return None
+
+
+def _quando(voce):
+    return _momento(voce.get("taken_at")) or _momento(voce.get("registered_at")) or _momento(voce.get("released_at"))
+
+
+def _rilasciata(voce):
+    # `released_at: ''` NON e' un rilascio: e' il modo in cui il registro azzera un campo sporco.
+    return bool(str(voce.get("released_at") or "").strip())
+
+
 def _latest_claim(state, claim_id):
-    """L'ULTIMA voce di claim con quell'id: il registro appende, e l'ultima e' quella viva."""
+    """La voce di claim VIVA con quell'id, o la piu' recente se nessuna e' viva.
+
+    L'ordine nel file NON e' cronologico: misurato il 2026-10-15 su 48 fasi con piu' voci, 18
+    avevano la piu' nuova in testa e 10 in fondo agli altri. Prendere l'ultima scritta — com'era
+    prima — leggeva lo stato di una presa vecchia, e poteva dire «da lanciare» di una fase che
+    qualcuno stava eseguendo. Si sceglie per DATA, e a parita' vince una presa viva.
+    """
     claims = [c for c in (state.get("active_claims") or []) if c.get("task_id") == claim_id]
     if claims:
-        claim = claims[-1]
-        live = claim.get("status") in LIVE_STATUSES and not claim.get("released_at")
+        vive = [
+            c for c in claims if c.get("status") in LIVE_STATUSES and not _rilasciata(c)
+        ]
+        candidate = vive or claims
+
+        def chiave(voce):
+            return _quando(voce) or datetime.min.replace(tzinfo=timezone.utc)
+
+        claim = max(candidate, key=chiave)
+        live = claim in vive
         owner = claim.get("taken_by") or claim.get("owner_agent") or claim.get("owner")
         return {
             "found": True,
