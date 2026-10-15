@@ -41,6 +41,7 @@ sys.path.insert(0, str(ROOT))
 
 import apply_transitions  # noqa: E402
 import activate  # noqa: E402 - attivare: riserva la fase e deposita l'ordine
+import handoff  # noqa: E402 - cosa c'e' da fare dopo: il testimone lasciato da chi ha finito
 import next_prompts  # noqa: E402 - una sola implementazione della regola, condivisa con STATUS.html
 import timeline  # noqa: E402 - la linea del tempo, con le date dichiarate dagli artefatti
 from workspace import Workspace  # noqa: E402 - il contratto dei nomi: qui non c'e' nessun progetto
@@ -285,6 +286,27 @@ class ReviewState:
             # Cosa si puo' far partire adesso: e' l'input che manca quando non ci sono domande,
             # decisioni o prompt da lanciare. Il calcolo sta in `registers/activate.py`.
             "activatable": activate.attivabili(self.workspace, state, tasks_doc),
+            # Cosa c'e' da fare dopo: le direzioni che chi ha finito ha GIA' lasciato nei report,
+            # e chi invece non le ha lasciate. Sta qui perche' la pagina non l'ha mai mostrato e
+            # l'unico modo di saperlo era leggere i report a mano.
+            "handoff": {
+                "declarations": [
+                    {
+                        "phase": voce["phase"],
+                        "unit": voce["unit"],
+                        "block": voce["block"],
+                        "status": voce["status"],
+                        "verdict": voce["verdict"],
+                        "source": voce["source"],
+                        "when": voce["when"],
+                        "unit_open": voce["unit_open"],
+                        "items": voce["items"],
+                    }
+                    for voce in handoff.dichiarazioni(self.workspace, state, tasks_doc)
+                    if voce["items"]
+                ],
+                "gaps": handoff.lacune(self.workspace, state),
+            },
             "activated": [
                 {
                     "phase": fase,
@@ -810,6 +832,23 @@ def build_handler(state):
                 except Exception as error:  # noqa: BLE001
                     return self._json(500, {"error": str(error)})
                 return self._json(200, {"ok": True, "action": azione, "target": target, **esito})
+            if route == "/api/handoff":
+                length = int(self.headers.get("Content-Length") or 0)
+                try:
+                    payload = json.loads(self.rfile.read(length) or b"{}")
+                except json.JSONDecodeError as error:
+                    return self._json(400, {"error": f"JSON non valido: {error}"})
+                target = str(payload.get("target") or "").strip()
+                testo = str(payload.get("note") or "").strip()
+                if not target or not testo:
+                    return self._json(400, {"error": "servono target e note: quale fase, e cosa fare dopo"})
+                try:
+                    esito = handoff.scrivi(state.workspace, target, testo)
+                except apply_transitions.TransitionError as error:
+                    return self._json(409, {"error": str(error)})
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
+                return self._json(200, {"ok": True, **esito})
             if route == "/api/decision":
                 length = int(self.headers.get("Content-Length") or 0)
                 try:

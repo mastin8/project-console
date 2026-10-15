@@ -790,6 +790,11 @@ function renderActivation(data) {
   if (attivate.length) {
     parti.push(activationGroup("Attivate, in attesa di un esecutore", "warn", attivate, true));
   }
+  // Il testimone: cosa hanno lasciato scritto quelli che hanno finito. Era nei report da giorni e
+  // la pagina non l'ha mai mostrato.
+  const dopo = (data.handoff && data.handoff.declarations) || [];
+  const lacune = (data.handoff && data.handoff.gaps) || [];
+  if (dopo.length || lacune.length) parti.push(handoffGroup(dopo, lacune));
   const rifare = aperte.filter((voce) => voce.rework);
   const fare = aperte.filter((voce) => !voce.rework);
   if (rifare.length) parti.push(activationGroup("Da rifare: respinte in verifica", "bad", rifare));
@@ -818,6 +823,129 @@ function renderActivation(data) {
     );
   }
   box.replaceChildren(...parti);
+}
+
+/* Cosa c'e' da fare dopo: le dichiarazioni testuali di chi ha consegnato, e la misura di chi non
+   l'ha lasciata. Il testo si mostra verbatim — e' quello che ha scritto chi ha finito il lavoro,
+   ed e' l'informazione piu' affidabile che esista su cosa fare adesso. */
+function handoffGroup(dichiarazioni, lacune) {
+  const aperte = lacune.filter((voce) => voce.unit_open);
+  const head = h("p", { class: "actgroup accent" }, [
+    h("b", { text: "Cosa c'e' da fare dopo" }),
+    h("span", {
+      class: "actcount",
+      text: `${dichiarazioni.length} dichiarate${aperte.length ? ` · ${aperte.length} consegne senza direzione` : ""}`,
+    }),
+  ]);
+  const voci = dichiarazioni.slice(0, 12).map(handoffRow);
+  const resto = dichiarazioni.slice(12);
+  if (resto.length) {
+    voci.push(
+      h("details", { class: "actbox" }, [
+        h("summary", { class: "acthead", text: `le altre ${resto.length} dichiarazioni` }),
+        ...resto.map(handoffRow),
+      ])
+    );
+  }
+  const corpo = [head, ...voci];
+  if (lacune.length) {
+    corpo.push(
+      h("details", { class: "actbox" }, [
+        h("summary", { class: "acthead" }, [
+          h("b", { text: `Consegne senza direzione: ${lacune.length}` }),
+          document.createTextNode(
+            aperte.length
+              ? ` — ${aperte.length} su unita' ancora aperte (${aperte.map((v) => v.phase).join(", ")}). Chi finisce deve lasciare cosa fare dopo: senza, il lavoro si ferma al primo che apre la pagina.`
+              : " — tutte su unita' gia' chiuse."
+          ),
+        ]),
+        ...(aperte.length ? aperte : lacune).slice(0, 12).map(handoffGapRow),
+      ])
+    );
+  }
+  return h("div", { class: "actbox" }, corpo);
+}
+
+function handoffRow(voce) {
+  const riga = h("div", { class: "actrow handoff" });
+  const testo = h("div", { class: "acttext" });
+  testo.append(h("code", { class: "actcode", text: voce.phase }));
+  testo.append(
+    document.createTextNode(
+      ` ${[voce.block, voce.status, voce.when, voce.unit_open ? "unita' aperta" : "unita' chiusa"]
+        .filter(Boolean)
+        .join(" · ")}`
+    )
+  );
+  voce.items.forEach((item) => testo.append(h("div", { class: "actquote", text: item.text })));
+  riga.append(testo);
+  const azioni = h("div", { class: "actactions" });
+  const apri = h("button", {
+    type: "button",
+    class: "actbtn release",
+    text: "Apri il report",
+    title: voce.source,
+  });
+  apri.addEventListener("click", () => openReportPath(`${voce.phase} — cosa c'e' da fare dopo`, voce.source));
+  azioni.append(apri);
+  riga.append(azioni);
+  return riga;
+}
+
+/* La lacuna si puo' chiudere da qui: chi ha finito scrive cosa fare dopo in dieci secondi, senza
+   aprire un YAML. La nota va nel registro, con la coda di sempre. */
+function handoffGapRow(voce) {
+  const riga = h("div", { class: "actrow waiting" });
+  const testo = h("div", { class: "acttext" });
+  testo.append(h("code", { class: "actcode", text: voce.phase }));
+  testo.append(
+    document.createTextNode(
+      ` ${[voce.block, voce.status, voce.when, voce.unit_open ? "unita' aperta" : "unita' chiusa"]
+        .filter(Boolean)
+        .join(" · ")}`
+    )
+  );
+  testo.append(h("div", { class: "actmeta", text: `consegna: ${voce.source} — nessuna direzione dichiarata` }));
+  riga.append(testo);
+  const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });
+  const campo = h("textarea", {
+    class: "actnote",
+    rows: "2",
+    placeholder: "Cosa c'e' da fare dopo su questa fase…",
+  });
+  const salva = h("button", { type: "button", class: "actbtn", text: "Lascia le istruzioni" });
+  salva.addEventListener("click", async () => {
+    const note = campo.value.trim();
+    if (!note) {
+      message.className = "msg show err";
+      message.textContent = "scrivi cosa fare dopo: senza testo non registro niente.";
+      campo.focus();
+      return;
+    }
+    salva.disabled = true;
+    message.className = "msg show pending";
+    message.textContent = "scrivo…";
+    try {
+      const response = await fetch("/api/handoff", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target: voce.phase, note }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || `errore ${response.status}`);
+      message.className = "msg show ok";
+      message.textContent = `scritto in ${payload.applied}: adesso chi apre la pagina lo vede.`;
+      setTimeout(load, 1600);
+    } catch (error) {
+      message.className = "msg show err";
+      message.textContent = `non scritto: ${error.message}`;
+      salva.disabled = false;
+    }
+  });
+  const azioni = h("div", { class: "actactions" }, [salva]);
+  const blocco = h("div", { class: "actnote-box" }, [campo]);
+  riga.append(azioni, blocco, message);
+  return riga;
 }
 
 function activationGroup(titolo, tono, voci, rilasciabili) {

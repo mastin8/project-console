@@ -361,6 +361,14 @@ details[open] > .acthead::before{content:"▾ "}
   .actbtn.release:not(:disabled):hover{background:var(--surface-2);color:var(--ink)}
 }
 .actrow .msg{margin:0;grid-column:1 / -1}
+.actrow.handoff{grid-template-columns:minmax(0,1fr) auto}
+.actquote{margin-top:var(--s2);padding-left:var(--s3);border-left:1px solid var(--line);
+  color:var(--ink-2);font-size:13px;max-width:var(--measure);text-wrap:pretty}
+.actnote-box{grid-column:1 / -1}
+.actnote{width:100%;min-height:52px;padding:var(--s2) var(--s3);border:1px solid var(--line-strong);
+  border-radius:var(--r-sm);background:var(--surface);color:var(--ink);font:inherit;font-size:13px;
+  margin-top:var(--s2)}
+.actnote::placeholder{color:var(--ink-3)}
 
 /* ------------------------------------------------------------ adattamento */
 @media (max-width: 720px){
