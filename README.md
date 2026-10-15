@@ -185,6 +185,26 @@ python3 registers/static_view.py --workspace <progetto>             # la stessa 
 python3 registers/apply_transitions.py --workspace <progetto> --dir <progetto>/pending-transitions
 ```
 
+## Se un progetto ha gia' un punto d'ingresso suo
+
+Capita che un progetto abbia imparato un comando proprio — per esempio
+`python3 docs/ux-context-pack/review/server.py` — e che quel comando serva una copia vecchia del
+coordinatore. Due copie divergono, e chi apre quella vecchia si trova un'interfaccia senza gli
+strumenti: pulsanti che falliscono, nessun modo di far partire una fase. E' successo il 2026-10-15.
+
+Il rimedio e' un **inoltro**, non una copia: il vecchio file diventa dieci righe che chiamano il
+coordinatore nuovo sul proprio workspace.
+
+```python
+CONSOLE = Path("/percorso/project-console")
+WORKSPACE = Path(__file__).resolve().parents[1]
+subprocess.call([sys.executable, str(CONSOLE / "console" / "server.py"),
+                 "--workspace", str(WORKSPACE), *sys.argv[1:]])
+```
+
+Cosi' il comando che si e' imparato continua a funzionare, la pagina e' una sola, e il codice non
+esiste in due posti.
+
 ## Cosa si vede, e cosa puoi fare
 
 0. **Cosa puoi attivare** — l'input, e la prima cosa in pagina: le fasi che si possono far partire
