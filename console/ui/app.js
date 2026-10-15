@@ -113,6 +113,8 @@ function render(data) {
   renderQuestions(data.questions, data.decisions);
   renderNextPrompts(data.next_prompts);
   renderActivation(data);
+  renderTestimone(data);
+  mostraPagina();
   renderClaims(data.claims);
   renderAnswered(data.answered);
   renderBlocks();
@@ -575,12 +577,19 @@ function promptCard(prompt) {
           document.createTextNode(prompt.notes.join("; ")),
         ])
       : null,
+    h("div", { class: "prow" }, [
+      h("button", {
+        type: "button",
+        class: "ghost",
+        text: "Leggi il prompt",
+        onclick: () => apriTesto(`${prompt.anchor || "§" + prompt.number} — il prompt`, prompt.prompt, { copia: true }),
+      }),
+      copy,
+      ...attiva,
+      message,
+    ]),
     prompt.prompt
-      ? h("details", {}, [
-          h("summary", { text: "il testo del prompt" }),
-          h("pre", { text: prompt.prompt }),
-          h("div", { class: "prow" }, [copy, ...attiva, message]),
-        ])
+      ? null
       : h("p", {
           class: "pmeta",
           text: "testo non estraibile dal quaderno: apri la sezione nel file.",
@@ -767,6 +776,72 @@ function renderAnswered(answered) {
 }
 
 /* ------------------------------------------------------------- attivazione */
+/* PAGINE: intestazione e tastini restano su tutte; il contenuto cambia. La coda e' la pagina che si
+   guarda tornando — corta, ordinata per leva, un pulsante per riga; il testo lungo va nel dialogo. */
+const PAGINE = {
+  "/": ["adesso", "Adesso"],
+  "/tempo": ["tempo", "Tempo"],
+  "/testimone": ["testimone", "Testimone"],
+  "/prompt": ["prompt", "Prompt"],
+  "/percorso": ["percorso", "Percorso"],
+};
+
+function paginaCorrente() {
+  const percorso = (location.pathname.replace(/\/+$/, "") || "/").toLowerCase();
+  return (PAGINE[percorso] || PAGINE["/"])[0];
+}
+
+function mostraPagina() {
+  const pagina = paginaCorrente();
+  document.body.dataset.page = pagina;
+  document.querySelectorAll(".pagenav a").forEach((link) => {
+    if (link.dataset.nav === pagina) link.setAttribute("aria-current", "page");
+    else link.removeAttribute("aria-current");
+  });
+  const trovata = Object.keys(PAGINE).find((chiave) => PAGINE[chiave][0] === pagina);
+  const nome = (PAGINE[trovata] || [])[1] || "";
+  const progetto = (consoleConfig && consoleConfig.project) || "";
+  document.title = [progetto, nome].filter(Boolean).join(" · ");
+}
+
+/* I testi lunghi (prompt, dichiarazioni, report) vivono in un dialogo: la pagina resta una lista di
+   righe, e il testo e' a un clic con «Copia» accanto. */
+function apriTesto(titolo, testo, opzioni = {}) {
+  const dialog = $("#report-dialog");
+  $("#report-title").textContent = titolo;
+  $("#report-body").textContent = testo || "—";
+  let azioni = $("#report-actions");
+  if (!azioni) {
+    azioni = h("div", { id: "report-actions", class: "row" });
+    dialog.insertBefore(azioni, $("#report-body"));
+  }
+  azioni.replaceChildren();
+  if (opzioni.copia) {
+    const esito = h("span", { class: "msg", role: "status", "aria-live": "polite" });
+    const copia = h("button", { type: "button", class: "ghost", text: "Copia" });
+    copia.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(testo || "");
+        esito.className = "msg show ok";
+        esito.textContent = "copiato: incollalo come primo messaggio di una chat nuova.";
+      } catch (error) {
+        esito.className = "msg show err";
+        esito.textContent = `non copiato (${error.message}): seleziona il testo e copialo a mano.`;
+      }
+    });
+    azioni.append(copia, esito);
+  }
+  if (!dialog.open) dialog.showModal();
+}
+
+/* Quante unita' ferma una fase: e' la LEVA, ed e' il criterio con cui si ordina la coda. */
+function leva(fase) {
+  const unita = ((snapshot && snapshot.blocks) || [])
+    .flatMap((blocco) => blocco.units)
+    .find((voce) => voce.id === fase || (voce.phases || []).some((p) => p.id === fase));
+  return (unita && unita.blocked) || 0;
+}
+
 /* Il campo che manca quando la pagina non ha niente da chiedere: far partire una fase. Attivare
    scrive l'ordine e riserva la fase; non avvia nessun agente, e la pagina non lo finge. */
 function renderActivation(data) {
@@ -787,18 +862,28 @@ function renderActivation(data) {
     .filter(Boolean)
     .join(" · ");
   const parti = [];
-  if (attivate.length) {
-    parti.push(activationGroup("Attivate, in attesa di un esecutore", "warn", attivate, true));
-  }
-  // Il testimone: cosa hanno lasciato scritto quelli che hanno finito. Era nei report da giorni e
-  // la pagina non l'ha mai mostrato.
-  const dopo = (data.handoff && data.handoff.declarations) || [];
-  const lacune = (data.handoff && data.handoff.gaps) || [];
-  if (dopo.length || lacune.length) parti.push(handoffGroup(dopo, lacune));
+  // L'ordine della coda e' la LEVA: prima cio' che sblocca piu' unita'. E' il motivo per cui questa
+  // pagina e' corta — non si legge tutto per decidere, si guarda la prima riga.
   const rifare = aperte.filter((voce) => voce.rework);
   const fare = aperte.filter((voce) => !voce.rework);
-  if (rifare.length) parti.push(activationGroup("Da rifare: respinte in verifica", "bad", rifare));
-  if (fare.length) parti.push(activationGroup("Da fare: nessuna presa viva", "accent", fare));
+  const perLeva = (elenco) => elenco.slice().sort((a, b) => leva(b.phase) - leva(a.phase));
+  if (rifare.length) parti.push(activationGroup("Da rifare: respinte in verifica", "bad", perLeva(rifare)));
+  if (fare.length) parti.push(activationGroup("Da attivare", "accent", perLeva(fare)));
+  if (attivate.length) {
+    // Senza `apriPrompt`: la riga resta una riga. Il prompt si COPIA in un clic (o si legge nel
+    // dialogo), invece di stare in linea: 1.500-2.700 caratteri per riga erano il muro.
+    parti.push(activationGroup("In attesa di un esecutore", "warn", attivate, true, false));
+  }
+  const mancanti = ((data.handoff && data.handoff.gaps) || []).filter((voce) => voce.unit_open);
+  if (mancanti.length) {
+    const riga = h("p", { class: "actgroup warn" }, [
+      h("b", { text: `${mancanti.length} consegne senza direzione` }),
+      document.createTextNode(" — chi ha finito non ha lasciato cosa fare dopo: si scrivono in "),
+      h("a", { class: "dlink", href: "/testimone", text: "Testimone" }),
+      document.createTextNode("."),
+    ]);
+    parti.push(riga);
+  }
   if (attese.length) {
     parti.push(
       h("details", { class: "actbox" }, [
@@ -825,9 +910,56 @@ function renderActivation(data) {
   box.replaceChildren(...parti);
 }
 
-/* Cosa c'e' da fare dopo: le dichiarazioni testuali di chi ha consegnato, e la misura di chi non
-   l'ha lasciata. Il testo si mostra verbatim — e' quello che ha scritto chi ha finito il lavoro,
-   ed e' l'informazione piu' affidabile che esista su cosa fare adesso. */
+/* LA PAGINA TESTIMONE: le dichiarazioni di chi ha consegnato, e chi non le ha lasciate. E' un
+   corpus (202 voci sul progetto di origine), quindi ha filtro e ricerca, il testo CHIUSO, e le
+   lacune col campo per scriverle. */
+let filtroTestimone = "aperte";
+let cercaTestimone = "";
+
+function renderTestimone(data) {
+  const box = $("#testimone");
+  const count = $("#testimone-count");
+  if (!box || !count) return;
+  const dichiarazioni = (data.handoff && data.handoff.declarations) || [];
+  const lacune = (data.handoff && data.handoff.gaps) || [];
+  count.textContent = `${dichiarazioni.length} dichiarate · ${lacune.length} senza direzione`;
+  if (filtroTestimone === "lacune") {
+    const aperte = lacune.filter((voce) => voce.unit_open);
+    box.replaceChildren(
+      h("p", { class: "actgroup bad" }, [
+        h("b", { text: `Consegne senza direzione: ${lacune.length}` }),
+        document.createTextNode(
+          aperte.length
+            ? ` — ${aperte.length} su unita' ancora aperte. Chi finisce deve lasciare cosa fare dopo: senza, il lavoro si ferma al primo che apre la pagina.`
+            : " — tutte su unita' gia' chiuse."
+        ),
+      ]),
+      ...(aperte.length ? aperte : lacune).map(handoffGapRow)
+    );
+    return;
+  }
+  const cerca = cercaTestimone.trim().toLowerCase();
+  let voci = dichiarazioni;
+  if (filtroTestimone === "aperte") voci = voci.filter((voce) => voce.unit_open);
+  if (cerca) {
+    voci = voci.filter(
+      (voce) =>
+        voce.phase.toLowerCase().includes(cerca) ||
+        (voce.items || []).some((item) => item.text.toLowerCase().includes(cerca))
+    );
+  }
+  count.textContent = `${voci.length} di ${dichiarazioni.length} dichiarazioni${
+    lacune.length ? ` · ${lacune.length} senza direzione` : ""
+  }`;
+  box.replaceChildren(
+    ...(voci.length
+      ? voci.map(handoffRow)
+      : [h("p", { class: "empty" }, [h("b", { text: "Nessuna dichiarazione con questo filtro. " })])])
+  );
+}
+
+/* Una dichiarazione = una riga. Il testo sta chiuso: e' quello che ha scritto chi ha finito, e si
+   apre solo quello che serve. */
 function handoffGroup(dichiarazioni, lacune) {
   const aperte = lacune.filter((voce) => voce.unit_open);
   const head = h("p", { class: "actgroup accent" }, [
@@ -948,7 +1080,7 @@ function handoffGapRow(voce) {
   return riga;
 }
 
-function activationGroup(titolo, tono, voci, rilasciabili) {
+function activationGroup(titolo, tono, voci, rilasciabili, apriPrompt = true) {
   const head = h("p", { class: `actgroup ${tono}` }, [
     h("b", { text: titolo }),
     h("span", { class: "actcount", text: String(voci.length) }),
@@ -957,7 +1089,7 @@ function activationGroup(titolo, tono, voci, rilasciabili) {
     head,
     // «In attesa di un esecutore» vuol dire che il prompt serve ADESSO: si carica e si apre da
     // solo, invece di stare dietro un pulsante. Chi legge quella riga si aspetta il prompt.
-    ...voci.map((voce) => activationRow(voce, false, Boolean(rilasciabili), Boolean(rilasciabili))),
+    ...voci.map((voce) => activationRow(voce, false, Boolean(rilasciabili), Boolean(rilasciabili) && apriPrompt)),
   ]);
 }
 
@@ -983,16 +1115,66 @@ function activationRow(voce, attesa, rilasciabile, apriPrompt) {
   riga.append(testo);
   const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });
   const azioni = h("div", { class: "actactions" });
+  // Una fase gia' attivata serve a UNA cosa: dare il prompt a un esecutore. Quindi copia in un clic,
+  // leggi nel dialogo, oppure togli la riserva. Il testo non sta in linea: era il muro.
+  if (rilasciabile) azioni.append(promptCopiaButton(voce.phase), promptLeggiButton(voce.phase));
   azioni.append(
     rilasciabile
       ? activationButton(voce.phase, "release", "Rilascia", message, false)
       : activationButton(voce.phase, "activate", "Attiva", message, attesa)
   );
-  // Il prompt: e' quello che si incolla in una chat. Sta su tutta la larghezza, sotto la riga,
-  // perche' e' testo da leggere e copiare, non un pulsante fra i pulsanti.
-  const prompt = activationPromptButton(voce.phase, Boolean(apriPrompt));
-  riga.append(azioni, message, prompt);
+  riga.append(azioni, message);
+  if (!rilasciabile) riga.append(activationPromptButton(voce.phase, Boolean(apriPrompt)));
   return riga;
+}
+
+/* Il prompt di una fase: copiato in un clic, o letto nel dialogo. Le due funzioni chiedono il testo
+   all'API solo quando servono, e non lo mettono mai in pagina. */
+async function chiediPrompt(phase) {
+  const response = await fetch(`/api/prompt?target=${encodeURIComponent(phase)}`);
+  const payload = await response.json();
+  if (!response.ok) throw new Error(payload.error || `errore ${response.status}`);
+  return payload;
+}
+
+function promptCopiaButton(phase) {
+  const esito = h("span", { class: "msg", role: "status", "aria-live": "polite" });
+  const bottone = h("button", { type: "button", class: "actbtn", text: "Copia il prompt" });
+  bottone.addEventListener("click", async () => {
+    bottone.disabled = true;
+    esito.className = "msg show pending";
+    esito.textContent = "preparo…";
+    try {
+      const payload = await chiediPrompt(phase);
+      await navigator.clipboard.writeText(payload.text || "");
+      esito.className = "msg show ok";
+      esito.textContent = `copiato (${(payload.text || "").length} caratteri, fonte: ${payload.source}). Incollalo come primo messaggio di una chat nuova.`;
+    } catch (error) {
+      esito.className = "msg show err";
+      esito.textContent = `non copiato: ${error.message}`;
+    } finally {
+      bottone.disabled = false;
+    }
+  });
+  const scatola = h("span", { class: "actprompt-box" });
+  scatola.append(bottone, esito);
+  return scatola;
+}
+
+function promptLeggiButton(phase) {
+  const bottone = h("button", { type: "button", class: "actbtn release", text: "Leggi" });
+  bottone.addEventListener("click", async () => {
+    bottone.disabled = true;
+    try {
+      const payload = await chiediPrompt(phase);
+      apriTesto(`${phase} — il prompt`, payload.text, { copia: true });
+    } catch (error) {
+      apriTesto(`${phase} — il prompt`, `non disponibile: ${error.message}`);
+    } finally {
+      bottone.disabled = false;
+    }
+  });
+  return bottone;
 }
 
 /* Il prompt della fase, a richiesta: quello del quaderno se c'e' una sezione per quella fase,
@@ -1843,6 +2025,21 @@ document.querySelectorAll('input[name="filter"]').forEach((input) => {
     renderGantt();
   });
 });
+
+document.querySelectorAll('input[name="testimone"]').forEach((input) => {
+  input.addEventListener("change", () => {
+    filtroTestimone = input.value;
+    renderTestimone(snapshot || {});
+  });
+});
+
+const campoCerca = $("#testimone-cerca");
+if (campoCerca) {
+  campoCerca.addEventListener("input", () => {
+    cercaTestimone = campoCerca.value;
+    renderTestimone(snapshot || {});
+  });
+}
 
 $("#refresh").addEventListener("click", load);
 

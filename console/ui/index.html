@@ -29,6 +29,13 @@
         </div>
       </div>
       <div class="top-actions">
+        <nav class="pagenav" aria-label="Pagine">
+          <a href="/" data-nav="adesso">Adesso</a>
+          <a href="/tempo" data-nav="tempo">Tempo</a>
+          <a href="/testimone" data-nav="testimone">Testimone</a>
+          <a href="/prompt" data-nav="prompt">Prompt</a>
+          <a href="/percorso" data-nav="percorso">Percorso</a>
+        </nav>
         <button type="button" class="ghost" id="refresh">Ricarica</button>
       </div>
     </div>
@@ -51,18 +58,35 @@
   </header>
 
   <main id="main">
-    <!-- L'INPUT che manca quando non ci sono domande, decisioni o prompt da lanciare: attivare
-         una fase. Deposita un ordine durevole e riserva la fase; non avvia nessun agente. -->
-    <section id="activation-section" aria-labelledby="activation-head">
+    <!-- LA CODA: una riga per cosa, un pulsante per riga, in ordine di leva. E' la pagina che si
+         guarda tornando: cosa posso far partire, cosa sta andando, cosa e' tornato indietro. -->
+    <section id="activation-section" data-page="adesso" aria-labelledby="activation-head">
       <div class="sec-head">
-        <h2 id="activation-head">Cosa puoi attivare</h2>
+        <h2 id="activation-head">Cosa fare adesso</h2>
         <span class="count" id="activation-count"></span>
       </div>
-      <p class="hint">Attivare deposita un ordine in <code>dispatch-queue/</code> e riserva la fase nel registro, cosi' una seconda attivazione della stessa fase viene rifiutata. <b>Non avvia nessun agente</b>: l'ordine aspetta un esecutore, e chi prende la fase la porta a <code>taken</code> col proprio nome.</p>
+      <p class="hint">In ordine di leva: prima quello che sblocca piu' unita'. <b>Attiva</b> deposita l'ordine e riserva la fase (una seconda attivazione viene rifiutata); <b>Copia il prompt</b> e' il testo da incollare in una chat; <b>Rilascia</b> toglie la riserva. Non avvia nessun agente.</p>
       <div id="activation"></div>
     </section>
 
-    <section id="timeline-section" aria-labelledby="timeline-head">
+    <section id="testimone-section" data-page="testimone" aria-labelledby="testimone-head">
+      <div class="sec-head">
+        <h2 id="testimone-head">Cosa c'e' da fare dopo</h2>
+        <span class="count" id="testimone-count"></span>
+      </div>
+      <p class="hint">Quello che chi ha finito ha lasciato scritto nel suo report: e' la direzione, parola per parola. Il testo sta chiuso: si apre quello che serve.</p>
+      <div class="row" id="testimone-filtri">
+        <div class="segmented" role="radiogroup" aria-label="Filtra le dichiarazioni">
+          <label><input type="radio" name="testimone" value="aperte" checked><span>Unità aperte</span></label>
+          <label><input type="radio" name="testimone" value="tutte"><span>Tutte</span></label>
+          <label><input type="radio" name="testimone" value="lacune"><span>Senza direzione</span></label>
+        </div>
+        <input type="search" id="testimone-cerca" placeholder="cerca nella dichiarazione…" aria-label="Cerca">
+      </div>
+      <div id="testimone"></div>
+    </section>
+
+    <section id="timeline-section" data-page="tempo" aria-labelledby="timeline-head">
       <div class="sec-head">
         <h2 id="timeline-head">Il percorso nel tempo</h2>
         <span class="count" id="timeline-count"></span>
@@ -82,13 +106,13 @@
       <div id="gantt" class="gantt"><p class="empty">Caricamento della linea del tempo…</p></div>
     </section>
 
-    <section id="questions-section" aria-labelledby="q-head" hidden>
+    <section id="questions-section" data-page="adesso" aria-labelledby="q-head" hidden>
       <div class="sec-head"><h2 id="q-head">Cosa aspetta te</h2></div>
       <p class="hint">Una domanda per volta. La risposta viene scritta nei registri del progetto passando dal lock e dalla validazione: se un registro non regge, la scrittura viene annullata e te lo dice qui.</p>
       <div id="questions"></div>
     </section>
 
-    <section id="prompts-section" aria-labelledby="prompts-head">
+    <section id="prompts-section" data-page="prompt" aria-labelledby="prompts-head">
       <div class="sec-head">
         <h2 id="prompts-head">I prossimi prompt da eseguire</h2>
         <span class="count" id="prompts-count"></span>
@@ -103,7 +127,7 @@
       <div id="prompts"></div>
     </section>
 
-    <section id="path-section" aria-labelledby="path-head">
+    <section id="path-section" data-page="percorso" aria-labelledby="path-head">
       <div class="sec-head">
         <h2 id="path-head">Percorso per blocchi</h2>
         <span class="count" id="visible-count"></span>
@@ -112,12 +136,12 @@
       <div id="blocks"></div>
     </section>
 
-    <section id="now-section" aria-labelledby="now-head">
+    <section id="now-section" data-page="adesso" aria-labelledby="now-head">
       <div class="sec-head"><h2 id="now-head">In corso adesso</h2></div>
       <div id="claims"></div>
     </section>
 
-    <section id="answered-section" aria-labelledby="done-head">
+    <section id="answered-section" data-page="adesso" aria-labelledby="done-head">
       <div class="sec-head"><h2 id="done-head">Risposte che hai già dato</h2></div>
       <p class="hint">Le risposte non si riscrivono: se una va cambiata, si apre una domanda nuova.</p>
       <div id="answered"></div>

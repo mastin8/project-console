@@ -836,7 +836,12 @@ def build_handler(state):
                         kind = "image/svg+xml" if target.suffix == ".svg" else "image/png"
                         return self._send(200, target.read_bytes(), kind)
                 return self._send(404, "nessun logo", "text/plain; charset=utf-8")
-            return self._send(404, "non trovato", "text/plain; charset=utf-8")
+            # Le pagine del coordinatore: `/`, `/tempo`, `/testimone`, `/prompt`, `/percorso` sono la
+            # stessa interfaccia, che disegna la pagina chiesta dal percorso. Un percorso sconosciuto
+            # che non e' ne' un'API ne' un file torna alla coda, invece di dare un 404.
+            return self._send(
+                200, (UI_DIR / "index.html").read_text("utf-8"), "text/html; charset=utf-8"
+            )
 
         def do_POST(self):
             route = urlparse(self.path).path

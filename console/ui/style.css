@@ -327,6 +327,28 @@ button.linkish{background:none;border:0;padding:0;color:var(--ink-3);font-size:1
 @media (hover:hover) and (pointer:fine){.answers summary:hover{color:var(--ink)}}
 
 /* ------------------------------------------------------------ attivazione */
+/* Pagine: l'intestazione e i tastini restano su tutte, il contenuto cambia. Nessun router: si
+   dichiara sul body quale pagina si sta guardando e il CSS mostra solo quella. */
+/* `main [data-page]`, non `[data-page]`: il body porta lo stesso attributo (dice quale pagina si
+   sta guardando) e con il selettore nudo si nascondeva tutto il documento. */
+main [data-page]{display:none}
+body[data-page="adesso"] main [data-page="adesso"],
+body[data-page="tempo"] main [data-page="tempo"],
+body[data-page="testimone"] main [data-page="testimone"],
+body[data-page="prompt"] main [data-page="prompt"],
+body[data-page="percorso"] main [data-page="percorso"]{display:block}
+.pagenav{display:flex;gap:var(--s1);flex-wrap:wrap;margin-right:var(--s2)}
+.pagenav a{padding:var(--s1) var(--s2);border-radius:var(--r-sm);text-decoration:none;
+  color:var(--ink-2);font-size:13px;font-weight:550}
+.pagenav a[aria-current="page"]{background:var(--accent-soft);color:var(--accent)}
+@media (hover: hover) and (pointer: fine){
+  .pagenav a:hover{background:var(--surface-2);color:var(--ink)}
+}
+#testimone-cerca{flex:1 1 220px;min-width:0;padding:var(--s2) var(--s3);
+  border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);
+  color:var(--ink);font:inherit;font-size:13px}
+#testimone .actquote{max-width:var(--measure)}
+
 /* L'input: un pulsante per far partire una fase, e il modo di togliere la riserva. Righe, non
    schede: quello che si legge e' una lista di cose da attivare, non una collezione di oggetti. */
 .actbox{margin-top:var(--s4)}
