@@ -25,6 +25,13 @@ from pathlib import Path
 
 import yaml
 
+
+def _carica(flusso):
+    """Legge un registro col parser veloce quando c'e' (libyaml): 17 volte piu' rapido su un
+    registro da 2 MB (misurato: 0,09 s contro 1,55 s). Stesso sottoinsieme sicuro di YAML, nessun
+    costruttore custom: e' `safe_load` scritto in C, non un'altra sintassi."""
+    return yaml.load(flusso, Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader))
+
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -44,7 +51,7 @@ RUOLI = {
 
 def _leggi(path):
     try:
-        return yaml.safe_load(path.read_text(encoding="utf-8", errors="replace")) or {}
+        return _carica(path.read_text(encoding="utf-8", errors="replace")) or {}
     except (OSError, yaml.YAMLError):
         return {}
 
@@ -148,17 +155,33 @@ def componi(ws, fase, state=None, tasks_doc=None):
     }
 
 
-def per(ws, fase):
-    """Il prompt della fase: prima il quaderno, che e' scritto a mano e vale di piu'."""
+def per(ws, fase, state=None):
+    """Il prompt della fase: prima il quaderno, che e' scritto a mano e vale di piu'.
+
+    `state` si passa gia' caricato quando c'e': evita di rileggere un registro da 1,9 MB per ogni
+    riga della pagina.
+    """
+    # Cache per fase: la pagina chiede il prompt di ogni riga attivata insieme, e senza questa
+    # ogni riga ricostruiva il quaderno (o componeva da capo) — misurato 4-5 s per prompt.
+    chiave = (str(ws.root), fase)
+    if chiave in _CACHE:
+        return _CACHE[chiave]
     dal_quaderno = activate.prompt_per(ws, fase)
     if dal_quaderno and dal_quaderno.get("text"):
-        return {
+        esito = {
             "source": dal_quaderno["source"],
             "role": None,
             "text": dal_quaderno["text"],
             "missing": [],
         }
-    return componi(ws, fase)
+    else:
+        esito = componi(ws, fase, state=state)
+    _CACHE[chiave] = esito
+    return esito
+
+
+#: Cache dei prompt composti, per (workspace, fase).
+_CACHE = {}
 
 
 def main(argv=None):

@@ -33,6 +33,13 @@ from pathlib import Path
 
 import yaml
 
+
+def _carica(flusso):
+    """Legge un registro col parser veloce quando c'e' (libyaml): 17 volte piu' rapido su un
+    registro da 2 MB (misurato: 0,09 s contro 1,55 s). Stesso sottoinsieme sicuro di YAML, nessun
+    costruttore custom: e' `safe_load` scritto in C, non un'altra sintassi."""
+    return yaml.load(flusso, Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader))
+
 ROOT = Path(__file__).resolve().parent.parent
 sys.path[:0] = [str(ROOT), str(ROOT / "registers")]
 
@@ -335,8 +342,8 @@ def build(pack=PACK_DEFAULT, state=None, tasks_doc=None, questions_doc=None, dec
           prompt_entries=None):
     """Il carico della sezione «percorso nel tempo». Nessuna scrittura, nessuna stima."""
     pack = Path(pack)
-    state = state if state is not None else (yaml.safe_load((pack / WS.state).read_text(encoding="utf-8")) or {})
-    tasks_doc = tasks_doc if tasks_doc is not None else (yaml.safe_load((pack / WS.tasks).read_text(encoding="utf-8")) or {})
+    state = state if state is not None else (_carica((pack / WS.state).read_text(encoding="utf-8")) or {})
+    tasks_doc = tasks_doc if tasks_doc is not None else (_carica((pack / WS.tasks).read_text(encoding="utf-8")) or {})
     if prompt_entries is None:
         prompt_entries = next_prompts.build(pack, state=state)
     if decisions_doc is None:
@@ -345,7 +352,7 @@ def build(pack=PACK_DEFAULT, state=None, tasks_doc=None, questions_doc=None, dec
         # ferme (misurato il 2026-10-15: la sezione diceva 0 decisioni con UD-1 e UD-2 aperte).
         path = pack / WS.user_decisions
         decisions_doc = (
-            yaml.safe_load(path.read_text(encoding="utf-8")) if path.exists() else {}
+            _carica(path.read_text(encoding="utf-8")) if path.exists() else {}
         )
     registered = state.get("tasks") or {}
     live = _live_claims(state)

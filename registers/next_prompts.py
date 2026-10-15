@@ -48,6 +48,13 @@ from pathlib import Path
 
 import yaml
 
+
+def _carica(flusso):
+    """Legge un registro col parser veloce quando c'e' (libyaml): 17 volte piu' rapido su un
+    registro da 2 MB (misurato: 0,09 s contro 1,55 s). Stesso sottoinsieme sicuro di YAML, nessun
+    costruttore custom: e' `safe_load` scritto in C, non un'altra sintassi."""
+    return yaml.load(flusso, Loader=getattr(yaml, "CSafeLoader", yaml.SafeLoader))
+
 #: Il workspace da `$CONSOLE_WORKSPACE` o dalla cartella corrente. Il modulo non conosce progetti.
 PACK = Path(os.environ.get("CONSOLE_WORKSPACE") or Path.cwd()).expanduser().resolve()
 #: Il file del quaderno e il prefisso dei percorsi di consegna: sono CONVENZIONI, e si cambiano
@@ -416,8 +423,21 @@ def build(pack=PACK, md_name=PROMPTS_MD, state=None):
     path = pack / md_name
     if not path.exists():
         return []
+    # Cache: la pagina chiede il prompt di una fase per riga, e ogni chiamata ricostruiva tutto
+    # leggendo un registro da 1,9 MB — misurato 4-5 s per prompt, quindi nove righe sembravano non
+    # aprirsi affatto. La chiave porta i tempi di modifica, quindi una scrittura la invalida.
     if state is None:
-        state = yaml.safe_load((pack / "state.yaml").read_text(encoding="utf-8")) or {}
+        registro = pack / "state.yaml"
+        chiave = (
+            str(path),
+            path.stat().st_mtime_ns,
+            registro.stat().st_mtime_ns if registro.exists() else 0,
+        )
+        if chiave in _CACHE:
+            return _CACHE[chiave]
+        state = _carica(registro.read_text(encoding="utf-8")) or {}
+    else:
+        chiave = None
     text = path.read_text(encoding="utf-8")
     entries = [resolve(section, state, pack) for section in sections(text)]
     for entry in entries:
@@ -425,7 +445,13 @@ def build(pack=PACK, md_name=PROMPTS_MD, state=None):
         entry["group_label"] = GROUP_LABEL.get(entry["group"], entry["group"])
     # Prima cio' che si puo' far partire: e' la domanda per cui si apre questa sezione.
     entries.sort(key=lambda entry: (STATE_PRIORITY.get(entry["group"], 9), entry["number"]))
+    if chiave is not None:
+        _CACHE[chiave] = entries
     return entries
+
+
+#: Cache dei prompt risolti, per (file, mtime del quaderno, mtime del registro).
+_CACHE = {}
 
 
 STATE_LABEL = {
