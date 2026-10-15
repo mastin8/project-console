@@ -33,7 +33,7 @@ import argparse
 import hashlib
 import os
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import yaml
@@ -62,14 +62,37 @@ def _rilasciata(voce):
 
 def prese(state):
     """Le prese VIVE per fase. Il registro ripete le voci e l'ordine non e' cronologico: si
-    guardano tutte, e una voce viva con `released_at` vuoto vale come presa."""
-    out = {}
+    guardano tutte, e una voce viva con `released_at` vuoto vale come presa.
+
+    Fra piu' voci vive della stessa fase si prende la PIU' RECENTE per data, non l'ultima scritta:
+    e' la differenza fra mostrare «in corso» e mostrare «in attesa di un esecutore» per una fase che
+    un agente ha gia' preso (misurato il 2026-10-15 su un registro con piu' voci per fase).
+    """
+    raccolte = {}
     for voce in state.get("active_claims") or []:
         fase = voce.get("task_id")
         if not fase or voce.get("status") not in LIVE or _rilasciata(voce):
             continue
-        out[str(fase)] = voce
-    return out
+        raccolte.setdefault(str(fase), []).append(voce)
+
+    def quando(voce):
+        for campo in ("taken_at", "registered_at", "released_at"):
+            valore = voce.get(campo)
+            if isinstance(valore, datetime):
+                return valore if valore.tzinfo else valore.replace(tzinfo=timezone.utc)
+            testo = str(valore or "").strip().strip("'\"")
+            for candidato in (testo, testo.replace(" ", "T", 1)):
+                try:
+                    momento = datetime.fromisoformat(candidato)
+                except ValueError:
+                    continue
+                return momento if momento.tzinfo else momento.replace(tzinfo=timezone.utc)
+        return None
+
+    return {
+        fase: max(voci, key=lambda v: quando(v) or datetime.min.replace(tzinfo=timezone.utc))
+        for fase, voci in raccolte.items()
+    }
 
 
 def fasi(tasks_doc):

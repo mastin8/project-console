@@ -14,6 +14,25 @@ Da li' esce lo stato: **fatto** (la consegna esiste su disco), **in azione** (la
 viva), **da lanciare**, **consegna respinta** (consegnata e la verifica ha detto di no),
 **ignoto** (nessun codice riconoscibile: si dichiara, non si inventa).
 
+## La prima istruzione di OGNI prompt
+
+Un prompt comincia sempre dichiarando che sta andando: **deposita la presa nel registro prima di
+qualunque altra cosa**, poi lavora, poi rilascia. Finche' la presa non e' applicata, per la
+piattaforma non e' partito niente: la pagina continua a dire «in attesa di un esecutore» mentre il
+lavoro e' gia' cominciato, e una seconda copia dello stesso prompt non trova nessun ostacolo.
+
+```
+════ PRIMA ISTRUZIONE — DICHIARA CHE STAI LAVORANDO, PRIMA DI QUALUNQUE ALTRA COSA ════
+Questa fase e' <FASE> e la stai prendendo TU: deposita la presa adesso, sul registro.
+Scrivi pending-transitions/<timestamp>-<tua-corsia>.yaml con: file, anchor "- task_id: <FASE>",
+occurrence <n>, field status, text taken — poi taken_by e taken_at. Fallo applicare.
+Se e' GIA' presa da un altro, fermati e dillo. Alla fine deposita il rilascio.
+══════════════════════════════════════════════════════════════════════════════════════
+```
+
+Il numero di occorrenza **non si scrive a mano**: i prompt composti dal coordinatore
+(`registers/mandate.py`) hanno gia' questo blocco in testa, calcolato sul registro.
+
 ---
 
 ## 1 — ES01A — DA FARE

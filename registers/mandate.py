@@ -56,6 +56,23 @@ def _leggi(path):
         return {}
 
 
+def _occorrenza_per(ws, fase):
+    """Quale occorrenza dell'ancora e' QUESTA voce: la n-esima fra quelle con lo stesso task_id.
+
+    Il prompt dice `occurrence` perche' l'applicatore, davanti a un'ancora ripetuta, rifiuta invece
+    di scegliere: senza il numero, la presa non si applica e la fase resta «in attesa».
+    """
+    state = _carica(ws.state_path.read_text(encoding="utf-8")) or {}
+    quante = 0
+    for voce in state.get("active_claims") or []:
+        if str(voce.get("task_id")) != fase:
+            continue
+        quante += 1
+        if voce.get("status") in ("pre_registered", "ready") or not voce.get("released_at"):
+            return quante
+    return max(quante, 1)
+
+
 def componi(ws, fase, state=None, tasks_doc=None):
     """Un prompt per quella fase, costruito da cio' che il registro sa."""
     state = state if state is not None else _leggi(ws.state_path)
@@ -87,7 +104,38 @@ def componi(ws, fase, state=None, tasks_doc=None):
     # Dove si lavora: il repository che contiene il workspace, se c'e' — il codice sta li'.
     radici = activate.radici(ws)
     radice_lavoro = next((r for nome, r in radici if nome == "repository"), ws.root)
+    # La PRIMA cosa che il prompt dice non e' cosa fare: e' che sta andando. Finche' non e'
+    # depositata la presa, per la piattaforma non e' partito niente — e chi apre la pagina vede
+    # «in attesa di un esecutore» mentre il lavoro e' gia' cominciato. Questa riga e' l'unica
+    # istruzione che deve venire prima di tutte le altre.
+    occorrenza = _occorrenza_per(ws, fase)
     righe = [
+        "════ PRIMA ISTRUZIONE — DICHIARA CHE STAI LAVORANDO, PRIMA DI QUALUNQUE ALTRA COSA ════",
+        f"Questa fase e' {fase} e la stai prendendo TU: deposita la presa adesso, sul registro.",
+        "",
+        f"Scrivi il file {ws.transitions_dir}/<timestamp>-<tua-corsia>.yaml con DENTRO:",
+        "",
+        f"    schema: project-console-transition/1.0",
+        f"    requested_by: <la tua corsia>",
+        f"    requested_at: '<adesso, ISO>'",
+        f"    file: {ws.state}",
+        f'    anchor: "- task_id: {fase}"',
+        f"    occurrence: {occorrenza}      # l'occorrenza di QUESTA voce nel registro",
+        f"    field: status",
+        f"    text: taken",
+        "",
+        f"e subito dopo, nella stessa voce, due richieste: `taken_by: <la tua corsia>` e",
+        "`taken_at: '<adesso>'`. Poi fallo applicare al coordinamento:",
+        f"    python3 registers/apply_transitions.py --workspace {ws.root} --dir {ws.transitions_dir}",
+        "",
+        "Se il registro dice che la fase e' GIA' presa da un altro, FERMATI e dillo: due esecutori",
+        "sugli stessi byte sono il difetto piu' caro. Alla fine del lavoro deposita il rilascio",
+        "(`status: released` e `released_at` INSIEME): cosi' la pagina sa che hai finito.",
+        "",
+        "L'effetto che vedrai: appena la presa e' applicata, la pagina passa da «in attesa di un",
+        "esecutore» a «in corso», col tuo nome e l'ora.",
+        "══════════════════════════════════════════════════════════════════════════════════════",
+        "",
         f"Lavora in {radice_lavoro}. Sei un agente di {ruolo}: non coordinare, non dispatchare",
         "figli, non chiedere conferme.",
         "",
