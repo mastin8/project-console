@@ -272,6 +272,7 @@ def costruisci_ordine(ws, voce, state, prompt=None):
     """Il file che un esecutore trova: cosa fare, con quale testo, su quale revisione, con quale
     criterio di accettazione."""
     revisione, fonte_revisione = impronte(ws, state, voce["phase"])
+    testo = (prompt or {}).get("text")
     return {
         "schema": "project-console-work-order/1.0",
         "code": voce["phase"],
@@ -283,7 +284,11 @@ def costruisci_ordine(ws, voce, state, prompt=None):
         "status_at_activation": voce["status"],
         "deliverable": voce["deliverable"],
         "prompt_source": prompt.get("source") if prompt else ws.queue,
-        "prompt": (prompt or {}).get("text"),
+        "prompt": testo,
+        # L'impronta del prompt: se qualcuno lo ricompone piu' tardi e viene diverso, la differenza
+        # si vede invece di essere silenziosa. E' la stessa disciplina delle impronte di revisione.
+        "prompt_sha256": hashlib.sha256(testo.encode("utf-8")).hexdigest() if testo else None,
+        "prompt_frozen_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S%z"),
         "registry": {
             "file": ws.state,
             "anchor": f"- task_id: {voce['phase']}",
@@ -469,6 +474,61 @@ def attiva(ws, fase, dry_run=False):
     }
 
 
+def aggiorna_ordini(ws, solo_vuoti=True):
+    """Mette il prompt negli ordini che non ce l'hanno.
+
+    Perche' esiste: le prime attivazioni sono state depositate quando il prompt si prendeva solo dal
+    quaderno, quindi per le fasi senza sezione l'ordine e' nato con `prompt:` vuoto — nove su nove
+    sul progetto di origine, misurato il 2026-10-15. Il testo esisteva (si ricompone dal registro),
+    ma stava solo in pagina: sul disco, dove un esecutore lo cerca, non c'era. **Un prompt che non
+    sta sul disco si perde.**
+
+    Non tocca gli ordini che il prompt ce l'hanno: quello e' il testo consegnato, e riscriverlo
+    cambiare sotto chi lo sta eseguendo. Ritorna cosa ha scritto e cosa ha lasciato com'era.
+    """
+    import mandate  # noqa: PLC0415 - import locale: `mandate` usa questo modulo per le impronte
+
+    aggiornati, lasciati = [], []
+    coda = ws.path("dispatch-queue")
+    if not coda.is_dir():
+        return aggiornati, lasciati
+    for percorso in sorted(coda.glob("*.yaml")):
+        try:
+            documento = _carica(percorso.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError as errore:
+            lasciati.append((percorso.name, f"illeggibile: {errore}"))
+            continue
+        if not isinstance(documento, dict):
+            continue
+        fase = documento.get("code") or documento.get("task_id")
+        if not fase:
+            continue
+        if documento.get("fulfilled_status") or documento.get("superseded_by"):
+            lasciati.append((percorso.name, "ordine chiuso"))
+            continue
+        if documento.get("prompt") and solo_vuoti:
+            lasciati.append((percorso.name, "prompt gia' presente"))
+            continue
+        try:
+            esito = mandate.per(ws, str(fase))
+        except SystemExit as errore:  # fase non dichiarata: si dichiara, non si inventa
+            lasciati.append((percorso.name, f"non componibile: {errore}"))
+            continue
+        documento["prompt"] = esito["text"]
+        documento["prompt_source"] = esito["source"]
+        documento["prompt_sha256"] = hashlib.sha256(esito["text"].encode("utf-8")).hexdigest()
+        documento["prompt_frozen_at"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S%z")
+        documento["prompt_added_note"] = (
+            "Prompt aggiunto DOPO l'attivazione: l'ordine era nato senza. Il testo e' ricomposto "
+            "dal registro; l'ordine resta quello depositato e cambia solo cio' che gli mancava."
+        )
+        percorso.write_text(
+            yaml.safe_dump(documento, allow_unicode=True, sort_keys=False), encoding="utf-8"
+        )
+        aggiornati.append(percorso.name)
+    return aggiornati, lasciati
+
+
 def rilascia(ws, fase):
     """Toglie la riserva: l'ordine resta come prova, la fase torna disponibile."""
     state = _carica(ws.state_path.read_text(encoding="utf-8")) or {}
@@ -520,12 +580,25 @@ def main(argv=None):
     parser.add_argument("--list", action="store_true", help="cosa si puo' attivare adesso")
     parser.add_argument("--target", help="la fase da attivare")
     parser.add_argument("--release", help="la fase da rilasciare")
+    parser.add_argument(
+        "--refresh-orders",
+        action="store_true",
+        help="mette il prompt negli ordini depositati che non ce l'hanno (non tocca gli altri)",
+    )
     parser.add_argument("--dry-run", action="store_true", help="mostra l'ordine senza scrivere")
     args = parser.parse_args(argv)
     ws = Workspace.load(args.workspace)
     next_prompts.configure(queue=ws.queue, deliverable_prefix=ws.deliverable_prefix)
     if args.release:
         print(rilascia(ws, args.release))
+        return 0
+    if args.refresh_orders:
+        aggiornati, lasciati = aggiorna_ordini(ws)
+        for nome in aggiornati:
+            print(f"prompt scritto   {nome}")
+        for nome, perche in lasciati:
+            print(f"lasciato com'era  {nome}  ({perche})")
+        print(f"\naggiornati: {len(aggiornati)} · lasciati: {len(lasciati)}")
         return 0
     if args.target:
         esito = attiva(ws, args.target, dry_run=args.dry_run)

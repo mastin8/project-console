@@ -180,6 +180,36 @@ def per(ws, fase, state=None):
     return esito
 
 
+def impronta(testo):
+    """L'impronta del prompt: serve a dire se quello congelato e' ancora quello giusto."""
+    import hashlib
+
+    return hashlib.sha256(str(testo or "").encode("utf-8")).hexdigest()
+
+
+def da_ordine(ws, fase):
+    """Il prompt congelato nell'ordine depositato per quella fase, se c'e'.
+
+    E' il testo che un esecutore ha ricevuto: si legge da li' invece di ricomporlo, perche' un
+    prompt che cambia dopo essere stato consegnato e' un prompt perso.
+    """
+    for nome in sorted(activate.ordini_aperti(ws).get(fase) or []):
+        percorso = ws.root / nome
+        if not percorso.is_file():
+            continue
+        documento = _leggi(percorso)
+        testo = documento.get("prompt")
+        if testo:
+            return {
+                "file": nome,
+                "text": testo,
+                "sha256": documento.get("prompt_sha256") or impronta(testo),
+                "frozen_at": documento.get("prompt_frozen_at"),
+                "source": documento.get("prompt_source"),
+            }
+    return None
+
+
 #: Cache dei prompt composti, per (workspace, fase).
 _CACHE = {}
 

@@ -786,18 +786,27 @@ def build_handler(state):
                 if not target:
                     return self._json(400, {"error": "serve target: la fase del prompt"})
                 try:
-                    return self._json(
-                        200,
-                        {
-                            "phase": target,
-                            **mandate.per(
-                                state.workspace,
-                                target,
-                                # `state` e' il ReviewState, non l'handler: `_load` sta su di lui.
-                                state=state._load(state.workspace.state),
-                            ),
-                        },
+                    esito = mandate.per(
+                        state.workspace,
+                        target,
+                        # `state` e' il ReviewState, non l'handler: `_load` sta su di lui.
+                        state=state._load(state.workspace.state),
                     )
+                    # Un ordine depositato porta un prompt CONGELATO: si mostra QUELLO, perche' e' il
+                    # testo consegnato a un esecutore e non deve cambiare sotto. Se il ricomposto
+                    # adesso e' diverso, lo si dichiara invece di sostituirlo in silenzio.
+                    congelato = mandate.da_ordine(state.workspace, target)
+                    if congelato:
+                        esito = {
+                            **esito,
+                            "text": congelato["text"],
+                            "source": f"ordine {congelato['file']} (congelato)",
+                            "order": congelato["file"],
+                            "order_prompt_sha256": congelato["sha256"],
+                            "diverges_from_registry": congelato["sha256"]
+                            != mandate.impronta(esito["text"]),
+                        }
+                    return self._json(200, {"phase": target, **esito})
                 except Exception as error:  # noqa: BLE001
                     return self._json(400, {"error": str(error)})
             if route == "/file":
