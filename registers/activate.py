@@ -365,7 +365,224 @@ def _applica(ws, richieste):
     applicate, fallite = [], []
     import fcntl
 
+    # Lo STESSO lock delle corsie: due scrittori sugli stessi registri non devono sovrapporsi.
     lock = Path(lock_file(ws.root))
+    with open(lock, "a+") as maniglia:
+        fcntl.flock(maniglia, fcntl.LOCK_EX)
+        for indice, richiesta in enumerate(richieste):
+            try:
+                apply_transitions.apply_request(
+                    richiesta, pack=ws.root, validate_after=indice == len(richieste) - 1
+                )
+                applicate.append(f"{richiesta['file']}#{richiesta.get('field') or richiesta.get('item', {}).get('status', 'voce')}")
+            except apply_transitions.TransitionError as errore:
+                fallite.append(str(errore))
+        fcntl.flock(maniglia, fcntl.LOCK_UN)
+    if fallite:
+        raise apply_transitions.TransitionError("; ".join(fallite))
+    return applicate
+
+
+def attiva(ws, fase, dry_run=False):
+    """Riserva la fase e deposita l'ordine. Rifiuta se qualcuno l'ha gia' presa."""
+    state = _carica(ws.state_path.read_text(encoding="utf-8")) or {}
+    tasks_doc = _carica(ws.path(ws.tasks).read_text(encoding="utf-8")) or {}
+    voce = next((v for v in attivabili(ws, state, tasks_doc) if v["phase"] == fase), None)
+    if voce is None:
+        presa = prese(state).get(fase)
+        if presa:
+            raise apply_transitions.TransitionError(
+                f"{fase} ha gia' una presa viva ({presa.get('owner_agent') or presa.get('taken_by') or presa.get('status')}): "
+                "attivarla di nuovo farebbe due esecutori sugli stessi byte"
+            )
+        # Perche' non e' attivabile: se il cancello dei prerequisiti e' chiuso il motivo e' MISURATO
+        # e va detto, invece di rispondere «fase non attivabile o inesistente». Serve anche contro
+        # una pagina vecchia, che offre un pulsante ormai chiuso.
+        registrate = state.get("tasks") or {}
+        per_id = {str(t.get("id")): t for t in tasks_doc.get("tasks") or [] if t.get("id")}
+        gated = [
+            str(dip)
+            for dip in (per_id.get(fase) or {}).get("depends_on") or []
+            if (registrate.get(str(dip)) or {}).get("status", "pending") != "accepted"
+        ]
+        if gated:
+            raise apply_transitions.TransitionError(
+                f"{fase} non e' attivabile adesso: attende "
+                + ", ".join(
+                    f"{dip} ({((registrate.get(dip) or {}).get('status') or 'pending')})"
+                    for dip in gated
+                )
+                + ". Attivarla prima creerebbe una riserva su una fase che non puo' partire."
+            )
+        raise apply_transitions.TransitionError(f"fase non attivabile o inesistente: {fase}")
+    # Il prompt che l'esecutore trova NELL'ORDINE: dal quaderno se c'e', altrimenti composto dal
+    # registro. Senza questo, attivare una fase senza sezione nel quaderno lasciava l'ordine con
+    # `prompt: null` e nessun testo da incollare (segnalato dall'utente).
+    import mandate  # noqa: PLC0415 - import locale: `mandate` usa `activate` per le impronte
+
+    ordine = costruisci_ordine(ws, voce, state, mandate.per(ws, fase))
+    # Un ordine per fase: se ce n'e' gia' uno aperto si usa QUELLO, non se ne scrive un secondo.
+    esistenti = voce.get("orders") or []
+    percorso = (ws.root / esistenti[-1]) if esistenti else _order_path(ws, fase)
+    # L'ancora si calcola PRIMA di scrivere l'ordine: se il registro non la regge (per esempio
+    # `active_claims` vuoto su un progetto al primo giorno) si fallisce senza lasciare un ordine
+    # orfano sul disco — che qualcun altro raccoglierebbe mentre la fase e' ancora libera.
+    ancora, occorrenza = _ultima_ancora(state, ws)
+    if dry_run:
+        return {"order": str(percorso), "order_body": ordine, "applied": []}
+    if not esistenti:
+        percorso.parent.mkdir(parents=True, exist_ok=True)
+        percorso.write_text(
+            yaml.safe_dump(ordine, allow_unicode=True, sort_keys=False), encoding="utf-8"
+        )
+    richiesta = {
+        "schema": apply_transitions.SCHEMA,
+        "file": ws.state,
+        "anchor": ancora,
+        "occurrence": occorrenza,
+        "item": {
+            "task_id": fase,
+            "unit": voce["unit"],
+            "phase": (fase[len(voce["unit"]) :] or "?"),
+            "status": "pre_registered",
+            "attempt": prossimo_tentativo(state, fase),
+            "registered_at": ordine["activated_at"],
+            "registered_by": "pagina di attivazione",
+            "order": str(percorso.relative_to(ws.root)),
+            "owner": "NESSUN TITOLARE: attivazione in attesa di un esecutore",
+        },
+        "position": "after",
+    }
+    try:
+        applicate = _applica(ws, [richiesta])
+    except Exception:
+        # Un ordine senza riserva e' un ordine che qualcun altro puo' raccogliere mentre la fase
+        # resta libera: si toglie invece di lasciarlo sul disco (misurato al primo giro, quando un
+        # ancora ambigua ha lasciato un ordine orfano). Se l'ordine c'era GIA' — un rilancio
+        # depositato prima — non si tocca: non e' mio.
+        if not esistenti:
+            percorso.unlink(missing_ok=True)
+        raise
+    return {
+        "order": str(percorso.relative_to(ws.root)),
+        "applied": applicate,
+        "prompt": ordine.get("prompt"),
+        "prompt_source": ordine.get("prompt_source"),
+        "action": ordine["action"],
+    }
+
+
+def aggiorna_ordini(ws, solo_vuoti=True):
+    """Mette il prompt negli ordini che non ce l'hanno.
+
+    Perche' esiste: le prime attivazioni sono state depositate quando il prompt si prendeva solo dal
+    quaderno, quindi per le fasi senza sezione l'ordine e' nato con `prompt:` vuoto — nove su nove
+    sul progetto di origine, misurato il 2026-10-15. Il testo esisteva (si ricompone dal registro),
+    ma stava solo in pagina: sul disco, dove un esecutore lo cerca, non c'era. **Un prompt che non
+    sta sul disco si perde.**
+
+    Non tocca gli ordini che il prompt ce l'hanno: quello e' il testo consegnato, e riscriverlo
+    cambiare sotto chi lo sta eseguendo. Ritorna cosa ha scritto e cosa ha lasciato com'era.
+    """
+    import mandate  # noqa: PLC0415 - import locale: `mandate` usa questo modulo per le impronte
+
+    aggiornati, lasciati = [], []
+    coda = ws.path("dispatch-queue")
+    if not coda.is_dir():
+        return aggiornati, lasciati
+    for percorso in sorted(coda.glob("*.yaml")):
+        try:
+            documento = _carica(percorso.read_text(encoding="utf-8")) or {}
+        except yaml.YAMLError as errore:
+            lasciati.append((percorso.name, f"illeggibile: {errore}"))
+            continue
+        if not isinstance(documento, dict):
+            continue
+        fase = documento.get("code") or documento.get("task_id")
+        if not fase:
+            continue
+        if documento.get("fulfilled_status") or documento.get("superseded_by"):
+            lasciati.append((percorso.name, "ordine chiuso"))
+            continue
+        if documento.get("prompt") and solo_vuoti:
+            lasciati.append((percorso.name, "prompt gia' presente"))
+            continue
+        try:
+            esito = mandate.per(ws, str(fase))
+        except SystemExit as errore:  # fase non dichiarata: si dichiara, non si inventa
+            lasciati.append((percorso.name, f"non componibile: {errore}"))
+            continue
+        documento["prompt"] = esito["text"]
+        documento["prompt_source"] = esito["source"]
+        documento["prompt_sha256"] = hashlib.sha256(esito["text"].encode("utf-8")).hexdigest()
+        documento["prompt_frozen_at"] = datetime.now().strftime("%Y-%m-%dT%H:%M:%S%z")
+        documento["prompt_added_note"] = (
+            "Prompt aggiunto DOPO l'attivazione: l'ordine era nato senza. Il testo e' ricomposto "
+            "dal registro; l'ordine resta quello depositato e cambia solo cio' che gli mancava."
+        )
+        percorso.write_text(
+            yaml.safe_dump(documento, allow_unicode=True, sort_keys=False), encoding="utf-8"
+        )
+        aggiornati.append(percorso.name)
+    return aggiornati, lasciati
+
+
+def rilascia(ws, fase):
+    """Toglie la riserva: l'ordine resta come prova, la fase torna disponibile."""
+    state = _carica(ws.state_path.read_text(encoding="utf-8")) or {}
+    # `occurrence` conta le voci CON QUELL'ANCORA, non la posizione nella lista: chiedere la 245ª
+    # corrispondenza di un'ancora che ne ha 6 e' l'errore che il registro mi ha rimandato indietro.
+    indice = None
+    quante = 0
+    for voce in state.get("active_claims") or []:
+        if str(voce.get("task_id")) != fase:
+            continue
+        quante += 1
+        if voce.get("status") in LIVE and not _rilasciata(voce):
+            indice = quante
+    if indice is None:
+        raise apply_transitions.TransitionError(f"{fase} non ha una presa viva da rilasciare")
+    adesso = datetime.now().strftime("%Y-%m-%dT%H:%M:%S%z")
+    richieste = [
+        {
+            "schema": apply_transitions.SCHEMA,
+            "file": ws.state,
+            "anchor": f"- task_id: {fase}",
+            "occurrence": indice,
+            "field": campo,
+            "text": valore,
+        }
+        for campo, valore in (
+            ("status", "released"),
+            ("released_at", adesso),
+            (
+                "release_note",
+                "Rilasciata dalla pagina di attivazione: la riserva e' tolta e la fase torna "
+                "disponibile. L'ordine depositato resta su disco come prova.",
+            ),
+        )
+    ]
+    return {"applied": _applica(ws, richieste)}
+
+
+def elenco(ws):
+    for voce in attivabili(ws):
+        stato = "da rifare" if voce["rework"] else voce["status"]
+        attesa = f" · attende {', '.join(voce['waiting_on'])}" if voce["waiting_on"] else ""
+        print(f"{voce['phase']:<14} {voce['block']:<14} {stato:<12} {voce['title'][:44]}{attesa}")
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--workspace", help="radice del workspace (default: cwd o $CONSOLE_WORKSPACE)")
+    parser.add_argument("--list", action="store_true", help="cosa si puo' attivare adesso")
+    parser.add_argument("--target", help="la fase da attivare")
+    parser.add_argument("--release", help="la fase da rilasciare")
+    parser.add_argument(
+        "--refresh-orders",
+        action="store_true",
+        help="mette il prompt negli ordini depositati che non ce l'hanno (non tocca gli altri)",
+    )
     parser.add_argument("--dry-run", action="store_true", help="mostra l'ordine senza scrivere")
     args = parser.parse_args(argv)
     ws = Workspace.load(args.workspace)
