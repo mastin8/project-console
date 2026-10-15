@@ -530,6 +530,12 @@ def aggiorna_ordini(ws, solo_vuoti=True):
         if documento.get("prompt") and solo_vuoti:
             lasciati.append((percorso.name, "prompt gia' presente"))
             continue
+        # Un ordine che qualcuno sta ESEGUENDO non si riscrive, nemmeno per arricchirlo: chi lo ha
+        # in mano ha una copia, e il file deve restare quello che ha raccolto.
+        presa_viva = prese(_carica(ws.state_path.read_text(encoding="utf-8")) or {}).get(str(fase))
+        if presa_viva and presa_viva.get("status") in ("taken", "active", "active_extension"):
+            lasciati.append((percorso.name, f"in esecuzione ({presa_viva.get('status')}): non lo tocco"))
+            continue
         try:
             esito = mandate.per(ws, str(fase))
         except SystemExit as errore:  # fase non dichiarata: si dichiara, non si inventa

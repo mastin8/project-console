@@ -333,7 +333,9 @@ class ReviewState:
             "activated": [
                 {
                     "phase": fase,
-                    "owner": (voce.get("owner") or voce.get("owner_agent") or voce.get("taken_by") or ""),
+                    # Chi tiene la fase lo dice `taken_by`; `owner` puo' essere un residuo
+                    # dell'attivazione («NESSUN TITOLARE: …») e non va mostrato come titolare.
+                    "owner": (voce.get("taken_by") or voce.get("owner_agent") or voce.get("owner") or ""),
                     "order": voce.get("order"),
                     "status": voce.get("status"),
                     "since": voce.get("registered_at") or voce.get("taken_at"),
