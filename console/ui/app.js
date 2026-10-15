@@ -2082,3 +2082,16 @@ initLogo();
 initHeaderHeight();
 loadConfig();
 load();
+
+/* Il registro viene letto a OGNI richiesta (il server lo rilegge quando cambia il tempo di
+   modifica), ma questa pagina e' un'istantanea: senza ricaricarla, i numeri restano quelli del
+   momento in cui l'hai aperta. Per questo si ricarica da sola — e non mentre stai scrivendo in un
+   campo, ne' con un dialogo aperto, per non cancellarti quello che stai facendo. */
+const INTERVALLO = 30000;
+setInterval(() => {
+  const campo = document.activeElement;
+  const staScrivendo = campo && ["INPUT", "TEXTAREA"].includes(campo.tagName);
+  const dialogo = document.getElementById("report-dialog");
+  if (staScrivendo || (dialogo && dialogo.open)) return;
+  load();
+}, INTERVALLO);
