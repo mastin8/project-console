@@ -407,9 +407,13 @@ def build(pack=PACK_DEFAULT, state=None, tasks_doc=None, questions_doc=None, dec
 
     all_days = sorted({u["first"] for u in units.values() if u["first"]} | {u["last"] for u in units.values() if u["last"]})
     git_facts = repository_facts(pack)
+    # Un progetto al primo giorno non ha NESSUNA data: nessuna consegna e' ancora stata fatta. Se
+    # in quel caso l'asse sparisse, la sezione in testa resterebbe vuota proprio quando serve di
+    # piu' — perche' non c'e' niente da datare, non perche' non ci sia niente da vedere. Si
+    # disegna un giorno solo, oggi, e le righe restano: senza barre, con scritto «nessuna data».
+    oggi = datetime.now().date().isoformat()
     if not all_days:
-        return {"from": None, "to": None, "days": [], "measured": counters, "blocks": [],
-                "decisions": decisions, "questions": questions, "commits": git_facts}
+        all_days = [oggi]
     day_zero = date.fromisoformat(all_days[0])
     day_last = date.fromisoformat(all_days[-1])
     days = []

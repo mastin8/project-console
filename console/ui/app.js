@@ -2,7 +2,11 @@
    Sola lettura tranne il submit di una risposta, che passa dal server e quindi dal lock. */
 
 const $ = (sel) => document.querySelector(sel);
-const OPEN_STATES = ["pending", "running", "active", "taken", "needs_changes", "failed"];
+/* Una fase e' aperta quando NON e' accettata. Elencare gli stati aperti uno per uno sembrava piu'
+   preciso ed era piu' fragile: bastava che un progetto usasse `ready`, `blocked_dependency` o una
+   parola sua — tutti stati legittimi del registro — e l'unita' spariva dalla vista «Aperte».
+   L'unica cosa che il coordinatore deve sapere e' quale stato CHIUDE: `accepted`. */
+const CLOSED_STATES = ["accepted"];
 let snapshot = null;
 let filter = "open";
 let loadedAt = 0;
@@ -57,7 +61,7 @@ function h(tag, attrs = {}, children = []) {
   return node;
 }
 
-const isOpen = (unit) => unit.phases.some((p) => OPEN_STATES.includes(p.status));
+const isOpen = (unit) => unit.phases.some((p) => !CLOSED_STATES.includes(p.status));
 const hasIssues = (unit) => unit.phases.some((p) => ["needs_changes", "failed"].includes(p.status));
 
 /* -------------------------------------------------------------------- avvio */
@@ -775,11 +779,19 @@ function renderTimelineNotes(data) {
   const box = $("#timeline-notes");
   if (!box) return;
   const measured = data.measured || {};
+  const giorni = (data.days || []).length;
+  const senzaDate = !(data.measured || {}).dichiarata && !(data.measured || {}).mtime;
   const parts = [
     h("p", { class: "gmeta" }, [
-      h("b", { text: `${data.from} → ${data.to}` }),
+      h("b", {
+        text: senzaDate
+          ? "Nessuna data ancora: le barre compaiono con la prima consegna"
+          : giorni > 1
+            ? `${data.from} → ${data.to}`
+            : data.from,
+      }),
       document.createTextNode(
-        ` · ${(data.days || []).length} giorni · date delle fasi: ${measured.dichiarata || 0} dichiarate dagli artefatti, ` +
+        ` · ${giorni} ${giorni === 1 ? "giorno" : "giorni"} · date delle fasi: ${measured.dichiarata || 0} dichiarate dagli artefatti, ` +
           `${measured.mtime || 0} prese dall'mtime del puntatore, ${measured.senza_data || 0} senza data ` +
           "(fasi mai eseguite)"
       ),
