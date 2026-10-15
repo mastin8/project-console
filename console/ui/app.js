@@ -112,6 +112,7 @@ function render(data) {
 
   renderQuestions(data.questions, data.decisions);
   renderNextPrompts(data.next_prompts);
+  renderActivation(data);
   renderClaims(data.claims);
   renderAnswered(data.answered);
   renderBlocks();
@@ -264,6 +265,14 @@ function renderTally(data) {
   const box = $("#tally");
   if (!box) return;
   const facts = unitFacts(data);
+  // «In corso» = qualcuno tiene la fase (taken/active). «Attivate» = riservate e in attesa di un
+  // esecutore (pre_registered/ready): due cose diverse, e la pagina non le confonde.
+  const attive = (data.activated || []).filter((voce) =>
+    ["active", "taken", "active_extension"].includes(voce.status)
+  );
+  const riservate = (data.activated || []).filter((voce) =>
+    ["pre_registered", "ready"].includes(voce.status)
+  );
   const perTe =
     (data.questions || []).length +
     (data.decisions || []).length +
@@ -286,10 +295,17 @@ function renderTally(data) {
       run: () => focusStalled(),
     },
     {
-      label: `${data.summary.claims} in corso`,
-      title: "chi sta scrivendo, adesso",
-      disabled: !data.summary.claims,
+      label: `${attive.length} in corso`,
+      title: "chi tiene una fase adesso (taken/active)",
+      disabled: !attive.length,
       run: () => jumpTo("now-section"),
+    },
+    {
+      label: `${riservate.length} attivate`,
+      title: "riservate e in attesa di un esecutore: le vedi in «Cosa puoi attivare»",
+      disabled: !riservate.length,
+      warn: Boolean(riservate.length),
+      run: () => jumpTo("activation-section"),
     },
     {
       label: `${perTe} per te`,
@@ -521,6 +537,28 @@ function promptCard(prompt) {
       message.textContent = `non copiato (${error.message}): seleziona il testo e copialo a mano.`;
     }
   });
+  // Attivare da qui: se il codice del prompt e' una fase attivabile, il pulsante la riserva e
+  // deposita l'ordine. Se e' gia' attivata, si puo' togliere la riserva. Se il codice non e' una
+  // fase del registro (ci sono prompt che nominano un obbligo), il pulsante non compare: meglio
+  // niente che un pulsante che fallisce.
+  const attivabile = ((snapshot && snapshot.activatable) || []).find((v) => v.phase === prompt.anchor);
+  const attivata = ((snapshot && snapshot.activated) || []).find(
+    (v) => v.phase === prompt.anchor && ["pre_registered", "ready"].includes(v.status)
+  );
+  const attiva = [];
+  if (attivata) {
+    attiva.push(activationButton(prompt.anchor, "release", "Rilascia la fase", message, false));
+  } else if (attivabile) {
+    attiva.push(
+      activationButton(
+        prompt.anchor,
+        "activate",
+        prompt.state === "da_lanciare" ? "Attiva questo prompt" : "Attiva la fase",
+        message,
+        false
+      )
+    );
+  }
   return h("article", { class: "prompt", id: `prompt-${prompt.anchor || prompt.number}`, "data-state": prompt.state }, [
     h("div", { class: "ph" }, [
       h("span", { class: "state" }, [
@@ -541,7 +579,7 @@ function promptCard(prompt) {
       ? h("details", {}, [
           h("summary", { text: "il testo del prompt" }),
           h("pre", { text: prompt.prompt }),
-          h("div", { class: "prow" }, [copy, message]),
+          h("div", { class: "prow" }, [copy, ...attiva, message]),
         ])
       : h("p", {
           class: "pmeta",
@@ -726,6 +764,141 @@ function renderAnswered(answered) {
         )
     )
   );
+}
+
+/* ------------------------------------------------------------- attivazione */
+/* Il campo che manca quando la pagina non ha niente da chiedere: far partire una fase. Attivare
+   scrive l'ordine e riserva la fase; non avvia nessun agente, e la pagina non lo finge. */
+function renderActivation(data) {
+  const box = $("#activation");
+  const count = $("#activation-count");
+  if (!box || !count) return;
+  const tutte = data.activatable || [];
+  const aperte = tutte.filter((voce) => !(voce.waiting_on || []).length);
+  const attese = tutte.filter((voce) => (voce.waiting_on || []).length);
+  const attivate = (data.activated || []).filter((voce) =>
+    ["pre_registered", "ready"].includes(voce.status)
+  );
+  count.textContent = [
+    aperte.length ? `${aperte.length} da attivare` : null,
+    attivate.length ? `${attivate.length} attivate` : null,
+    attese.length ? `${attese.length} in attesa a monte` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  const parti = [];
+  if (attivate.length) {
+    parti.push(activationGroup("Attivate, in attesa di un esecutore", "warn", attivate, true));
+  }
+  const rifare = aperte.filter((voce) => voce.rework);
+  const fare = aperte.filter((voce) => !voce.rework);
+  if (rifare.length) parti.push(activationGroup("Da rifare: respinte in verifica", "bad", rifare));
+  if (fare.length) parti.push(activationGroup("Da fare: nessuna presa viva", "accent", fare));
+  if (attese.length) {
+    parti.push(
+      h("details", { class: "actbox" }, [
+        h("summary", { class: "acthead" }, [
+          h("b", { text: `In attesa a monte (${attese.length})` }),
+          document.createTextNode(
+            " — attivarle adesso chiederebbe lavoro che non si puo' ancora fare: prima le unita' elencate."
+          ),
+        ]),
+        ...attese.map((voce) => activationRow(voce, true, false)),
+      ])
+    );
+  }
+  if (!parti.length) {
+    parti.push(
+      h("p", { class: "empty" }, [
+        h("b", { text: "Niente da attivare: " }),
+        document.createTextNode(
+          "tutte le fasi dichiarate hanno una presa viva o sono accettate. E' il caso in cui la pagina aspetta, non ti chiede niente."
+        ),
+      ])
+    );
+  }
+  box.replaceChildren(...parti);
+}
+
+function activationGroup(titolo, tono, voci, rilasciabili) {
+  const head = h("p", { class: `actgroup ${tono}` }, [
+    h("b", { text: titolo }),
+    h("span", { class: "actcount", text: String(voci.length) }),
+  ]);
+  return h("div", { class: "actbox" }, [
+    head,
+    ...voci.map((voce) => activationRow(voce, false, Boolean(rilasciabili))),
+  ]);
+}
+
+function activationRow(voce, attesa, rilasciabile) {
+  const riga = h("div", { class: `actrow${attesa ? " waiting" : ""}` });
+  const testo = h("div", { class: "acttext" });
+  testo.append(h("code", { class: "actcode", text: voce.phase }));
+  testo.append(document.createTextNode(` ${voce.title || ""}`));
+  testo.append(
+    h("div", {
+      class: "actmeta",
+      text: [
+        voce.block,
+        voce.rework ? "respinta in verifica" : voce.status,
+        (voce.waiting_on || []).length ? `attende ${voce.waiting_on.join(", ")}` : null,
+        voce.order ? `ordine ${voce.order}` : null,
+        voce.since ? `attivata ${voce.since}` : null,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    })
+  );
+  riga.append(testo);
+  const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });
+  const azioni = h("div", { class: "actactions" });
+  azioni.append(
+    rilasciabile
+      ? activationButton(voce.phase, "release", "Rilascia", message, false)
+      : activationButton(voce.phase, "activate", "Attiva", message, attesa)
+  );
+  riga.append(azioni, message);
+  return riga;
+}
+
+function activationButton(phase, action, label, message, disabled) {
+  const button = h("button", {
+    type: "button",
+    class: `actbtn ${action}`,
+    text: label,
+    disabled: Boolean(disabled),
+    title: disabled
+      ? "in attesa delle unita' a monte"
+      : action === "release"
+        ? "toglie la riserva: la fase torna disponibile, l'ordine resta sul disco"
+        : "deposita l'ordine e riserva la fase nel registro",
+  });
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    message.className = "msg show pending";
+    message.textContent = action === "release" ? "rilascio in corso…" : "attivazione in corso…";
+    try {
+      const response = await fetch("/api/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target: phase, action }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || `errore ${response.status}`);
+      message.className = "msg show ok";
+      message.textContent =
+        action === "release"
+          ? "rilasciata: la fase e' di nuovo disponibile, l'ordine resta su disco."
+          : `ordine in ${payload.order}. Riserva scritta nel registro: una seconda attivazione della stessa fase viene rifiutata. Adesso cerca un esecutore.`;
+      setTimeout(load, 1600);
+    } catch (error) {
+      message.className = "msg show err";
+      message.textContent = `non fatto: ${error.message}`;
+      button.disabled = false;
+    }
+  });
+  return button;
 }
 
 /* -------------------------------------------------------- percorso nel tempo */

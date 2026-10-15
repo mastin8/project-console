@@ -175,6 +175,9 @@ due corsie lavorano sugli stessi byte e la vista mostra due titolari sulla stess
 ```bash
 python3 console/server.py --workspace <progetto> [--port 8899] [--host 127.0.0.1]
 python3 scaffold.py <cartella> --project "Nome" [--esempio]
+python3 registers/activate.py --workspace <progetto> --list          # cosa si puo' far partire adesso
+python3 registers/activate.py --workspace <progetto> --target <fase> # attiva: ordine + riserva
+python3 registers/activate.py --workspace <progetto> --release <fase># toglie la riserva
 python3 registers/sync_phases.py --workspace <progetto> [--apply]   # apre le fasi non ancora registrate
 python3 registers/validate_registries.py --workspace <progetto>
 python3 registers/next_prompts.py --workspace <progetto> [--json|--explain]
@@ -184,6 +187,8 @@ python3 registers/apply_transitions.py --workspace <progetto> --dir <progetto>/p
 
 ## Cosa si vede, e cosa puoi fare
 
+0. **Cosa puoi attivare** — l'input, e la prima cosa in pagina: le fasi che si possono far partire
+   adesso, con il pulsante per attivarle. Vedi la sezione qui sotto.
 1. **Il percorso nel tempo** — blocchi, unita', fasi, con le barre datate da cio' che gli artefatti
    DICHIARANO (`published_at`) o, in mancanza, dall'mtime; e la riga dei commit del repository, con i
    commit che toccano i path dichiarati da ogni blocco. Nessuna previsione: solo misure. Un progetto
@@ -198,6 +203,32 @@ python3 registers/apply_transitions.py --workspace <progetto> --dir <progetto>/p
 Nell'intestazione: il marchio (dal tuo `brand/`, o un monogramma), il nome del progetto, quattro
 tastini coi conteggi — aperte, respinte, in corso, per te — e il filtro condiviso dalle due viste.
 Il tastino delle respinte filtra e atterra sulla prima fase `needs_changes`.
+
+## Attivare una fase: l'input
+
+Quando non ci sono domande da rispondere, decisioni da prendere o prompt da lanciare, la pagina
+restava muta: nessun campo, nessun pulsante, nessun modo di cominciare. Adesso c'e' «Cosa puoi
+attivare»: le fasi senza presa viva, in cima quelle respinte in verifica (sono lavoro da rifare),
+ognuna col suo pulsante. Il pulsante c'e' anche su ogni prompt del quaderno, quando il suo codice e'
+una fase.
+
+Attivare fa due cose, e non finge la terza:
+
+1. deposita un **ordine durevole** in `<workspace>/dispatch-queue/` con il testo del prompt, il
+   perimetro, il file di consegna atteso (`attempt-N`, il prossimo) e le **impronte** dei file di
+   prodotto che la fase deve misurare — la revisione che l'ordine si aspetta, congelata;
+2. **riserva la fase** nel registro con `status: pre_registered`, lo stato che il registro usa per
+   «voce pronta, nessun titolare». Da quel momento una seconda attivazione della stessa fase viene
+   rifiutata, invece di produrre due esecutori sugli stessi byte.
+
+Quello che NON fa: non avvia nessun agente. Un ordine e' una promessa in attesa di un esecutore, e
+il pannello lo dice con quelle parole. Chi prende la fase la porta a `taken` col proprio nome,
+depositando la presa come al solito, ed e' lui che risponde di quei byte.
+
+La riserva si toglie con **Rilascia** (o `--release`): la fase torna disponibile e l'ordine resta
+sul disco come prova di cosa era stato chiesto. Un ordine senza riserva viene cancellato da solo se
+la scrittura nel registro fallisce: non resta mai sul disco un ordine che qualcuno potrebbe
+raccogliere mentre la fase e' libera.
 
 ## Il contratto di un workspace
 

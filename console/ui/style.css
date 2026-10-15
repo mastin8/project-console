@@ -326,6 +326,42 @@ button.linkish{background:none;border:0;padding:0;color:var(--ink-3);font-size:1
 .answers details[open] summary::before{content:"▾ "}
 @media (hover:hover) and (pointer:fine){.answers summary:hover{color:var(--ink)}}
 
+/* ------------------------------------------------------------ attivazione */
+/* L'input: un pulsante per far partire una fase, e il modo di togliere la riserva. Righe, non
+   schede: quello che si legge e' una lista di cose da attivare, non una collezione di oggetti. */
+.actbox{margin-top:var(--s3)}
+.acthead,.actgroup{display:flex;align-items:baseline;gap:var(--s2);margin:0 0 var(--s2);
+  font-size:13px;max-width:var(--measure)}
+.acthead{cursor:pointer;color:var(--ink-2);list-style:none}
+.acthead::-webkit-details-marker{display:none}
+.acthead::before{content:"▸ ";font-size:11px;color:var(--ink-3)}
+details[open] > .acthead::before{content:"▾ "}
+.actgroup.accent b{color:var(--accent)}
+.actgroup.bad b{color:var(--bad)}
+.actgroup.warn b{color:var(--warn)}
+.actcount{margin-left:auto;font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
+.actrow{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:var(--s15) var(--s3);
+  align-items:center;padding:var(--s2) var(--s3);border:1px solid var(--line);
+  border-radius:var(--r-sm);background:var(--surface);margin-bottom:var(--s15)}
+.actrow.waiting{opacity:.62}
+.acttext{min-width:0}
+.actcode{font-family:var(--mono);font-size:12.5px;font-weight:600}
+.actmeta{margin-top:2px;color:var(--ink-3);font-size:12px;font-family:var(--mono);
+  overflow-wrap:anywhere}
+.actactions{display:flex;gap:var(--s2);flex:none}
+.actbtn{padding:var(--s15) var(--s3);border-radius:var(--r-sm);border:1px solid var(--accent);
+  background:var(--accent);color:var(--accent-ink);font:inherit;font-size:12.5px;font-weight:600;
+  cursor:pointer;transition:transform 160ms var(--ease-out), background-color 160ms var(--ease-out)}
+.actbtn.release{background:var(--surface);color:var(--ink-2);border-color:var(--line-strong);
+  font-weight:550}
+.actbtn:active:not(:disabled){transform:scale(.97)}
+.actbtn:disabled{opacity:.5;cursor:default}
+@media (hover: hover) and (pointer: fine){
+  .actbtn:not(:disabled):hover{background:var(--accent-soft);color:var(--accent)}
+  .actbtn.release:not(:disabled):hover{background:var(--surface-2);color:var(--ink)}
+}
+.actrow .msg{margin:0;grid-column:1 / -1}
+
 /* ------------------------------------------------------------ adattamento */
 @media (max-width: 720px){
   /* Su uno schermo stretto l'header impilato mangerebbe un terzo della finestra: qui scorre via

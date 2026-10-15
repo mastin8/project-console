@@ -142,6 +142,8 @@ non regge dopo la scrittura, il file torna com'era e te lo dice.
 
 | Azione | Chi lo fa | Come |
 | --- | --- | --- |
+| attivare una fase (farla partire) | l'utente, dalla pagina | ordine in `dispatch-queue/` + riserva `pre_registered` |
+| togliere una riserva | l'utente, dalla pagina | rilascio della presa (`status: released`) |
 | prendere/rilasciare una fase | un agente | una transizione in `pending-transitions/` |
 | registrare una consegna | un agente | un file nuovo in `reports/<fase>/` + il puntatore |
 | rispondere a una domanda | l'utente | dalla pagina, o con una transizione |
@@ -150,3 +152,25 @@ non regge dopo la scrittura, il file torna com'era e te lo dice.
 
 Quello che nessuno fa: riscrivere un tentativo consegnato, cambiare una decisione presa, o
 modificare un registro senza passare dalla coda.
+
+## Attivazione e ordini di lavoro
+
+Un'**attivazione** e' la dichiarazione «questa fase deve partire». Vive in due posti, sempre
+insieme:
+
+* l'**ordine** in `dispatch-queue/<timestamp>-<fase>-attivazione.yaml` (`project-console-work-order/1.0`),
+  che porta il testo del prompt, il perimetro, il file di consegna atteso e le impronte dei file di
+  prodotto da misurare;
+* la **riserva** in `state.yaml#active_claims` con `status: pre_registered`, `order:` che punta
+  all'ordine e `owner` che dice esplicitamente che non c'e' un titolare.
+
+`pre_registered` e' uno stato che il registro conosce: vale come presa VIVA (quindi impedisce una
+seconda attivazione, ed e' il motivo per cui il controllo delle prese non segnala nulla), ma non
+come fase in esecuzione — la pagina le conta separatamente: «in corso» chi tiene la fase,
+«attivate» chi la aspetta.
+
+Le impronte si risolvono su due basi, in quest'ordine: la cartella dei registri e il repository che
+la contiene. Serve perche' i path di prodotto sono relativi al repository (`tenders/tests/...`)
+mentre i file del coordinamento sono relativi alla cartella dei registri (`reports/...`); l'ordine
+dichiara per ogni impronta su quale base l'ha trovata, e se non ne trova nessuna lo scrive invece
+di lasciare la sezione vuota.

@@ -51,6 +51,17 @@
   </header>
 
   <main id="main">
+    <!-- L'INPUT che manca quando non ci sono domande, decisioni o prompt da lanciare: attivare
+         una fase. Deposita un ordine durevole e riserva la fase; non avvia nessun agente. -->
+    <section id="activation-section" aria-labelledby="activation-head">
+      <div class="sec-head">
+        <h2 id="activation-head">Cosa puoi attivare</h2>
+        <span class="count" id="activation-count"></span>
+      </div>
+      <p class="hint">Attivare deposita un ordine in <code>dispatch-queue/</code> e riserva la fase nel registro, cosi' una seconda attivazione della stessa fase viene rifiutata. <b>Non avvia nessun agente</b>: l'ordine aspetta un esecutore, e chi prende la fase la porta a <code>taken</code> col proprio nome.</p>
+      <div id="activation"></div>
+    </section>
+
     <section id="timeline-section" aria-labelledby="timeline-head">
       <div class="sec-head">
         <h2 id="timeline-head">Il percorso nel tempo</h2>

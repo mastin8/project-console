@@ -40,6 +40,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / "registers"), str(Path(__file__).resolve()
 sys.path.insert(0, str(ROOT))
 
 import apply_transitions  # noqa: E402
+import activate  # noqa: E402 - attivare: riserva la fase e deposita l'ordine
 import next_prompts  # noqa: E402 - una sola implementazione della regola, condivisa con STATUS.html
 import timeline  # noqa: E402 - la linea del tempo, con le date dichiarate dagli artefatti
 from workspace import Workspace  # noqa: E402 - il contratto dei nomi: qui non c'e' nessun progetto
@@ -281,6 +282,19 @@ class ReviewState:
             # lista vuota mandata al posto di un guasto si leggerebbe «non c'e' nessun prompt»,
             # che e' una cosa falsa detta con parole nostre.
             "next_prompts": next_prompts.build(self.pack, state=state),
+            # Cosa si puo' far partire adesso: e' l'input che manca quando non ci sono domande,
+            # decisioni o prompt da lanciare. Il calcolo sta in `registers/activate.py`.
+            "activatable": activate.attivabili(self.workspace, state, tasks_doc),
+            "activated": [
+                {
+                    "phase": fase,
+                    "owner": (voce.get("owner") or voce.get("owner_agent") or voce.get("taken_by") or ""),
+                    "order": voce.get("order"),
+                    "status": voce.get("status"),
+                    "since": voce.get("registered_at") or voce.get("taken_at"),
+                }
+                for fase, voce in activate.prese(state).items()
+            ],
         }
 
     def timeline_payload(self):
@@ -775,6 +789,27 @@ def build_handler(state):
                 except Exception as error:  # noqa: BLE001
                     return self._json(500, {"error": str(error)})
                 return self._json(200, {"ok": True, **result})
+            if route == "/api/activate":
+                length = int(self.headers.get("Content-Length") or 0)
+                try:
+                    payload = json.loads(self.rfile.read(length) or b"{}")
+                except json.JSONDecodeError as error:
+                    return self._json(400, {"error": f"JSON non valido: {error}"})
+                target = str(payload.get("target") or "").strip()
+                azione = str(payload.get("action") or "activate")
+                if not target:
+                    return self._json(400, {"error": "serve target: la fase da attivare o rilasciare"})
+                try:
+                    esito = (
+                        activate.rilascia(state.workspace, target)
+                        if azione == "release"
+                        else activate.attiva(state.workspace, target)
+                    )
+                except apply_transitions.TransitionError as error:
+                    return self._json(409, {"error": str(error)})
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
+                return self._json(200, {"ok": True, "action": azione, "target": target, **esito})
             if route == "/api/decision":
                 length = int(self.headers.get("Content-Length") or 0)
                 try:
