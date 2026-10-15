@@ -955,11 +955,13 @@ function activationGroup(titolo, tono, voci, rilasciabili) {
   ]);
   return h("div", { class: "actbox" }, [
     head,
-    ...voci.map((voce) => activationRow(voce, false, Boolean(rilasciabili))),
+    // «In attesa di un esecutore» vuol dire che il prompt serve ADESSO: si carica e si apre da
+    // solo, invece di stare dietro un pulsante. Chi legge quella riga si aspetta il prompt.
+    ...voci.map((voce) => activationRow(voce, false, Boolean(rilasciabili), Boolean(rilasciabili))),
   ]);
 }
 
-function activationRow(voce, attesa, rilasciabile) {
+function activationRow(voce, attesa, rilasciabile, apriPrompt) {
   const riga = h("div", { class: `actrow${attesa ? " waiting" : ""}` });
   const testo = h("div", { class: "acttext" });
   testo.append(h("code", { class: "actcode", text: voce.phase }));
@@ -986,8 +988,70 @@ function activationRow(voce, attesa, rilasciabile) {
       ? activationButton(voce.phase, "release", "Rilascia", message, false)
       : activationButton(voce.phase, "activate", "Attiva", message, attesa)
   );
-  riga.append(azioni, message);
+  // Il prompt: e' quello che si incolla in una chat. Sta su tutta la larghezza, sotto la riga,
+  // perche' e' testo da leggere e copiare, non un pulsante fra i pulsanti.
+  const prompt = activationPromptButton(voce.phase, Boolean(apriPrompt));
+  riga.append(azioni, message, prompt);
   return riga;
+}
+
+/* Il prompt della fase, a richiesta: quello del quaderno se c'e' una sezione per quella fase,
+   altrimenti composto dal registro (criteri di accettazione, perimetro, protocollo). */
+function activationPromptButton(phase, apri) {
+  const button = h("button", {
+    type: "button",
+    class: "actbtn release",
+    text: "Prompt",
+    title: "il testo da incollare in una chat per far partire questa fase",
+  });
+  const scatola = h("div", { class: "actprompt", hidden: true });
+  let caricato = null;
+  const mostra = async () => {
+    scatola.hidden = false;
+    button.textContent = "Chiudi il prompt";
+    if (caricato) return;
+    caricato = true;
+    scatola.replaceChildren(h("p", { class: "actmeta", text: "compongo…" }));
+    try {
+      const response = await fetch(`/api/prompt?target=${encodeURIComponent(phase)}`);
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || `errore ${response.status}`);
+      const copia = h("button", { type: "button", class: "actbtn", text: "Copia il prompt" });
+      const esito = h("span", { class: "msg", role: "status", "aria-live": "polite" });
+      copia.addEventListener("click", async () => {
+        try {
+          await navigator.clipboard.writeText(payload.text);
+          esito.className = "msg show ok";
+          esito.textContent = "copiato: incollalo come primo messaggio di una chat nuova.";
+        } catch (error) {
+          esito.className = "msg show err";
+          esito.textContent = `non copiato (${error.message}): seleziona il testo e copialo a mano.`;
+        }
+      });
+      scatola.replaceChildren(
+        h("p", { class: "actmeta", text: `fonte: ${payload.source}` }),
+        h("pre", { class: "acttext-pre", text: payload.text }),
+        h("div", { class: "actactions" }, [copia, esito])
+      );
+    } catch (error) {
+      caricato = null;
+      scatola.replaceChildren(
+        h("p", { class: "actmeta", text: `prompt non disponibile: ${error.message}` })
+      );
+    }
+  };
+  button.addEventListener("click", () => {
+    if (!scatola.hidden) {
+      scatola.hidden = true;
+      button.textContent = "Prompt";
+      return;
+    }
+    mostra();
+  });
+  const contenitore = h("span", { class: "actprompt-box" });
+  contenitore.append(button, scatola);
+  if (apri) setTimeout(mostra, 0);
+  return contenitore;
 }
 
 function activationButton(phase, action, label, message, disabled) {

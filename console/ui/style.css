@@ -369,6 +369,10 @@ details[open] > .acthead::before{content:"▾ "}
   border-radius:var(--r-sm);background:var(--surface);color:var(--ink);font:inherit;font-size:13px;
   margin-top:var(--s2)}
 .actnote::placeholder{color:var(--ink-3)}
+.actprompt-box{grid-column:1 / -1;display:flex;flex-direction:column;align-items:flex-start;
+  gap:var(--s2);margin-top:var(--s2)}
+.actprompt{max-width:min(74ch, 68vw)}
+.acttext-pre{margin:var(--s2) 0 0;max-height:320px;overflow:auto}
 
 /* ------------------------------------------------------------ adattamento */
 @media (max-width: 720px){

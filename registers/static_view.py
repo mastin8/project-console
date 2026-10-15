@@ -77,7 +77,8 @@ def load(name):
 
 def unit_progress(tasks_doc, state):
     """(unita' totali, accettate, tabella unita' -> fasi e stato) dai due registri."""
-    statuses = state.get("tasks", {}) if state else {}
+    # `or {}`: chiave presente e vuota si legge None, e il default di `.get` non si applica.
+    statuses = (state or {}).get("tasks") or {}
     units = {}
     for task in (tasks_doc or {}).get("tasks", []) or []:
         unit = task.get("unit_id")

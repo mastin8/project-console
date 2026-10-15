@@ -7,6 +7,8 @@ task_statuses:
 - running
 - needs_changes
 - accepted
+# Le due sequenze si tengono in forma BLOCCO (la chiave su una riga sua), non compatta: e' la
+# forma in cui una presa nuova si puo' appendere senza riscrivere il file a mano.
 active_functional_question: null
-active_claims: []
-tasks: {}
+active_claims:
+tasks:

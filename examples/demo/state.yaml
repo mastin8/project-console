@@ -8,7 +8,7 @@ task_statuses:
 - needs_changes
 - accepted
 active_functional_question: null
-active_claims: []
+active_claims:
 tasks:
   ES01A:
     status: accepted

@@ -108,8 +108,10 @@ def ordini_aperti(ws):
 def attivabili(ws, state=None, tasks_doc=None):
     """Cosa si puo' far partire adesso, e perche' — misurato, non indovinato.
 
-    Regola: una fase senza presa viva, la cui unita' non aspetta altre unita' aperte. Le fasi
-    respinte in verifica restano attivabili (sono lavoro da rifare) e lo dichiarano.
+    Regola: una fase senza presa viva, i cui PREREQUISITI DICHIARATI (`depends_on`: la catena
+    A -> E -> T -> R, e le dipendenze fra unita') sono tutti accettati. Le fasi respinte in
+    verifica restano attivabili — sono lavoro da rifare, e nel caso normale il loro prerequisito
+    e' accettato — e lo dichiarano.
     """
     state = state if state is not None else (yaml.safe_load(ws.state_path.read_text(encoding="utf-8")) or {})
     tasks_doc = tasks_doc if tasks_doc is not None else (yaml.safe_load(ws.path(ws.tasks).read_text(encoding="utf-8")) or {})
@@ -117,6 +119,11 @@ def attivabili(ws, state=None, tasks_doc=None):
     vive = prese(state)
     ordini = ordini_aperti(ws)
     unita = {str(u.get("id")): u for u in tasks_doc.get("units") or [] if u.get("id")}
+    per_id = {str(t.get("id")): t for t in tasks_doc.get("tasks") or [] if t.get("id")}
+
+    def stato_di(fase):
+        return (registrate.get(fase) or {}).get("status", "pending")
+
     accettate = {
         uid
         for uid, u in unita.items()
@@ -133,8 +140,22 @@ def attivabili(ws, state=None, tasks_doc=None):
     }
     fuori = []
     for fase, unit_id, kind, titolo in fasi(tasks_doc):
-        stato = (registrate.get(fase) or {}).get("status", "pending")
+        stato = stato_di(fase)
         if stato == "accepted" or fase in vive:
+            continue
+        # I PREREQUISITI DELLA FASE, che fino a questa revisione non si leggevano. La misura che
+        # li ha resi necessari: il 2026-10-15 la pagina ha offerto all'utente cinque fasi con il
+        # prerequisito APERTO (`A11Y03R` mentre `A11Y03T` era respinta, `REG03R` mentre `REG03T`
+        # era respinta, `OVR01E`/`OVR01R`/`OVR01T` mentre `OVR01VR` era in volo). L'attivazione ha
+        # creato sei riserve su fasi che non potevano partire; chi ha letto quelle riserve come un
+        # difetto le ha poi chiuse scrivendo su una voce STORICA del registro. Il pulsante si offre
+        # col cancello aperto e non prima.
+        gated = [
+            str(dip)
+            for dip in (per_id.get(fase) or {}).get("depends_on") or []
+            if stato_di(str(dip)) != "accepted"
+        ]
+        if gated:
             continue
         unita_dati = unita.get(unit_id) or {}
         attese = [d for d in (unita_dati.get("depends_on_units") or []) if str(d) not in chiuse]
@@ -285,17 +306,33 @@ def prompt_per(ws, fase):
     return None
 
 
-def _ultima_ancora(state):
+def _ultima_ancora(state, ws):
     """(ancora, occorrenza) dell'ULTIMA voce di claim, per appenderne una nuova dopo di lei.
 
     L'occorrenza serve: il registro ripete gli id, e senza dirla l'applicatore rifiuta l'ancora
     ambigua — giustamente, perche' non deve scegliere lui quale voce intendevi.
+
+    Con `active_claims` VUOTO — un progetto al primo giorno — non c'e' nessuna voce dopo cui
+    appendere: si usa la riga della chiave, che e' unica, e la voce nuova nasce subito sotto. Senza
+    questo, la PRIMISSIMA attivazione di un progetto falliva (misurato sull'esempio del repository).
     """
     voci = [str(v.get("task_id")) for v in state.get("active_claims") or [] if v.get("task_id")]
-    if not voci:
-        raise apply_transitions.TransitionError("nessuna voce di claim nel registro")
-    ultima = voci[-1]
-    return f"- task_id: {ultima}", sum(1 for v in voci if v == ultima)
+    if voci:
+        ultima = voci[-1]
+        return f"- task_id: {ultima}", sum(1 for v in voci if v == ultima)
+    # Nessuna presa: si usa la RIGA della chiave, riprodotta com'e' scritta nel file (l'ancora deve
+    # combaciare alla lettera). Una sequenza COMPATTA non puo' ricevere una voce dopo di se':
+    # `active_claims: []` seguito da `- task_id: ...` non e' YAML valido, e lo si dice invece di
+    # farlo scoprire al validatore.
+    for riga in ws.state_path.read_text(encoding="utf-8").splitlines():
+        if riga.startswith("active_claims:"):
+            if riga.strip() != "active_claims:":
+                raise apply_transitions.TransitionError(
+                    f"il registro tiene `{riga.strip()}` in forma compatta: per potervi appendere una "
+                    "presa va scritto `active_claims:` su una riga sua, senza `[]`"
+                )
+            return riga, 1
+    raise apply_transitions.TransitionError("il registro non ha la chiave `active_claims`")
 
 
 def prossimo_tentativo(state, fase):
@@ -348,11 +385,39 @@ def attiva(ws, fase, dry_run=False):
                 f"{fase} ha gia' una presa viva ({presa.get('owner_agent') or presa.get('taken_by') or presa.get('status')}): "
                 "attivarla di nuovo farebbe due esecutori sugli stessi byte"
             )
+        # Perche' non e' attivabile: se il cancello dei prerequisiti e' chiuso il motivo e' MISURATO
+        # e va detto, invece di rispondere «fase non attivabile o inesistente». Serve anche contro
+        # una pagina vecchia, che offre un pulsante ormai chiuso.
+        registrate = state.get("tasks") or {}
+        per_id = {str(t.get("id")): t for t in tasks_doc.get("tasks") or [] if t.get("id")}
+        gated = [
+            str(dip)
+            for dip in (per_id.get(fase) or {}).get("depends_on") or []
+            if (registrate.get(str(dip)) or {}).get("status", "pending") != "accepted"
+        ]
+        if gated:
+            raise apply_transitions.TransitionError(
+                f"{fase} non e' attivabile adesso: attende "
+                + ", ".join(
+                    f"{dip} ({((registrate.get(dip) or {}).get('status') or 'pending')})"
+                    for dip in gated
+                )
+                + ". Attivarla prima creerebbe una riserva su una fase che non puo' partire."
+            )
         raise apply_transitions.TransitionError(f"fase non attivabile o inesistente: {fase}")
-    ordine = costruisci_ordine(ws, voce, state, prompt_per(ws, fase))
+    # Il prompt che l'esecutore trova NELL'ORDINE: dal quaderno se c'e', altrimenti composto dal
+    # registro. Senza questo, attivare una fase senza sezione nel quaderno lasciava l'ordine con
+    # `prompt: null` e nessun testo da incollare (segnalato dall'utente).
+    import mandate  # noqa: PLC0415 - import locale: `mandate` usa `activate` per le impronte
+
+    ordine = costruisci_ordine(ws, voce, state, mandate.per(ws, fase))
     # Un ordine per fase: se ce n'e' gia' uno aperto si usa QUELLO, non se ne scrive un secondo.
     esistenti = voce.get("orders") or []
     percorso = (ws.root / esistenti[-1]) if esistenti else _order_path(ws, fase)
+    # L'ancora si calcola PRIMA di scrivere l'ordine: se il registro non la regge (per esempio
+    # `active_claims` vuoto su un progetto al primo giorno) si fallisce senza lasciare un ordine
+    # orfano sul disco — che qualcun altro raccoglierebbe mentre la fase e' ancora libera.
+    ancora, occorrenza = _ultima_ancora(state, ws)
     if dry_run:
         return {"order": str(percorso), "order_body": ordine, "applied": []}
     if not esistenti:
@@ -360,7 +425,6 @@ def attiva(ws, fase, dry_run=False):
         percorso.write_text(
             yaml.safe_dump(ordine, allow_unicode=True, sort_keys=False), encoding="utf-8"
         )
-    ancora, occorrenza = _ultima_ancora(state)
     richiesta = {
         "schema": apply_transitions.SCHEMA,
         "file": ws.state,
@@ -393,6 +457,7 @@ def attiva(ws, fase, dry_run=False):
         "order": str(percorso.relative_to(ws.root)),
         "applied": applicate,
         "prompt": ordine.get("prompt"),
+        "prompt_source": ordine.get("prompt_source"),
         "action": ordine["action"],
     }
 
@@ -460,7 +525,7 @@ def main(argv=None):
         print(f"ordine: {esito['order']}")
         print(f"scritto nel registro: {', '.join(esito['applied']) or 'niente (dry-run)'}")
         if esito.get("prompt"):
-            print("prompt pronto: si', dal quaderno")
+            print(f"prompt nell'ordine: {len(esito['prompt'])} caratteri (fonte: {esito.get('prompt_source')})")
         return 0
     elenco(ws)
     return 0

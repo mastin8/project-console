@@ -42,6 +42,7 @@ sys.path.insert(0, str(ROOT))
 import apply_transitions  # noqa: E402
 import activate  # noqa: E402 - attivare: riserva la fase e deposita l'ordine
 import handoff  # noqa: E402 - cosa c'e' da fare dopo: il testimone lasciato da chi ha finito
+import mandate  # noqa: E402 - il prompt di una fase: dal quaderno, o composto dal registro
 import next_prompts  # noqa: E402 - una sola implementazione della regola, condivisa con STATUS.html
 import timeline  # noqa: E402 - la linea del tempo, con le date dichiarate dagli artefatti
 from workspace import Workspace  # noqa: E402 - il contratto dei nomi: qui non c'e' nessun progetto
@@ -104,7 +105,10 @@ class ReviewState:
         state = self._load(self.workspace.state) or {}
         tasks_doc = self._load(self.workspace.tasks) or {}
         questions = self._load(self.workspace.questions) or {}
-        tasks = state.get("tasks", {})
+        # `or {}`: un registro con la chiave presente e vuota (`tasks:`) si legge come None, e
+        # `.get(chiave, default)` NON applica il default in quel caso — e' la forma che il modello
+        # di workspace usa proprio perche' ci si possa appendere. Misurato su un progetto nuovo.
+        tasks = state.get("tasks") or {}
 
         blocks = {}
         for unit in tasks_doc.get("units") or []:
@@ -751,6 +755,16 @@ def build_handler(state):
                     return self._json(200, state.timeline_payload())
                 except Exception as error:  # noqa: BLE001
                     return self._json(500, {"error": str(error)})
+            if route == "/api/prompt":
+                # Il prompt di UNA fase, a richiesta: dal quaderno se c'e', altrimenti composto dal
+                # registro. Non sta nel carico generale perche' sono migliaia di caratteri per fase.
+                target = (parse_qs(parsed.query).get("target") or [""])[0]
+                if not target:
+                    return self._json(400, {"error": "serve target: la fase del prompt"})
+                try:
+                    return self._json(200, {"phase": target, **mandate.per(state.workspace, target)})
+                except Exception as error:  # noqa: BLE001
+                    return self._json(400, {"error": str(error)})
             if route == "/file":
                 wanted = (parse_qs(parsed.query).get("path") or [""])[0]
                 target = (state.pack / wanted).resolve()
