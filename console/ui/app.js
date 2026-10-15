@@ -1,4 +1,4 @@
-/* Verifica del percorso del pack UX.
+/* Il coordinatore: la pagina che legge i registri di un workspace e mostra dove sta il lavoro.
    Sola lettura tranne il submit di una risposta, che passa dal server e quindi dal lock. */
 
 const $ = (sel) => document.querySelector(sel);
@@ -816,9 +816,9 @@ function renderTimelineNotes(data) {
     if (commits.tracked_pack_files === 0) {
       note.append(
         h("p", { class: "warnnote" }, [
-          h("b", { text: "Il pack non è tracciato: " }),
+          h("b", { text: "Il workspace non è tracciato: " }),
           document.createTextNode(
-            "nessuno dei file di docs/ux-context-pack/ è dentro un commit, quindi la riga dei commit qui sotto resta vuota per costruzione, non perché non si sia lavorato."
+            "nessun file di questo workspace è dentro un commit, quindi la riga dei commit resta vuota per costruzione, non perché non si sia lavorato."
           ),
         ])
       );

@@ -122,6 +122,22 @@ Nessuno scrive i registri a mano: si deposita una richiesta, l'applicatore la ap
 indentazione calcolata dall'ancora, idempotenza per campo e ripristino se il file non regge piu' la
 validazione. Formato in `templates/workspace/pending-transitions/README.md`.
 
+## Il primo giorno di un progetto: aprire le fasi
+
+Una fase non si puo' prendere se il registro non ha la sua voce: `tasks.yaml` dichiara la mappa,
+ma `state.yaml#tasks` deve contenere l'entry di ogni fase. Su un progetto nuovo quel blocco e'
+vuoto e la prima presa viene **rifiutata** («ancora non trovata»). Dopo aver scritto `tasks.yaml`
+il primo passo e':
+
+```bash
+python3 registers/sync_phases.py --workspace <progetto>          # mostra cosa aprirebbe
+python3 registers/sync_phases.py --workspace <progetto> --apply  # apre le fasi mancanti
+```
+
+Apre SOLO le voci mancanti con `status: pending` e non tocca quelle esistenti: la storia di una
+fase non si azzera. Backup, validazione e ripristino sono quelli dell'applicatore — se il registro
+non regge dopo la scrittura, il file torna com'era e te lo dice.
+
 ## Come si scrive (e cosa non si tocca)
 
 | Azione | Chi lo fa | Come |

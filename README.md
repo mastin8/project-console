@@ -17,6 +17,19 @@ python3 console/server.py --workspace /tmp/prova             # http://127.0.0.1:
 
 Senza `--workspace` il coordinatore usa `$CONSOLE_WORKSPACE`, o la cartella corrente.
 
+## Il primo giorno di un progetto vero
+
+```bash
+python3 scaffold.py /percorso/vattelappesca --project "Vattelappesca"   # la cartella dei registri
+# scrivi la mappa del lavoro in tasks.yaml e il primo prompt in PARALLEL-PROMPTS.md
+python3 registers/sync_phases.py --workspace /percorso/vattelappesca --apply   # apre le fasi
+python3 console/server.py --workspace /percorso/vattelappesca
+```
+
+Da li' in poi il coordinatore mostra tutto da solo: gli agenti prendono le fasi depositando una
+transizione, consegnano scrivendo un file in `reports/`, e la pagina ne ricava lo stato senza che
+nessuno lo aggiorni a mano.
+
 ## Cosa si vede
 
 1. **Il percorso nel tempo** — blocchi, unita', fasi, con le barre datate da cio' che gli artefatti
@@ -34,6 +47,7 @@ Senza `--workspace` il coordinatore usa `$CONSOLE_WORKSPACE`, o la cartella corr
 ```bash
 python3 console/server.py --workspace <progetto> [--port 8899] [--host 127.0.0.1]
 python3 scaffold.py <cartella> --project "Nome" [--esempio]
+python3 registers/sync_phases.py --workspace <progetto> [--apply]   # apre le fasi dichiarate e non ancora registrate
 python3 registers/validate_registries.py --workspace <progetto>
 python3 registers/next_prompts.py --workspace <progetto> [--json|--explain]
 python3 registers/static_view.py --workspace <progetto>          # la stessa cosa, in una pagina statica

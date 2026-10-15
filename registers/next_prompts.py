@@ -72,7 +72,10 @@ _OBLIGATION = re.compile(r"obbligo\s+([^\n]{0,60})")
 #: Serve davvero: «La voce di claim e' `taken` nel registro» e «la voce di claim che il registro
 #: ha gia'» davano come id `e` e `che` — misurato al primo giro di questo strumento (§5 e §10).
 _TOKEN = re.compile(r"`([^`]+)`|([A-Za-z][A-Za-z0-9._-]{2,})")
-_ID_LIKE = re.compile(r"^(?=.*[A-Z0-9])[A-Za-z0-9][A-Za-z0-9._-]*$")
+#: Un id finisce con una lettera o una cifra: la prosa lo mette in mezzo a un punto fermo
+#: («la voce di claim VAT01A. NON scrivere») e senza questo vincolo l'id letto era `VAT01A.`,
+#: che il registro non conosce (misurato il 2026-10-15 su un progetto nuovo).
+_ID_LIKE = re.compile(r"^(?=.*[A-Z0-9])[A-Za-z0-9][A-Za-z0-9._-]*[A-Za-z0-9]$|^[A-Za-z0-9]{2}$")
 _DELIVERABLE = re.compile(r"\breports/[A-Za-z0-9._/-]+\.ya?ml")
 
 
