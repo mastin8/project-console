@@ -391,10 +391,14 @@ details[open] > .acthead::before{content:"▾ "}
   border-radius:var(--r-sm);background:var(--surface);color:var(--ink);font:inherit;font-size:13px;
   margin-top:var(--s2)}
 .actnote::placeholder{color:var(--ink-3)}
-.actprompt-box{grid-column:1 / -1;display:flex;flex-direction:column;align-items:flex-start;
-  gap:var(--s2);margin-top:var(--s2)}
-.actprompt{max-width:min(74ch, 68vw)}
-.acttext-pre{margin:var(--s2) 0 0;max-height:320px;overflow:auto}
+/* Il box del prompt: larghezza ESPLICITA. Un figlio di un flex con `overflow` ha `min-width: 0` e
+   puo' collassare a zero, e allora il testo va a un carattere per riga — il difetto segnalato
+   dall'utente. Qui la larghezza non si lascia dedurre. */
+.actprompt-box{grid-column:1 / -1;display:flex;flex-direction:column;align-items:stretch;
+  gap:var(--s2);margin-top:var(--s2);width:100%;min-width:0}
+.actprompt{width:100%;max-width:min(74ch, 68vw);min-width:0}
+.acttext-pre{margin:var(--s2) 0 0;max-height:320px;overflow:auto;width:100%;min-width:0;
+  white-space:pre-wrap;overflow-wrap:break-word}
 
 /* ------------------------------------------------------------ adattamento */
 @media (max-width: 720px){
@@ -594,13 +598,18 @@ details[open] > .acthead::before{content:"▾ "}
 
 /* ---------------------------------------------------------------- dialogo */
 dialog{border:0;border-radius:var(--r-lg);padding:var(--s5);
-  width:min(92vw,920px);background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+  width:min(92vw,920px);min-width:min(92vw,320px);max-height:88vh;overflow:auto;
+  background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
 dialog::backdrop{background:rgba(12,14,18,.5)}
 dialog h3{margin:0 0 var(--s3);font-size:15px;word-break:break-all}
 dialog .close{float:right}
 pre{margin:0;background:#0f1115;color:#e8e8ea;border-radius:var(--r-sm);padding:var(--s4);
   overflow:auto;max-height:62vh;font-family:var(--mono);font-size:12.5px;line-height:1.5;
-  white-space:pre-wrap;word-break:break-word}
+  /* `pre-wrap` per mandare a capo le righe lunghe, NON `break-word`: con le parole spezzate il
+     testo sembra andare a capo a caso. Larghezza esplicita perche' un figlio di un flex con
+     `overflow` ha `min-width: 0` e puo' collassare a zero (testo a un carattere per riga). */
+  white-space:pre-wrap;word-break:normal;overflow-wrap:normal;
+  width:100%;min-width:0}
 
 /* Un solo momento di movimento: la scheda della domanda, cioe' l'azione principale.
    Niente ingressi identici su ogni sezione. */

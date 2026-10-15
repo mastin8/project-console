@@ -1080,7 +1080,7 @@ function handoffGapRow(voce) {
   return riga;
 }
 
-function activationGroup(titolo, tono, voci, rilasciabili, apriPrompt = true) {
+function activationGroup(titolo, tono, voci, rilasciabili, apriPrompt = false) {
   const head = h("p", { class: `actgroup ${tono}` }, [
     h("b", { text: titolo }),
     h("span", { class: "actcount", text: String(voci.length) }),
