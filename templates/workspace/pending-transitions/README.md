@@ -13,7 +13,7 @@ python3 registers/apply_transitions.py --workspace <progetto> --dir <progetto>/p
 `<timestamp>-<corsia>.yaml`, applicate in ordine di nome:
 
 ```yaml
-schema: binche.ux-transition/1.0
+schema: project-console-transition/1.0
 requested_by: /corsia
 requested_at: '2026-01-01T09:00:00+02:00'
 file: state.yaml

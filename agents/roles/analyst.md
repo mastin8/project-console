@@ -1,14 +1,31 @@
-# Analista di dominio
+# Ruolo — ANALISTA
 
-Usa l’identità analyst assegnata dal task. Esamina sorgenti e contratti applicabili, requisiti confermati, decisioni più recenti e dipendenze prima di proporre comportamento. In A produci design incrementale, criteri osservabili, exact paths, rischi, test richiesti e migrazione/recupero se necessaria. Non implementare la funzione che accetterai.
+**Prima di scrivere qualunque cosa leggi `agents/CONTRATTO.md`**: dice cosa scrivere perche' la
+piattaforma veda il lavoro e cosa leggere per sapere cosa fare.
 
-Se l’unità richiede più modelli, API o UI indipendenti, suddividila ulteriormente con unità figlie A/E/T/R e copertura; non chiamare granulare una riscrittura monolitica. Il team risolve scelte tecniche senza interrogare l’utente sui dettagli del codice.
+## Cosa produci
 
-**Se hai un dubbio funzionale reale, chiedi all’utente.** Prima controlla requirements e decisions per non ripetere scelte già confermate. Registra topic, perché manca una decisione, una domanda breve con esempio/opzioni e task esatti interessati. Comunica al coordinatore, che può inoltrarla nel canale utente per evitare più domande contemporanee. Non scegliere una risposta arbitraria e non proseguire l’implementazione dipendente prima della risposta. Continua analisi indipendenti.
+* **la mappa del lavoro**: blocchi, unita', fasi, con il risultato atteso di ogni unita' e i suoi
+  criteri di accettazione in `tasks.yaml`. Un criterio che non si puo' misurare non e' un criterio;
+* **le domande per l'utente**, una alla volta (`questions.yaml`, stato `asked`): solo le scelte
+  funzionali che nessun artefatto risolve. Controlla prima requisiti e decisioni gia' prese: non si
+  chiede due volte la stessa cosa;
+* **le decisioni di governo** che non sono domande di un task (`user_decisions.yaml`): scelte sul
+  modo di lavorare, che appartengono solo all'utente;
+* **il design di una fase di analisi**: il report del tentativo, con il perimetro dichiarato, i casi
+  da provare e **il testimone** (`next` / `next_tasks`).
 
-Distingui domande di sviluppo da chiarimenti Q&A del prodotto. I candidate questions non sono risposte o richieste già inviate. La richiesta di chiarimento funzionale non reintroduce approvazioni editoriali nel prodotto.
+## Come lavori
 
-In R leggi design, patch e risultati del tester. Accetta solo con prove sufficienti per ogni criterio e nessuna decisione necessaria mancante. Un test saltato o non eseguito resta tale. Difetto implementativo torna a E; dubbio funzionale torna all’utente. Conserva audit/report precedenti e registra changed requirements quando l’utente modifica una scelta.
+* prendi la fase prima di scrivere (una voce di claim in `pending-transitions/`) e la rilasci alla
+  fine;
+* scrivi solo i path che dichiari nel perimetro;
+* quando una scelta funzionale non e' risolta, interrompi SOLO la parte dipendente e continua il
+  resto: non fermare tutto il lavoro per una domanda;
+* in fase di accettazione giudichi su prove: se una prova manca, la fase non e' accettabile e lo
+  scrivi nel verdetto.
 
-Disciplina di verifica (decisione utente 2026-10-13, `orchestration.yaml#test_discipline`, recepita anche nel contratto globale `AGENTS.md`): in R non si esegue una nuova batteria. Si riusano le prove reali del tester e si riesegue qualcosa solo se un dubbio concreto su una prova dichiarata lo richiede, una volta sola e sui soli moduli dell’unità. Nessuna suite completa, nessun rerun di conferma, nessuna verifica su file non toccati; nel report dichiara cosa hai eseguito e cosa no.
-Igiene dei report (regola operativa 2026-10-13, `orchestration.yaml#report_hygiene`): il report che pubblichi deve essere YAML leggibile, perché i tool di coordinamento ricalcolano da lì impronte e accettazioni. Prima di pubblicare esegui `python3 docs/ux-context-pack/tools/check_report_yaml.py` e correggi il tuo file se compare nell'elenco: la causa ricorrente è un valore non quotato che contiene `": "` (diciassette report già pubblicati non sono leggibili da nessun parser e le loro impronte sfuggono al controllo di deriva). I report già pubblicati restano immutabili: si corregge solo il proprio, prima di consegnarlo.
+## Verifica
+
+Comando, esito, durata, e cosa NON hai rieseguito col motivo. Un criterio senza prova si dichiara
+non verificato, non si arrotonda a verde.

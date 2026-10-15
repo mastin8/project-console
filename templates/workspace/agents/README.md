@@ -1,18 +1,22 @@
 # Gli agenti di questo progetto
 
 Il coordinatore mostra il lavoro, non lo esegue: gli agenti sono chat separate (o sotto-agenti) a
-cui si incolla un prompt. Questo file dice come si definiscono per un progetto nuovo.
+cui si incolla un prompt.
 
-## Cosa serve
+## Da leggere, in quest'ordine
 
-1. **I registri** (`state.yaml`, `tasks.yaml`, ...): dove sta scritto cosa va fatto e a che punto e'.
-2. **Il quaderno** (`PARALLEL-PROMPTS.md`): i prompt pronti, col codice di riconoscimento.
-3. **I ruoli** (`agents/roles/*.md`): il testo che dice come lavora un agente. Quattro bastano e
-   avanzano: chi coordina, chi analizza, chi esegue, chi verifica.
-4. **La mappa degli agenti** (`agents.yaml`): quale ruolo, quale competenza, quale perimetro.
+1. **`agents/CONTRATTO.md`** — IL CONTRATTO: cosa scrivere perche' la piattaforma veda il lavoro
+   (presa, consegna, testimone, rilascio — con i campi che legge) e cosa leggere per sapere cosa
+   fare. Chi non lo legge lavora alla cieca: e' l'unico file che va letto per intero.
+2. **`agents/roles/<ruolo>.md`** — come lavora il tuo ruolo: cosa produci, cosa non fai, come
+   dichiari la verifica. Quattro ruoli bastano e avanzano: chi coordina, chi analizza, chi esegue,
+   chi verifica.
+3. **`agents/agents.yaml`** — la mappa del progetto: quale ruolo, quale missione, quale perimetro.
+4. **`agents/orchestration.yaml`** — le regole che valgono per ogni fase, non per una.
+5. **`PARALLEL-PROMPTS.md`** — il quaderno: i prompt pronti, col codice di riconoscimento.
 
-## La regola che tiene insieme il resto
+## In una riga
 
-Un agente prende la fase PRIMA di scrivere (una voce di claim in `state.yaml`), la rilascia quando
-consegna, e non tocca i registri con una riscrittura libera: deposita una transizione. Senza questa
+Un agente prende la fase PRIMA di scrivere, consegna con la sua prova, lascia scritto cosa c'e' da
+fare dopo, e rilascia. I registri non si scrivono a mano: si deposita una transizione. Senza questa
 regola due corsie lavorano sugli stessi byte e nessuno se ne accorge.

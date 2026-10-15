@@ -17,6 +17,8 @@ import sys
 
 import yaml
 
+LOADER = getattr(yaml, 'CSafeLoader', yaml.SafeLoader)
+
 
 def workspace_root(explicit=None):
     return os.path.abspath(
@@ -53,7 +55,7 @@ def duplicate_keys(path):
                 walk(child)
 
     with open(path, encoding="utf-8") as handle:
-        for document in yaml.compose_all(handle):
+        for document in yaml.compose_all(handle, Loader=LOADER):
             if document is not None:
                 walk(document)
     return problems
@@ -95,7 +97,7 @@ def main(argv=None):
         checked += 1
         try:
             with open(path, encoding="utf-8") as handle:
-                data = yaml.safe_load(handle)
+                data = yaml.load(handle, Loader=LOADER)
         except yaml.YAMLError as exc:
             mark = getattr(exc, "problem_mark", None)
             where = f"line {mark.line + 1}" if mark is not None else "unknown line"
@@ -118,7 +120,7 @@ def main(argv=None):
         checked += 1
         try:
             with open(relative, encoding="utf-8") as handle:
-                yaml.safe_load(handle)
+                yaml.load(handle, Loader=LOADER)
         except yaml.YAMLError as exc:
             print(f"INVALID {os.path.relpath(relative, root)}: {getattr(exc, 'problem', exc)}")
             failures += 1

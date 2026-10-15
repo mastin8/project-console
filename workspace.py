@@ -19,6 +19,23 @@ import yaml
 CONFIG_NAME = "console.yaml"
 
 
+def lock_file(root) -> str:
+    """Il file di lock dei registri di un workspace.
+
+    Perche' sta qui e non in ogni modulo: due scrittori sugli stessi registri devono serializzarsi
+    sullo STESSO file, altrimenti il lock non serve a niente. Il nome si puo' dichiarare
+    (`CONSOLE_REGISTRY_LOCK`), e si accetta anche `BINCHE_REGISTRY_LOCK` perche' e' quello che usano
+    i progetti gia' avviati: la pagina e le corsie devono prendere lo stesso lucchetto.
+    """
+    import hashlib
+    import os
+
+    dichiarato = os.environ.get("CONSOLE_REGISTRY_LOCK") or os.environ.get("BINCHE_REGISTRY_LOCK")
+    if dichiarato:
+        return dichiarato
+    return f"/tmp/project-console-{hashlib.sha1(str(root).encode()).hexdigest()[:12]}.lock"
+
+
 @dataclass(frozen=True)
 class Workspace:
     """La radice di un progetto e i nomi dei suoi registri."""

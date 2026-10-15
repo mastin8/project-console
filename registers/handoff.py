@@ -46,7 +46,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import apply_transitions  # noqa: E402
-from workspace import Workspace  # noqa: E402
+from workspace import Workspace, lock_file  # noqa: E402
 
 #: Le chiavi che dicono la direzione, in ordine di fiducia.
 CHIAVI = ("next", "next_tasks", "next_task", "next_actions", "next_required")
@@ -226,13 +226,9 @@ def scrivi(ws, fase, testo):
         ),
     }
     import fcntl
-    import hashlib
-    import os
 
-    lock = Path(
-        os.environ.get("CONSOLE_REGISTRY_LOCK")
-        or f"/tmp/project-console-{hashlib.sha1(str(ws.root).encode()).hexdigest()[:12]}.lock"
-    )
+    # Lo stesso lock delle corsie: due scrittori sugli stessi registri non devono mai sovrapporsi.
+    lock = Path(lock_file(ws.root))
     with open(lock, "a+") as maniglia:
         fcntl.flock(maniglia, fcntl.LOCK_EX)
         try:

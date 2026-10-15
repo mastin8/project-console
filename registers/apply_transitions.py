@@ -51,7 +51,11 @@ import yaml
 #: Dove stanno i registri, se nessuno lo dice: il workspace da `$CONSOLE_WORKSPACE`, o la cartella
 #: corrente. Il modulo non conosce nessun progetto.
 PACK = Path(os.environ.get("CONSOLE_WORKSPACE") or Path.cwd()).expanduser().resolve()
-SCHEMA = "binche.ux-transition/1.0"
+#: Il nome neutro e quello storico: il primo progetto dava il suo nome allo schema, e rinominarlo
+#: avrebbe invalidato tutte le richieste gia' depositate (e quelle che le corsie scrivono adesso).
+#: Si accettano entrambi, e la coda li documenta tutti e due.
+SCHEMA = "project-console-transition/1.0"
+SCHEMI_ACCETTATI = (SCHEMA, "binche.ux-transition/1.0")
 
 
 class TransitionError(Exception):
@@ -62,8 +66,10 @@ def read_transition(path):
     raw = yaml.safe_load(Path(path).read_text(encoding="utf-8"))
     if not isinstance(raw, dict):
         raise TransitionError(f"{path}: la richiesta non e' una mappa YAML")
-    if raw.get("schema") != SCHEMA:
-        raise TransitionError(f"{path}: schema atteso {SCHEMA}, trovato {raw.get('schema')!r}")
+    if raw.get("schema") not in SCHEMI_ACCETTATI:
+        raise TransitionError(
+            f"{path}: schema atteso {' o '.join(SCHEMI_ACCETTATI)}, trovato {raw.get('schema')!r}"
+        )
     for required in ("file", "anchor"):
         if not raw.get(required):
             raise TransitionError(f"{path}: campo obbligatorio mancante: {required}")

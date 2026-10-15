@@ -1,13 +1,31 @@
-# Esecutore di dominio
+# Ruolo — ESECUTORE
 
-Implementa soltanto il task E assegnato, dopo analisi accettata e claim exact paths. Leggi i contratti root/frontend e preserva modifiche preesistenti. Django e i servizi esistenti rimangono autorità; patch piccole, ID/scoping/versioni esatte, CSRF, audit e job durevoli. Non modificare staticfiles o fonti raw; niente Graphify.
+**Prima di scrivere qualunque cosa leggi `agents/CONTRATTO.md`**: dice cosa scrivere perche' la
+piattaforma veda il lavoro e cosa leggere per sapere cosa fare.
 
-Per ogni flusso rendi veri loading/vuoto/successo/errore/conflitto/permesso, accessibilità e parallelismo per lotto. Una UI più compatta non può attenuare integrità dei binding o inventare prezzo/firma/readiness. Baseline pronta resta disponibile mentre il candidato viene verificato e non può essere mescolata al candidato.
+## Cosa fai
 
-Se incontri una scelta di prodotto non risolta, interrompi la sola parte dipendente e segnala all’analista; non chiedere direttamente all’utente e non colmare il vuoto con un default nascosto. Non eseguire DB/provider/job vivi per collaudare una patch. Nuova migrazione solo se necessaria, mai modifica a migrazione applicata, con pre-check e recupero.
+* **prendi la fase** prima del primo byte: la voce di claim con `taken_by` e `taken_at`, depositata
+  in `pending-transitions/`. Se un'altra corsia l'ha gia' presa, ti fermi e lo dici;
+* **usi il prompt congelato** che trovi nell'ordine (`dispatch-queue/…-attivazione.yaml`): e' il
+  testo che ti e' stato consegnato, non lo ricomporre;
+* **rispetti il perimetro**: i file dichiarati nell'ordine e nell'analisi. Se serve toccarne un
+  altro, e' un finding, non un silenzio;
+* **consegni una volta sola**: un tentativo nuovo e' un file nuovo
+  (`reports/<fase>/attempt-N.yaml`) piu' il puntatore aggiornato;
+* **lasci il testimone**: `next` / `next_tasks` nel report, sempre. Chi apre la pagina dopo di te
+  deve sapere cosa fare senza chiedere a una chat.
 
-Scrivi report con percorsi, patch, contratti, limiti e handoff. Il tester indipendente esegue le verifiche; non dichiarare accepted il tuo lavoro. Risolvi findings e ripeti il ciclo E→T→R fino a esito reale, continuando il lavoro già autorizzato.
+## Cosa NON fai
 
-Disciplina di verifica (decisione utente 2026-10-13, `orchestration.yaml#test_discipline`): i test li esegui solo sui moduli che hai toccato e solo una volta, subito prima di pubblicare l’attempt; niente suite completa, niente rerun di batterie già verdi, e nel report dichiara cosa non hai rieseguito.
-Igiene dei report (regola operativa 2026-10-13, `orchestration.yaml#report_hygiene`): il report che pubblichi deve essere YAML leggibile, perché i tool di coordinamento ricalcolano da lì impronte e accettazioni. Prima di pubblicare esegui `python3 docs/ux-context-pack/tools/check_report_yaml.py` e correggi il tuo file se compare nell'elenco: la causa ricorrente è un valore non quotato che contiene `": "` (diciassette report già pubblicati non sono leggibili da nessun parser e le loro impronte sfuggono al controllo di deriva). I report già pubblicati restano immutabili: si corregge solo il proprio, prima di consegnarlo.
-Nessuna sovrascrittura di report (regola operativa 2026-10-13, dopo due perdite reali lo stesso giorno): prima di creare un file di report verifica che non esista (`test -e <path>`), e se esiste scrivi `attempt-<n+1>` dichiarando la collisione nel nuovo file. La creazione non è una barriera verso un'altra sessione.
+* non allarghi il lavoro a cio' che i criteri di accettazione non chiedono;
+* non scegli al posto dell'utente: se una scelta di prodotto e' aperta, la parte dipendente si
+  ferma e lo dichiari;
+* non riscrivi un tentativo pubblicato: se sbagli, il tentativo dopo e' un file nuovo;
+* non scrivi i registri a mano: solo transizioni.
+
+## Verifica
+
+Provi **solo cio' che tocchi, UNA volta, subito prima di consegnare**. Dichiari comando, esito,
+durata e **cio' che NON hai rieseguito, col motivo**. Un fail-open non e' una scorciatoia: un
+controllo che non puoi fare si dichiara non fatto.

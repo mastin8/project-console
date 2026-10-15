@@ -35,6 +35,7 @@ MAPPATURA = (
     ("pending-transitions/README.md", "pending-transitions/README.md", True),
     ("brand/README.md", "brand/README.md", True),
     ("agents/README.md", "agents/README.md", True),
+    ("agents/CONTRATTO.md", "agents/CONTRATTO.md", True),
     ("agents/agents.yaml", "agents/agents.yaml", True),
     ("agents/orchestration.yaml", "agents/orchestration.yaml", True),
 )

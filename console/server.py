@@ -52,7 +52,7 @@ import handoff  # noqa: E402 - cosa c'e' da fare dopo: il testimone lasciato da 
 import mandate  # noqa: E402 - il prompt di una fase: dal quaderno, o composto dal registro
 import next_prompts  # noqa: E402 - una sola implementazione della regola, condivisa con STATUS.html
 import timeline  # noqa: E402 - la linea del tempo, con le date dichiarate dagli artefatti
-from workspace import Workspace  # noqa: E402 - il contratto dei nomi: qui non c'e' nessun progetto
+from workspace import Workspace, lock_file  # noqa: E402 - il contratto dei nomi: qui non c'e' nessun progetto
 
 PACK_DEFAULT = Path(os.environ.get("CONSOLE_WORKSPACE") or Path.cwd()).expanduser().resolve()
 
@@ -90,12 +90,7 @@ class ReviewState:
         self._loaded = {}
         #: Il lock e' per PROGETTO e il nome si deriva dal percorso con un digest STABILE: `hash()`
         #: cambia a ogni processo (sale casuale), quindi due processi non si vedrebbero.
-        self.lock_path = os.environ.get(
-            "CONSOLE_REGISTRY_LOCK",
-            "/tmp/project-console-"
-            + hashlib.sha1(str(self.pack).encode("utf-8")).hexdigest()[:12]
-            + ".lock",
-        )
+        self.lock_path = lock_file(self.pack)
         self._queue()
 
     # ------------------------------------------------------------------ lettura
@@ -485,8 +480,8 @@ class ReviewState:
         requests[-1]["anchor"] = self.last_decision_anchor()
 
         applied, failed = [], []
-        with open(self.lock_path, "a+") as lock_file:
-            fcntl.flock(lock_file, fcntl.LOCK_EX)
+        with open(self.lock_path, "a+") as maniglia:
+            fcntl.flock(maniglia, fcntl.LOCK_EX)
             for index, request in enumerate(requests):
                 try:
                     # Una sola validazione, sull'ULTIMA richiesta: i sei campi validati uno a uno
@@ -499,7 +494,7 @@ class ReviewState:
                     applied.append(f"{request['file']}#{request.get('field') or decision_id}")
                 except apply_transitions.TransitionError as error:
                     failed.append(str(error))
-            fcntl.flock(lock_file, fcntl.LOCK_UN)
+            fcntl.flock(maniglia, fcntl.LOCK_UN)
         if failed:
             raise apply_transitions.TransitionError("; ".join(failed))
 
