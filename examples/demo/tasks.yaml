@@ -1,0 +1,25 @@
+# Esempio minimo ma completo: un blocco, una unita', le quattro fasi.
+units:
+- id: ES01
+  domain: esempio
+  title: "Prima unita' di esempio"
+  deliverable: "Cosa deve esistere quando questa unita' e' accettata"
+  requirement_ids: []
+  depends_on_units: []
+tasks:
+- id: ES01A
+  unit_id: ES01
+  kind: analysis
+  title: "Analisi: capire il problema prima di scrivere"
+- id: ES01E
+  unit_id: ES01
+  kind: implementation
+  title: "Esecuzione: fare la cosa"
+- id: ES01T
+  unit_id: ES01
+  kind: independent_verification
+  title: "Verifica indipendente: provarla su byte vivi"
+- id: ES01R
+  unit_id: ES01
+  kind: functional_acceptance
+  title: "Accettazione: chiudere l'unita'"

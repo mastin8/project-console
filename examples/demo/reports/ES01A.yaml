@@ -1,0 +1,8 @@
+schema: project-console-report-pointer/1.0
+task_id: ES01A
+attempt: 1
+report_ref: reports/ES01A/attempt-1.yaml
+report: reports/ES01A/attempt-1.yaml
+status: published
+verdict: pass
+published_at: '2026-10-15T12:51:24'

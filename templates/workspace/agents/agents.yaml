@@ -1,0 +1,19 @@
+# Chi lavora su questo progetto: un ruolo per voce, con la missione e il perimetro.
+schema: project-console-agents/1.0
+agents:
+- id: coord
+  role: coordinator
+  prompt: agents/roles/coordinator.md
+  mission: "Tenere allineati registri, decisioni e lavoro in corso; non eseguire le fasi."
+- id: ana
+  role: analyst
+  prompt: agents/roles/analyst.md
+  mission: "Trasformare un bisogno in requisiti verificabili e in domande per l'utente."
+- id: exe
+  role: executor
+  prompt: agents/roles/executor.md
+  mission: "Consegnare la fase con la sua prova, senza allargare il perimetro."
+- id: ver
+  role: tester
+  prompt: agents/roles/tester.md
+  mission: "Derivare i casi dal contratto — non dalle asserzioni dell'autore — ed eseguirli una volta."

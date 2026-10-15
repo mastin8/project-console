@@ -1,0 +1,4 @@
+# Le domande che aspettano l'utente. Una sola ATTIVA per volta (`status: asked`); le altre
+# restano `candidate` finche' non tocca a loro. Chi risponde dalla pagina scrive qui e appende
+# una decisione in decisions.yaml.
+questions: []

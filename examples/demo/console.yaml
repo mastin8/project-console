@@ -1,0 +1,21 @@
+# Il contratto di questo workspace: come si chiama ogni cosa che il coordinatore legge e scrive.
+# Ogni chiave e' opzionale: senza, valgono i nomi della convenzione (vedi workspace.py).
+project: "Demo"
+surface: "verifica del percorso"
+# state: state.yaml
+# tasks: tasks.yaml
+# questions: questions.yaml
+# decisions: decisions.yaml
+# user_decisions: user_decisions.yaml
+# reports: reports
+# queue: PARALLEL-PROMPTS.md
+# transitions: pending-transitions
+# brand: brand
+# view: STATUS.html
+# deliverable_prefix: reports/
+# phases: [A, E, T, R]
+# I comandi che una persona esegue a mano per verificare il progetto da sola: finiscono nella
+# vista statica. Il coordinatore non li esegue, li mostra.
+verify: []
+#  - label: "Suite del progetto"
+#    command: "python -m pytest -q"

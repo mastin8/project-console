@@ -1,0 +1,544 @@
+/* Verifica del percorso — sistema di questa superficie.
+   Modalita': Operate (si completa un compito: leggere, decidere, rispondere).
+   Un tema solo, per token, verificato in chiaro e in scuro.
+   L'accento e' il teal del marchio Binche (#084040, campionato dal lockup ufficiale il
+   2026-10-15), con la crema (#f0f0e8) come inchiostro sopra l'accento. */
+
+:root{
+  color-scheme: light;
+  --bg:#f7f8fa;
+  --surface:#ffffff;
+  --surface-2:#f2f4f7;
+  --line:#e3e6eb;
+  --line-strong:#cfd4dc;
+  --ink:#12151a;
+  --ink-2:#4b5563;
+  --ink-3:#6b7280;
+  --accent:#084040;
+  --accent-ink:#f2f2e9;
+  --accent-soft:#e4eeee;
+  --ok:#0f6b2f;   --ok-soft:#e9f4ec;
+  --warn:#8a5300; --warn-soft:#fdf3e3;
+  --bad:#a51f18;  --bad-soft:#fdeceb;
+  --shadow-tight:0 1px 2px rgba(18,21,26,.07);
+  --shadow:0 2px 4px rgba(18,21,26,.08), 0 16px 40px rgba(18,21,26,.14);
+  --r-sm:8px; --r-md:12px; --r-lg:14px;
+  --s1:4px; --s15:6px; --s2:8px; --s25:10px; --s3:12px; --s4:16px; --s5:24px; --s6:32px; --s7:48px;
+  --ease-out:cubic-bezier(.23,1,.32,1);
+  --measure:74ch;
+  --page:1180px;
+  --ui:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+
+@media (prefers-color-scheme: dark){
+  :root{
+    color-scheme: dark;
+    --bg:#0e1116; --surface:#151a21; --surface-2:#1b222b;
+    --line:#252d38; --line-strong:#36404e;
+    --ink:#e8eaed; --ink-2:#a8b0bb; --ink-3:#8d96a3;
+    --accent:#7ec9c0; --accent-ink:#0e1116; --accent-soft:#12292a;
+    --ok:#5fd08a;   --ok-soft:#12291d;
+    --warn:#e2a33c; --warn-soft:#2b2213;
+    --bad:#ff8a80;  --bad-soft:#2c1614;
+    --shadow-tight:0 1px 2px rgba(0,0,0,.5);
+    --shadow:0 2px 6px rgba(0,0,0,.5), 0 18px 44px rgba(0,0,0,.45);
+  }
+}
+
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%}
+body{
+  margin:0;
+  font:15px/1.55 var(--ui);
+  color:var(--ink);background:var(--bg);
+  font-variant-numeric:tabular-nums;
+  caret-color:var(--accent);
+}
+
+/* Superfici del browser: fanno parte del disegno e di solito nessuno le tema. */
+::selection{background:var(--accent);color:var(--accent-ink)}
+*{scrollbar-color:var(--line-strong) transparent;scrollbar-width:thin}
+*::-webkit-scrollbar{width:10px;height:10px}
+*::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:99px;border:3px solid transparent;background-clip:content-box}
+*::-webkit-scrollbar-track{background:transparent}
+
+:where(button,a,input,textarea,summary,[tabindex]):focus-visible{
+  outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r-sm);
+}
+
+.skip{position:absolute;left:-9999px}
+.skip:focus{left:var(--s4);top:var(--s4);z-index:10;background:var(--surface);
+  padding:var(--s2) var(--s3);border-radius:var(--r-sm);box-shadow:var(--shadow)}
+
+/* ---------------------------------------------------------------- testata */
+/* Header generico: marchio, nome del progetto, nome della vista, istantanea dei registri. Resta
+   appiccicato in cima perche' la barra sotto porta le scorciatoie, e servono a ogni salto. */
+.top{position:sticky;top:0;z-index:5;background:var(--surface);
+  border-bottom:1px solid var(--line-strong)}
+.top-inner{display:flex;gap:var(--s4);align-items:center;justify-content:flex-start;
+  flex-wrap:wrap;max-width:var(--page);margin:0 auto;padding:var(--s2) var(--s5)}
+.brand{display:flex;align-items:center;gap:var(--s3);min-width:0}
+.logo{width:36px;height:36px;flex:none;display:grid;place-items:center;border-radius:var(--r-sm);
+  background:var(--surface-2);border:1px solid var(--line)}
+.logo .mark,.logo .mono{display:none}
+.logo .mark{width:24px;height:24px;object-fit:contain}
+.logo.has-logo .mark.on-light{display:block}
+.logo:not(.has-logo) .mono{display:block;font-weight:700;font-size:16px;color:var(--ink-2)}
+@media (prefers-color-scheme: dark){
+  .logo.has-logo .mark.on-light{display:none}
+  .logo.has-logo .mark.on-dark{display:block}
+}
+.brand-lines{min-width:0;flex:1 1 auto}
+h1{margin:0;font-size:22px;line-height:1.2;letter-spacing:-.02em;font-weight:650;
+  white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+h1 .surface{color:var(--ink-3);font-weight:450;font-size:15px}
+.topmeta{margin:2px 0 0;color:var(--ink-3);font-size:12.5px}
+.top-actions{margin-left:auto}
+
+.top-bar{border-top:1px solid var(--line)}
+.top-bar .top-inner{padding:var(--s2) var(--s5);gap:var(--s3) var(--s4)}
+.status-line{margin:0;color:var(--ink-2);font-size:13px;white-space:nowrap}
+.status-line b{color:var(--ink);font-weight:600}
+.tally{display:flex;gap:var(--s2);flex-wrap:wrap;align-items:center}
+.tally-chip{padding:var(--s15) var(--s3);border-radius:99px;border:1px solid var(--line-strong);
+  background:var(--surface);color:var(--ink-2);font:inherit;font-size:12.5px;font-weight:550;
+  cursor:pointer;transition:transform 160ms var(--ease-out), background-color 160ms var(--ease-out)}
+.tally-chip:active:not(:disabled){transform:scale(.97)}
+.tally-chip:disabled{opacity:.5;cursor:default}
+.tally-chip.warn{border-color:var(--warn);color:var(--warn)}
+.tally-chip.accent{border-color:var(--accent);background:var(--accent-soft);color:var(--accent);
+  font-weight:650}
+@media (hover: hover) and (pointer: fine){
+  .tally-chip:not(:disabled):hover{background:var(--surface-2);color:var(--ink)}
+  .tally-chip.accent:not(:disabled):hover{background:var(--accent);color:var(--accent-ink)}
+}
+.segmented{margin-left:auto}
+.rail{height:3px;background:var(--surface-2);overflow:hidden;border:0;border-radius:0;margin:0}
+.rail span{display:block;height:100%;width:100%;background:var(--accent);
+  transform:scaleX(0);transform-origin:left center;transition:transform 420ms var(--ease-out)}
+@media (prefers-reduced-motion: reduce){.rail span{transition:none}}
+
+/* --------------------------------------------------------------- sezioni */
+/* `--top-h` la misura l'header appiccicato: cosi' un salto non finisce sotto la barra. */
+main{max-width:var(--page);margin:0 auto;padding:var(--s5) var(--s5) var(--s7)}
+section{margin-top:var(--s7);scroll-margin-top:calc(var(--top-h, 118px) + var(--s3))}
+section:first-of-type{margin-top:var(--s4)}
+.sec-head{display:flex;align-items:baseline;gap:var(--s3);flex-wrap:wrap;
+  padding-bottom:var(--s2);border-bottom:1px solid var(--line)}
+h2{margin:0;font-size:17px;font-weight:650;letter-spacing:-.005em}
+h2 .count{color:var(--ink-3);font-weight:400;font-size:13px}
+.hint{margin:var(--s2) 0 var(--s4);color:var(--ink-3);font-size:13px;max-width:72ch;text-wrap:pretty}
+.explain{margin:var(--s2) 0 var(--s4);color:var(--ink-3);font-size:12.5px}
+.explain summary{display:inline-block;cursor:pointer;list-style:none;color:var(--ink-2);
+  border-bottom:1px solid var(--line-strong);padding-bottom:1px}
+.explain summary::-webkit-details-marker{display:none}
+.explain summary::before{content:"▸ ";font-size:11px}
+.explain[open] summary::before{content:"▾ "}
+.explain p{margin:var(--s2) 0 0;max-width:var(--measure);text-wrap:pretty}
+
+/* Il segno lasciato da un salto: un anello di stato, non un movimento. */
+.flash{box-shadow:inset 0 0 0 2px var(--accent);border-radius:var(--r-sm)}
+
+/* Legenda: lo stesso segno delle fasi, cosi' lo stato si legge anche senza i colori. */
+.legend{display:flex;flex-wrap:wrap;gap:var(--s15) var(--s5);margin:calc(-1 * var(--s2)) 0 var(--s4);
+  color:var(--ink-3);font-size:12.5px;max-width:90ch}
+.legend span{display:inline-flex;align-items:center;gap:7px}
+.legend i{width:8px;height:8px;flex:none;background:currentColor;display:inline-block}
+.legend .st-accepted{color:var(--ok)}
+.legend .st-accepted i{border-radius:50%}
+.legend .st-pending i{background:transparent;box-shadow:inset 0 0 0 1.5px currentColor;border-radius:50%}
+.legend .st-running{color:var(--warn)}
+.legend .st-running i{border-radius:50%;box-shadow:inset 0 0 0 1.5px currentColor;
+  background:linear-gradient(90deg,currentColor 50%,transparent 50%)}
+.legend .st-issues{color:var(--bad)}
+.legend .st-issues i{border-radius:2px}
+
+/* --------------------------------------------------------------- domanda */
+/* Elevazione dichiarata una volta sola: bordo E ombra larga insieme sono la "ghost card".
+   Le schede vivono del bordo; l'ombra profonda e' riservata al dialogo, che e' un piano. */
+.qcard{background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r-lg);
+  box-shadow:var(--shadow-tight);padding:var(--s5);margin:0 0 var(--s4)}
+.qcard .topic{margin:0;font-size:16px;line-height:1.35;letter-spacing:-.01em;font-weight:650}
+.qcard .qmeta{margin:var(--s1) 0 var(--s3);color:var(--ink-3);font-size:12.5px;font-family:var(--mono)}
+.qcard .ask{margin:0 0 var(--s3);max-width:70ch;text-wrap:pretty}
+.qcard .why{margin:0 0 var(--s4);padding:var(--s3) var(--s4);background:var(--surface-2);
+  border-radius:var(--r-sm);color:var(--ink-2);font-size:13.5px;max-width:74ch}
+
+/* Le decisioni di governo dentro «Cosa aspetta te»: hanno la forma di una scheda ma nessun
+   controllo, perche' non si rispondono da qui: si decidono. */
+.govcard .gov{margin-top:var(--s3);padding-top:var(--s3);border-top:1px solid var(--line);
+  font-size:13.5px;color:var(--ink-2);max-width:var(--measure)}
+.govcard .gov b{display:block;color:var(--ink);font-weight:600}
+
+.opts{display:grid;gap:var(--s2);margin:0 0 var(--s4);border:0;padding:0}
+.opts legend{color:var(--ink-3);font-size:12.5px;margin-bottom:var(--s2);padding:0}
+.opt{display:flex;gap:var(--s3);align-items:flex-start;padding:var(--s3) var(--s4);
+  border:1px solid var(--line-strong);border-radius:var(--r-sm);background:var(--surface);
+  cursor:pointer;transition:border-color 140ms var(--ease-out), background-color 140ms var(--ease-out)}
+.opt input{margin:3px 0 0;accent-color:var(--accent);width:16px;height:16px;flex:none}
+.opt span{text-wrap:pretty}
+@media (hover:hover) and (pointer:fine){.opt:hover{border-color:var(--accent);background:var(--accent-soft)}}
+.opt:has(input:checked){border-color:var(--accent);background:var(--accent-soft)}
+.opt:has(input:focus-visible){outline:2px solid var(--accent);outline-offset:2px}
+
+.answer-label{display:block;color:var(--ink-3);font-size:12.5px;margin-bottom:var(--s2)}
+textarea{width:100%;min-height:84px;padding:var(--s3);border:1px solid var(--line-strong);
+  border-radius:var(--r-sm);font:inherit;color:var(--ink);background:var(--surface);resize:vertical}
+textarea::placeholder{color:var(--ink-3)}
+
+.row{display:flex;gap:var(--s3);align-items:center;flex-wrap:wrap;margin-top:var(--s3)}
+button{font:inherit;font-weight:550;padding:9px 18px;border-radius:var(--r-sm);
+  border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);cursor:pointer;
+  transition:transform 160ms var(--ease-out), background-color 140ms var(--ease-out),
+             border-color 140ms var(--ease-out)}
+button.ghost{background:var(--surface);color:var(--ink);border-color:var(--line-strong)}
+button:disabled{opacity:.55;cursor:progress}
+@media (hover:hover) and (pointer:fine){
+  button:hover:not(:disabled){background-color:#1a44bd;border-color:#1a44bd}
+  button.ghost:hover:not(:disabled){background:var(--surface-2)}
+}
+button:active:not(:disabled){transform:scale(.97)}
+
+.msg{display:none;margin-top:var(--s3);padding:10px var(--s3);border-radius:var(--r-sm);
+  font-size:13.5px;border:1px solid transparent}
+.msg.show{display:block}
+.msg.ok{background:var(--ok-soft);color:var(--ok);border-color:currentColor}
+.msg.err{background:var(--bad-soft);color:var(--bad);border-color:currentColor}
+.msg.pending{background:var(--surface-2);color:var(--ink-2);border-color:var(--line)}
+
+/* ------------------------------------------------------ filtro e blocchi */
+.segmented{display:inline-flex;gap:3px;padding:4px;background:var(--surface-2);
+  border:1px solid var(--line);border-radius:99px;margin:0 0 var(--s4)}
+.segmented label{position:relative;display:inline-flex}
+.segmented input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.segmented span{display:inline-block;padding:7px 15px;border-radius:99px;font-size:13px;
+  color:var(--ink-2);transition:background-color 140ms var(--ease-out), color 140ms var(--ease-out)}
+.segmented input:checked+span{background:var(--surface);color:var(--ink);font-weight:550;
+  box-shadow:0 1px 2px rgba(18,21,26,.08)}
+.segmented input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+
+.tabs{display:flex;flex-wrap:wrap;gap:var(--s2);margin:0;padding-bottom:var(--s2);
+  border-bottom:1px solid var(--line)}
+.tab{display:inline-flex;align-items:center;gap:var(--s2);min-height:36px;padding:var(--s15) var(--s3);
+  border:1px solid transparent;border-radius:var(--r-sm);background:none;color:var(--ink-2);
+  font:inherit;font-size:13px;font-weight:550;cursor:pointer;
+  transition:transform 160ms var(--ease-out), background-color 160ms var(--ease-out)}
+.tab .tlabel{white-space:nowrap}
+.tab .ttally{font-family:var(--mono);font-size:11px;color:var(--ink-3)}
+.tab .tdot{min-width:18px;padding:0 5px;border-radius:99px;background:var(--accent);
+  color:var(--accent-ink);font-size:11px;font-weight:700;text-align:center}
+.tab .tmark{width:8px;height:8px;flex:none;display:inline-block;background:var(--ink-3)}
+.tab .tmark.accettata{border-radius:50%;background:var(--ok)}
+.tab .tmark.in_corso{border-radius:50%;background:transparent;box-shadow:inset 0 0 0 1.5px var(--warn)}
+.tab .tmark.respinta{border-radius:2px;background:var(--bad)}
+.tab .tmark.da_fare{border-radius:50%;background:transparent;box-shadow:inset 0 0 0 1.5px var(--ink-3)}
+.tab[aria-selected="true"]{background:var(--surface);border-color:var(--line);color:var(--ink);
+  font-weight:650}
+.tab:active{transform:scale(.98)}
+@media (hover: hover) and (pointer: fine){
+  .tab:hover{background:var(--surface-2);color:var(--ink)}
+  .tab[aria-selected="true"]:hover{background:var(--surface)}
+}
+.tabpanel{margin-top:var(--s3);border:1px solid var(--line);border-radius:var(--r-md);
+  background:var(--surface);padding:var(--s4) var(--s4) var(--s2)}
+.tabpanel:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.phead{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap}
+.pnext{margin:var(--s3) 0 0;font-size:13.5px;max-width:var(--measure);text-wrap:pretty}
+.pnext b{color:var(--ink-2)}
+.pcommits{margin-top:var(--s4);padding-top:var(--s3);border-top:1px dashed var(--line-strong)}
+.pcommits .pmeta{margin:0}
+
+.unit{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:var(--s2) var(--s4);
+  padding:var(--s4) 0;border-bottom:1px solid var(--line)}
+.unit:last-child{border-bottom:0}
+.unit .name{font-weight:600;letter-spacing:-.005em}
+.unit .id{margin-top:2px;color:var(--ink-3);font-size:12.5px;font-family:var(--mono)}
+.unit .deliverable{margin-top:var(--s2);color:var(--ink-2);font-size:13.5px;max-width:74ch;text-wrap:pretty}
+.unit .phases{display:flex;gap:var(--s25);flex-wrap:wrap;align-content:start}
+.unit.accepted .name::after{content:" \2713";color:var(--ok);font-weight:600}
+
+.phase{display:inline-flex;align-items:center;gap:7px;min-height:34px;padding:5px 12px;
+  border:1px solid var(--line-strong);border-radius:99px;background:var(--surface);
+  color:var(--ink-2);font-size:12.5px;font-weight:500;cursor:pointer;
+  transition:transform 160ms var(--ease-out), border-color 140ms var(--ease-out),
+             background-color 140ms var(--ease-out)}
+.phase .step{font-weight:700;color:var(--ink);font-family:var(--mono)}
+.phase .dot{width:8px;height:8px;flex:none;background:currentColor}
+/* Lo stato non e' solo colore: cambia la forma del segno. */
+.phase[data-status="accepted"]{border-color:var(--ok);color:var(--ok);background:var(--ok-soft)}
+.phase[data-status="accepted"] .dot{border-radius:50%}
+.phase[data-status="pending"] .dot{background:transparent;
+  box-shadow:inset 0 0 0 1.5px currentColor;border-radius:50%}
+.phase[data-status="running"],.phase[data-status="active"],.phase[data-status="taken"]{
+  color:var(--warn);background:var(--warn-soft);border-color:currentColor}
+.phase[data-status="running"] .dot,.phase[data-status="active"] .dot,.phase[data-status="taken"] .dot{
+  border-radius:50%;box-shadow:inset 0 0 0 1.5px currentColor;
+  background:linear-gradient(90deg,currentColor 50%,transparent 50%)}
+.phase[data-status="needs_changes"],.phase[data-status="failed"]{
+  color:var(--bad);background:var(--bad-soft);border-color:currentColor}
+.phase[data-status="needs_changes"] .dot,.phase[data-status="failed"] .dot{border-radius:2px}
+@media (hover:hover) and (pointer:fine){.phase:hover{border-color:var(--accent)}}
+.phase:active{transform:scale(.97)}
+@media (pointer:coarse){.phase{min-height:44px;padding:9px 14px}}
+
+/* Una fase respinta: perche', e l'ordine di lavoro pronto da depositare. */
+.intervene{margin-top:var(--s3);border-top:1px dashed var(--line-strong);padding-top:var(--s3)}
+.stall+.stall{margin-top:var(--s3)}
+.intervene .why{margin:0 0 var(--s2);color:var(--ink-2);font-size:13px;max-width:78ch;text-wrap:pretty}
+.intervene .why b{color:var(--bad);font-weight:600}
+.intervene .row{margin-top:0}
+.intervene .msg{margin-top:0}
+.intervene .incoherent{margin:0 0 var(--s2);padding:var(--s2) var(--s3);border-radius:var(--r-sm);
+  background:var(--warn-soft);color:var(--warn);font-size:13px;max-width:78ch;text-wrap:pretty}
+button.linkish{background:none;border:0;padding:0;color:var(--ink-3);font-size:13px;
+  text-decoration:underline;text-underline-offset:3px;cursor:pointer}
+@media (hover:hover) and (pointer:fine){button.linkish:hover{background:none;color:var(--ink)}}
+.warnnote{color:var(--warn)}
+.warnnote b{color:var(--warn)}
+
+/* --------------------------------------------------------- prese e risposte */
+.claims,.answers{margin:0;padding:0;list-style:none;border-top:1px solid var(--line)}
+.claims li{display:grid;gap:var(--s15) var(--s5);align-items:baseline;
+  grid-template-columns:max-content minmax(0,1fr) max-content;
+  grid-template-areas:"id who when";
+  padding:var(--s3) 0;border-bottom:1px solid var(--line);font-size:13.5px}
+.claims .id{grid-area:id;font-family:var(--mono);font-size:12.5px;color:var(--ink);white-space:nowrap}
+.claims .id .phase{color:var(--ink-3)}
+.claims .who{grid-area:who;color:var(--ink-2);display:-webkit-box;-webkit-line-clamp:2;
+  -webkit-box-orient:vertical;overflow:hidden}
+.claims .when{grid-area:when;color:var(--ink-3);font-family:var(--mono);font-size:12.5px;white-space:nowrap}
+.answers li{padding:var(--s4) 0;border-bottom:1px solid var(--line);max-width:80ch}
+.answers .topic{font-weight:600}
+.answers .qmeta{color:var(--ink-3);font-size:12.5px;font-family:var(--mono);margin-top:2px}
+.answers .said{margin:var(--s2) 0 0;text-wrap:pretty}
+.answers .said b{color:var(--ink-2);font-weight:500}
+.answers .why{margin:var(--s2) 0 0;color:var(--ink-3);font-size:13px;text-wrap:pretty}
+
+/* Le risposte sono materiale di consultazione: il contesto lungo sta dietro un
+   clic, cosi' l'elenco resta leggibile a colpo d'occhio. */
+.answers details{margin-top:var(--s25)}
+.answers summary{display:inline-block;cursor:pointer;list-style:none;
+  color:var(--ink-3);font-size:12.5px;text-decoration:underline;
+  text-underline-offset:3px;text-decoration-color:var(--line-strong)}
+.answers summary::-webkit-details-marker{display:none}
+.answers summary::before{content:"▸ ";font-size:11px}
+.answers details[open] summary::before{content:"▾ "}
+@media (hover:hover) and (pointer:fine){.answers summary:hover{color:var(--ink)}}
+
+/* ------------------------------------------------------------ adattamento */
+@media (max-width: 720px){
+  /* Su uno schermo stretto l'header impilato mangerebbe un terzo della finestra: qui scorre via
+     con la pagina. Il marchio resta, la vista si accorcia, e le scorciatoie non si appiccicano. */
+  .top{position:static}
+  .top-inner{padding:var(--s2) var(--s4)}
+  /* Marchio e «Ricarica» sulla STESSA riga: la base flessibile a zero impedisce che il blocco del
+     marchio, che ha testo non spezzabile, spinga il pulsante a capo. */
+  .brand{flex:1 1 0}
+  .brand-lines,.topmeta{min-width:0}
+  .topmeta{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .top-bar .top-inner{padding:var(--s2) var(--s4)}
+  .status-line{flex-basis:100%;white-space:normal}
+  .segmented{margin-left:0}
+  main{padding:var(--s4) var(--s4) var(--s6)}
+  section{margin-top:var(--s6);scroll-margin-top:var(--s3)}
+  .tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
+  .tabs::-webkit-scrollbar{display:none}
+  .unit{grid-template-columns:1fr;gap:var(--s3)}
+  .claims li{grid-template-columns:1fr;grid-template-areas:"id" "who" "when";gap:2px}
+  .claims .who{-webkit-line-clamp:3}
+  .qcard{padding:var(--s4)}
+  .row{align-items:flex-start;flex-direction:column}
+}
+
+@media (max-width: 520px){
+  h1 .surface{display:none}
+}
+
+.empty{padding:var(--s4) var(--s5);border:1px dashed var(--line-strong);border-radius:var(--r-md);
+  color:var(--ink-3);font-size:13.5px;max-width:74ch}
+.empty b{color:var(--ink);font-weight:600}
+
+/* ------------------------------------------------------ percorso nel tempo */
+/* Tre colonne: nome, traccia temporale, tastini. La traccia e' a giorni; il segno dello stato ha
+   la stessa forma della legenda (cerchio pieno, anello, quadrato, cerchio tratteggiato). */
+.gmeta{margin:var(--s2) 0 0;color:var(--ink-3);font-size:12.5px;text-wrap:pretty}
+.gmeta b{color:var(--ink-2)}
+.gnote{margin-top:var(--s3);padding:var(--s3) var(--s4);background:var(--surface-2);
+  border:1px solid var(--line);border-radius:var(--r-md);font-size:13px;max-width:96ch}
+.gnote p{margin:0}
+.gnote p+p{margin-top:var(--s2)}
+.gnote summary{margin-top:var(--s2);cursor:pointer;color:var(--ink-2);display:inline-block;
+  list-style:none;font-size:12.5px;border-bottom:1px solid var(--line-strong);padding-bottom:2px}
+.gnote summary::-webkit-details-marker{display:none}
+.gnote summary::before{content:"▸ ";font-size:11px}
+.gnote details[open] summary::before{content:"▾ "}
+.gcommits,.gdecisions{margin:var(--s2) 0 0;padding-left:var(--s5);font-size:12.5px;color:var(--ink-2)}
+.gcommits li,.gdecisions li{margin-top:var(--s15)}
+.gcommits .sha{font-family:var(--mono);color:var(--ink)}
+.gcommits .when{font-family:var(--mono);color:var(--ink-3);margin:0 var(--s2)}
+
+.gantt{margin-top:var(--s4);border:1px solid var(--line);border-radius:var(--r-md);
+  background:var(--surface);overflow:hidden}
+/* La colonna dei tastini ha una larghezza FISSA: ogni riga e' una griglia a se', e con `auto` le
+   colonne dei giorni non cadrebbero una sotto l'altra fra una riga e l'altra. */
+.grow{display:grid;grid-template-columns:minmax(180px,300px) minmax(0,1fr) 236px;
+  gap:var(--s3);align-items:center;padding:var(--s2) var(--s3);border-top:1px solid var(--line)}
+.grow:first-child{border-top:0}
+.ghead{background:var(--surface-2);color:var(--ink-3);font-size:11px;
+  text-transform:uppercase;letter-spacing:.05em}
+.ghead .gtrack{padding-top:var(--s1)}
+.gtoggle{display:flex;align-items:baseline;gap:var(--s2);width:100%;text-align:left;
+  background:none;border:0;padding:0;cursor:pointer;color:inherit;font:inherit}
+.gtoggle:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r-sm)}
+.gtoggle .caret{color:var(--ink-3);font-size:10px;width:10px;flex:none}
+.gtoggle .caret::before{content:"▸"}
+.gtoggle[aria-expanded="true"] .caret::before{content:"▾"}
+.gtitle{font-weight:600;letter-spacing:-.005em;white-space:nowrap}
+.gsubtitle{color:var(--ink-3);font-size:12px;overflow:hidden;text-overflow:ellipsis;
+  white-space:nowrap}
+.gtoggle .tally{margin-left:auto;color:var(--ink-3);font-size:11.5px;font-family:var(--mono);
+  white-space:nowrap}
+.gunit .gname{padding-left:var(--s4)}
+.gunit .gtitle{font-weight:550}
+.gchildren .gunit{border-top:1px dashed var(--line)}
+
+.gtrack{position:relative;height:22px;min-width:120px}
+.ggrid{position:absolute;inset:0;display:grid}
+.ggrid span{border-left:1px solid var(--line)}
+.ggrid span:first-child{border-left:0}
+.ggrid span.today{background:var(--surface-2)}
+.gday{display:block;padding:0 var(--s15);text-align:left;font-family:var(--mono);letter-spacing:0}
+.gday.today{color:var(--accent);font-weight:700}
+.gday.weekend{color:var(--line-strong)}
+.gday.has-commits{color:var(--ink-2)}
+.gbar{position:absolute;top:6px;height:10px;border-radius:99px;background:var(--ink-3);
+  min-width:3px}
+.gbar.accettata{background:var(--ok)}
+.gbar.in_corso{background:var(--warn)}
+.gbar.respinta{background:var(--bad)}
+.gbar.da_fare{background:transparent;border:1px dashed var(--ink-3)}
+.gnodate{position:absolute;left:6px;top:3px;color:var(--ink-3);font-size:11px}
+.gdot{position:absolute;top:8px;width:6px;height:6px;margin-left:-3px;border-radius:50%;
+  background:var(--ink-3)}
+.gdot.accepted{background:var(--ok)}
+.gdot.needs_changes,.gdot.failed{background:var(--bad);border-radius:1px}
+.gdot.running,.gdot.active,.gdot.taken{background:var(--warn)}
+.gdot.pending{background:transparent;box-shadow:inset 0 0 0 1.5px var(--ink-3)}
+
+.gbadges{display:flex;gap:var(--s15);align-items:center;flex-wrap:nowrap;justify-content:flex-end;
+  min-width:0}
+.chip{padding:2px 8px;border-radius:99px;border:1px solid var(--line-strong);font-size:11.5px;
+  white-space:nowrap;background:var(--surface);color:var(--ink-2)}
+.chip.ghost{background:none;border:0;padding:2px 0;color:inherit}
+.chip.stato.accettata{color:var(--ok);border-color:var(--ok)}
+.chip.stato.in_corso{color:var(--warn);border-color:var(--warn)}
+.chip.stato.respinta{color:var(--bad);border-color:var(--bad)}
+.chip.stato.da_fare{color:var(--ink-3)}
+.chip.next{font-family:var(--mono);font-size:11px;max-width:124px;overflow:hidden;
+  text-overflow:ellipsis}
+.chip.none{opacity:.55}
+.chip.yours{background:var(--accent-soft);border-color:var(--accent);color:var(--accent);
+  font-weight:600;cursor:pointer}
+
+.gdetail{padding:var(--s3) var(--s4) var(--s4);background:var(--surface-2);
+  border-top:1px dashed var(--line)}
+.gdetail .dline{margin:0 0 var(--s2);font-size:13px;text-wrap:pretty;max-width:96ch}
+.gdetail .dline b{color:var(--ink-2);font-weight:600}
+.gdetail .dphases{display:flex;gap:var(--s25);flex-wrap:wrap;margin-top:var(--s3)}
+.dlink{color:var(--accent);text-decoration:underline;text-underline-offset:2px}
+
+/* Sotto i 720 px il grafico non ha larghezza utile: si mostra l'intervallo in cifre e i tastini. */
+@media (max-width: 720px){
+  .grow{grid-template-columns:minmax(0,1fr) auto;gap:var(--s2)}
+  .gname,.gtoggle{min-width:0}
+  .gtoggle{padding-left:var(--s3)}
+  .gtoggle .tally,.gsubtitle{display:none}
+  .gtrack{display:none}
+  .ghead{display:none}
+}
+
+/* ------------------------------------------------ prompt da eseguire */
+/* Il segno prima dello stato ha la stessa forma della legenda qui sopra: cerchio pieno, cerchio
+   con anello, cerchio tratteggiato, quadrato. Si legge senza distinguere i colori. */
+.pgroupbox{margin-top:var(--s4)}
+.pgroupbox:first-child{margin-top:0}
+.pgroup{display:flex;align-items:baseline;gap:var(--s2);flex-wrap:wrap;margin:0 0 var(--s3);
+  font-size:13px;font-weight:650;letter-spacing:.02em;text-transform:uppercase}
+.pgroup .mark{width:9px;height:9px;flex:none;align-self:center;background:var(--ink-3)}
+.pgroup .pcount{font-family:var(--mono);font-size:12px;color:var(--ink-3);font-weight:400}
+.pgroup .phint{font-size:12.5px;font-weight:400;letter-spacing:0;text-transform:none;
+  color:var(--ink-3)}
+.pgroupbox.accent .pgroup{color:var(--accent)}
+.pgroupbox.accent .pgroup .mark{border-radius:50%;background:transparent;
+  box-shadow:inset 0 0 0 2px var(--accent)}
+.pgroupbox.warn .pgroup{color:var(--warn)}
+.pgroupbox.warn .pgroup .mark{border-radius:50%;background:transparent;
+  box-shadow:inset 0 0 0 2px var(--warn)}
+.pgroupbox.bad .pgroup{color:var(--bad)}
+.pgroupbox.bad .pgroup .mark{border-radius:2px;background:var(--bad)}
+.pgroupbox.ok .pgroup{color:var(--ink-2)}
+.pgroupbox.ok .pgroup .mark{border-radius:50%;background:var(--ok)}
+.pgroupbox.ok summary{list-style:none;cursor:pointer;display:block}
+.pgroupbox.ok summary::-webkit-details-marker{display:none}
+.pgroupbox.ok .pgroup{margin-bottom:0}
+.pgroupbox.ok .pgroup::before{content:"▸ ";font-size:11px;color:var(--ink-3)}
+.pgroupbox.ok[open] .pgroup::before{content:"▾ "}
+.pgroupbox.ok .pgroupbody{margin-top:var(--s3)}
+.pgroupbox.ok summary .pgroup:hover{color:var(--ink)}
+.prompt{background:var(--surface);border:1px solid var(--line-strong);border-radius:var(--r-lg);
+  padding:var(--s4);margin-top:var(--s3)}
+.prompt .ph{display:flex;align-items:center;gap:var(--s3);flex-wrap:wrap}
+.prompt .state{display:inline-flex;align-items:center;gap:7px;font-size:12.5px;font-weight:600}
+.prompt .state .mark{width:8px;height:8px;flex:none;background:currentColor;display:inline-block}
+.prompt[data-state="fatto"] .state{color:var(--ok)}
+.prompt[data-state="fatto"] .state .mark{border-radius:50%}
+.prompt[data-state="in_azione"] .state{color:var(--warn)}
+.prompt[data-state="in_azione"] .state .mark{border-radius:50%;background:transparent;
+  box-shadow:inset 0 0 0 1.5px currentColor}
+.prompt[data-state="da_lanciare"] .state{color:var(--ink-2)}
+.prompt[data-state="da_lanciare"] .state .mark{border-radius:50%;background:transparent;
+  box-shadow:inset 0 0 0 1.5px currentColor;border:1px dashed currentColor}
+.prompt[data-state="ignoto"] .state,.prompt[data-state="parziale"] .state{color:var(--bad)}
+.prompt[data-state="ignoto"] .state .mark,.prompt[data-state="parziale"] .state .mark{
+  border-radius:2px}
+.prompt .code{font-family:var(--mono);font-size:12.5px;color:var(--ink-3)}
+.prompt .ptitle{margin:var(--s2) 0 0;font-weight:600;letter-spacing:-.005em;text-wrap:pretty}
+.prompt .pmeta{margin:var(--s1) 0 0;color:var(--ink-3);font-size:12.5px;font-family:var(--mono);
+  overflow-wrap:anywhere}
+.prompt .pflag{margin:var(--s3) 0 0;padding:var(--s2) var(--s3);border-radius:var(--r-sm);
+  background:var(--warn-soft);color:var(--warn);font-size:13px;text-wrap:pretty}
+.prompt .pflag b{font-weight:600}
+/* La consegna respinta non è un avviso qualunque: si legge con lo stesso colore della verifica
+   che l'ha respinta. */
+.prompt .pflag.bad{background:var(--bad-soft);color:var(--bad)}
+.prompt details{margin-top:var(--s3)}
+.prompt summary{display:inline-block;cursor:pointer;list-style:none;
+  font-size:13px;color:var(--ink-2);border-bottom:1px solid var(--line-strong);padding-bottom:2px}
+.prompt summary::-webkit-details-marker{display:none}
+.prompt summary::before{content:"▸ ";font-size:11px}
+.prompt details[open] summary::before{content:"▾ "}
+.prompt pre{margin-top:var(--s3)}
+.prompt .prow{display:flex;gap:var(--s3);align-items:center;flex-wrap:wrap}
+.prompt .msg{margin-top:var(--s2)}
+
+/* ---------------------------------------------------------------- dialogo */
+dialog{border:0;border-radius:var(--r-lg);padding:var(--s5);
+  width:min(92vw,920px);background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+dialog::backdrop{background:rgba(12,14,18,.5)}
+dialog h3{margin:0 0 var(--s3);font-size:15px;word-break:break-all}
+dialog .close{float:right}
+pre{margin:0;background:#0f1115;color:#e8e8ea;border-radius:var(--r-sm);padding:var(--s4);
+  overflow:auto;max-height:62vh;font-family:var(--mono);font-size:12.5px;line-height:1.5;
+  white-space:pre-wrap;word-break:break-word}
+
+/* Un solo momento di movimento: la scheda della domanda, cioe' l'azione principale.
+   Niente ingressi identici su ogni sezione. */
+@media (prefers-reduced-motion: no-preference){
+  .qcard{animation:settle 260ms var(--ease-out) both}
+  dialog[open]{animation:panel 200ms var(--ease-out) both}
+  dialog[open]::backdrop{animation:fade 160ms var(--ease-out) both}
+  @keyframes settle{from{opacity:0;transform:translateY(-6px);filter:blur(2px)}}
+  @keyframes panel{from{opacity:0;transform:scale(.98)}}
+  @keyframes fade{from{opacity:0}}
+}

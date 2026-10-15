@@ -1,0 +1,5 @@
+# Le decisioni che appartengono all'UTENTE e non a un agente: scelte sul modo di lavorare, non
+# domande di un task. Stanno separate da questions.yaml, che ammette una sola domanda attiva.
+# Chiuderle dalla pagina scrive `answer`, `decision_ref` e `closed_note`, e appende la decisione.
+schema: project-console-user-decisions/1.0
+decisions: []

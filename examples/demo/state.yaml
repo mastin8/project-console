@@ -1,0 +1,17 @@
+# Lo stato delle fasi: una voce per micro-task, con stato e ultimo report.
+# `active_claims` e' il registro delle presenze: chi sta lavorando su cosa, adesso.
+schema: project-console-state/1.0
+task_statuses:
+- pending
+- ready
+- running
+- needs_changes
+- accepted
+active_functional_question: null
+active_claims: []
+tasks:
+  ES01A:
+    status: accepted
+    attempt: 1
+    report: reports/ES01A/attempt-1.yaml
+

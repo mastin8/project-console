@@ -1,0 +1,124 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Coordinatore</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <a class="skip" href="#main">Vai al contenuto</a>
+
+  <!-- Header generico della superficie: casella del logo, nome del progetto, nome della vista,
+       istantanea dei registri e l'azione di ricarica. La casella prende il file che si deposita in
+       review/brand/ (logo.svg, logo.png); senza file mostra il simbolo ufficiale, e se manca anche
+       quello un monogramma. Nessuna regola della pagina dipende dal marchio che trova. -->
+  <header class="top">
+    <div class="top-inner">
+      <div class="brand">
+        <span class="logo" id="logo">
+          <img class="mark on-light" src="/logo?variant=light" alt="">
+          <img class="mark on-dark" src="/logo?variant=dark" alt="">
+          <span class="mono" aria-hidden="true">B</span>
+        </span>
+        <div class="brand-lines">
+          <!-- Nome del progetto e nome della vista NON sono cablati: li dichiara il workspace e li
+               serve `/config.json`. Un progetto nuovo non tocca questo file. -->
+          <h1><span id="brand-project">Coordinatore</span> <span class="surface" id="brand-surface"></span></h1>
+          <p class="topmeta" id="generated">caricamento…</p>
+        </div>
+      </div>
+      <div class="top-actions">
+        <button type="button" class="ghost" id="refresh">Ricarica</button>
+      </div>
+    </div>
+
+    <!-- Barra delle scorciatoie: qui sta «a che punto siamo» e, soprattutto, la strada diretta per
+         le fasi respinte in verifica: il tastino le filtra e porta sulla prima. -->
+    <div class="top-bar">
+      <div class="top-inner">
+        <p class="status-line" id="status-line" role="status" aria-live="polite"></p>
+        <div class="tally" id="tally" role="group" aria-label="Scorciatoie allo stato"></div>
+        <div class="segmented" role="radiogroup" aria-label="Filtra le unità mostrate">
+          <label><input type="radio" name="filter" value="open" checked><span>Aperte</span></label>
+          <label><input type="radio" name="filter" value="all"><span>Tutte</span></label>
+          <label><input type="radio" name="filter" value="issues"><span>Con problemi</span></label>
+        </div>
+      </div>
+      <div class="rail" id="rail" role="progressbar" aria-label="Unità accettate"
+           aria-valuemin="0" aria-valuemax="100" aria-valuenow="0"><span id="rail-fill"></span></div>
+    </div>
+  </header>
+
+  <main id="main">
+    <section id="timeline-section" aria-labelledby="timeline-head">
+      <div class="sec-head">
+        <h2 id="timeline-head">Il percorso nel tempo</h2>
+        <span class="count" id="timeline-count"></span>
+      </div>
+      <p class="hint">Un blocco si apre e mostra le unità; un'unità si apre e mostra le fasi, cosa manca e cosa tocca a te.</p>
+      <details class="explain">
+        <summary>come sono datate le barre</summary>
+        <p>Ogni barra copre il tempo fra la prima e l'ultima data <b>misurata</b> di quel nodo: la data che l'artefatto dichiara (<code>published_at</code>), altrimenti l'mtime del puntatore, altrimenti nessuna data. Non è una previsione: una barra lunga vuol dire «si è mossa fra questi due giorni». Le fasi mai eseguite non hanno barra, e lo dicono.</p>
+      </details>
+      <p class="legend">
+        <span class="st-accepted"><i aria-hidden="true"></i>accettata</span>
+        <span class="st-running"><i aria-hidden="true"></i>in corso: qualcuno ci sta lavorando</span>
+        <span class="st-issues"><i aria-hidden="true"></i>respinta in verifica: torna a chi la esegue</span>
+        <span class="st-pending"><i aria-hidden="true"></i>da fare: non iniziata, o in attesa a monte</span>
+      </p>
+      <div id="timeline-notes"></div>
+      <div id="gantt" class="gantt"><p class="empty">Caricamento della linea del tempo…</p></div>
+    </section>
+
+    <section id="questions-section" aria-labelledby="q-head" hidden>
+      <div class="sec-head"><h2 id="q-head">Cosa aspetta te</h2></div>
+      <p class="hint">Una domanda per volta. La risposta viene scritta nei registri del pack passando dal lock e dalla validazione: se un registro non regge, la scrittura viene annullata e te lo dice qui.</p>
+      <div id="questions"></div>
+    </section>
+
+    <section id="prompts-section" aria-labelledby="prompts-head">
+      <div class="sec-head">
+        <h2 id="prompts-head">I prossimi prompt da eseguire</h2>
+        <span class="count" id="prompts-count"></span>
+      </div>
+      <p class="hint">Prompt pronti da incollare in una chat nuova. Il codice è quello che citi tu; lo stato lo ricava la pagina dai registri e dai file di consegna.</p>
+      <p class="legend">
+        <span class="st-accepted"><i aria-hidden="true"></i>fatto: la consegna esiste su disco</span>
+        <span class="st-running"><i aria-hidden="true"></i>in azione: una voce di claim viva nel registro</span>
+        <span class="st-pending"><i aria-hidden="true"></i>da lanciare: ancora nel registro, consegna assente</span>
+        <span class="st-issues"><i aria-hidden="true"></i>ignoto: nel testo non c'è un codice del registro</span>
+      </p>
+      <div id="prompts"></div>
+    </section>
+
+    <section id="path-section" aria-labelledby="path-head">
+      <div class="sec-head">
+        <h2 id="path-head">Percorso per blocchi</h2>
+        <span class="count" id="visible-count"></span>
+      </div>
+      <p class="hint" id="path-hint">Scegli un blocco e leggi i suoi particolari: unità, risultato atteso, le fasi del ciclo (ogni fase apre il suo report) e i commit che toccano i path dichiarati dal blocco. Le fasi respinte in verifica sono quelle che il registro chiama <code>needs_changes</code>: tornano a chi le esegue, non a te.</p>
+      <div id="blocks"></div>
+    </section>
+
+    <section id="now-section" aria-labelledby="now-head">
+      <div class="sec-head"><h2 id="now-head">In corso adesso</h2></div>
+      <div id="claims"></div>
+    </section>
+
+    <section id="answered-section" aria-labelledby="done-head">
+      <div class="sec-head"><h2 id="done-head">Risposte che hai già dato</h2></div>
+      <p class="hint">Le risposte non si riscrivono: se una va cambiata, si apre una domanda nuova.</p>
+      <div id="answered"></div>
+    </section>
+  </main>
+
+  <dialog id="report-dialog" aria-labelledby="report-title">
+    <form method="dialog"><button type="submit" class="ghost close">Chiudi</button></form>
+    <h3 id="report-title">Report</h3>
+    <pre id="report-body" tabindex="0"></pre>
+  </dialog>
+
+  <script src="/app.js"></script>
+</body>
+</html>

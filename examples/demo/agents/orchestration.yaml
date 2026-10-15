@@ -1,0 +1,13 @@
+# Come si muove il lavoro: regole che valgono per ogni fase, non per una.
+schema: project-console-orchestration/1.0
+regole:
+- id: claim-before-bytes
+  what: "Nessuno scrive prima di avere una voce di claim viva nel registro."
+- id: one-live-claim-per-phase
+  what: "Una sola presa viva per fase: due titolari sugli stessi byte sono il difetto piu' caro."
+- id: evidence-with-the-act
+  what: "Ogni atto porta la sua prova (comando, esito, durata) e cio' che NON e' stato rieseguito."
+- id: verify-once
+  what: "Si prova solo cio' che si e' toccato, una volta sola, subito prima di consegnare."
+- id: fail-closed
+  what: "Un controllo che non si puo' fare non si dichiara passato: si dichiara non fatto."

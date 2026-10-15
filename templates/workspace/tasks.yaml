@@ -1,0 +1,5 @@
+# La mappa del lavoro: i blocchi (domini) e le loro unita'. Ogni unita' attraversa le fasi
+# dichiarate in console.yaml (per convenzione A/E/T/R): i micro-task sono l'id dell'unita' piu'
+# il suffisso della fase.
+units: []
+tasks: []

@@ -1,0 +1,9 @@
+schema: project-console-report/1.0
+task_id: ES01A
+attempt: 1
+status: published
+verdict: pass
+published_at: '2026-10-15T12:51:24'
+summary: >-
+  Consegna d'esempio: e' la prova che il coordinatore legge per datare e colorare una fase.
+findings: []

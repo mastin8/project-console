@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+*.log
+.venv/
+
+# La vista statica si rigenera; il resto di un workspace sono dati, e i dati stanno nel workspace.
+STATUS.html
