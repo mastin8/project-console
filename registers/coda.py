@@ -248,8 +248,12 @@ def leggi(ws, adesso=None, limite_sospette: int = 12):
         "totale": len(elenco),
         "ferme": len(ferme),
         "soglia_ore": SOGLIA_ORE,
-        "piu_vecchia": min((voce["at"] for voce in richieste if voce["at"]), default=None),
+        "piu_vecchia": min((voce["at"] for voce in elenco if voce["at"]), default=None),
         "per_fase": [[fase, numero] for fase, numero in per_fase.most_common(8)],
+        # Tutte, non solo le prime otto: una riga della coda deve poter dire quante richieste
+        # non applicate ha addosso LA SUA fase, altrimenti «applica la coda» resta un consiglio
+        # generale mentre il blocco e' su una fase precisa.
+        "per_fase_tutte": dict(per_fase),
         "sospette": sospette[:limite_sospette],
         "sospette_totali": len(sospette),
         "da_applicare": len(elenco) - len(sospette),

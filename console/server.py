@@ -313,6 +313,11 @@ class ReviewState:
         dovuto = handoff.dovuto(self.workspace, state, tasks_doc, prese=set(activate.prese(state)))
         return {
             "generated": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            # Chi firma nel registro: una firma sola vuol dire che la condizione «chi accetta non
+            # deve aver eseguito quei byte» puo' non essere soddisfatta da nessuno che esista. E' il
+            # fatto che serve accanto a un ostacolo di firma, e senza il quale l'utente resta con un
+            # prompt in mano e nessuna azione.
+            "signers": self._firme(state),
             "summary": {
                 "blocks": len(blocks),
                 "units": total,
@@ -857,10 +862,15 @@ class ReviewState:
         sola, e le quattro ratifiche sono ancora li'. Questo conto, accanto alla domanda, l'avrebbe
         detto subito: si legge dai campi di presa, non si deduce.
         """
+        # Una firma e' un IDENTIFICATORE, non una frase: `taken_by` porta spesso prosa
+        # («da assegnare alla prima slot libera», «NESSUNO — voce pre-registrata»), e contarli come
+        # firme gonfiava il numero a 11 su un registro dove le identita' sono due. Misurato oggi.
         conta = {}
         for voce in state.get("active_claims") or []:
             chi = str(voce.get("taken_by") or "").strip()
             if not chi[:1].isalnum() and not chi.startswith("/"):
+                continue
+            if " " in chi:
                 continue
             canonico = "/".join(chi.split("/")[:2]) if chi.startswith("/") else chi.split("(")[0].strip()
             if not canonico:

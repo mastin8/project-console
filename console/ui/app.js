@@ -1778,6 +1778,46 @@ function activationRow(voce, attesa, rilasciabile, apriPrompt) {
   // IL MANDATO SCADUTO: l'ordine si dichiara superato al proprio interno, e consegnarlo di nuovo
   // brucia il turno di chi lo riceve. Attivare ne deposita uno nuovo.
   const mandato = voce.mandato;
+  // «SI SBLOCCA IN UN MODO SOLO: LA FIRMA». Qui il prompt non basta, ed e' il difetto che l'utente
+  // ha segnalato: non e' un lavoro da mandare a qualcuno, sono due condizioni da mettere a posto —
+  // la coda applicata (senza, l'atto nasce su una base vecchia) e una firma che non abbia eseguito
+  // quei byte. Se nel registro c'e' UNA firma sola, la seconda condizione oggi non e' soddisfatta da
+  // nessuno che esista: e quello va detto, non lasciato scoprire al dodicesimo tentativo.
+  if (misura && misura.solo_firma) {
+    const inCoda = ((snapshot && snapshot.queue && snapshot.queue.per_fase_tutte) || {})[voce.phase] || 0;
+    const firme = (snapshot && snapshot.signers) || { distinte: 0, elenco: [] };
+    const comando =
+      "python3 tools/registry_runner.py --once   # dalla radice del progetto: applica la coda";
+    const copia = h("button", {
+      type: "button",
+      class: "actbtn release",
+      text: "Copia il comando della coda",
+      onclick: async () => {
+        try {
+          await navigator.clipboard.writeText(comando);
+          message.className = "msg show ok";
+          message.textContent = "copiato: applicalo dalla radice del progetto, poi il cancello dira' PRONTA.";
+        } catch (error) {
+          message.className = "msg show err";
+          message.textContent = `non copiato (${error.message}): ${comando}`;
+        }
+      },
+    });
+    testo.append(
+      h("div", { class: "actmeta" }, [
+        h("b", { class: "warnnote", text: "perché non basta mandare un prompt: " }),
+        document.createTextNode(
+          (inCoda
+            ? `${inCoda} richieste non applicate su questa fase — finché sono in coda si giudica una base vecchia. `
+            : "la coda su questa fase è applicata. ") +
+            (firme.distinte <= 1
+              ? `Nel registro c'è una sola identità (${(firme.elenco[0] || {}).chi || "—"}): la condizione «chi accetta non ha eseguito quei byte» oggi non è soddisfatta.`
+              : "L'atto va dato a una corsia che quei byte non li ha scritti.")
+        ),
+      ])
+    );
+    azioni.append(copia);
+  }
   if (mandato && mandato.scaduto) {
     // Due casi, e la differenza conta: un ordine dichiarato scaduto e un ordine GIA' ESEGUITO. Il
     // secondo e' quello che ha bloccato tutto il 2026-10-16: lo stesso mandato consegnato a cinque
