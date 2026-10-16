@@ -54,6 +54,7 @@ import inbox  # noqa: E402 - la posta in arrivo: i messaggi depositati interi, u
 import mandate  # noqa: E402 - il prompt di una fase: dal quaderno, o composto dal registro
 import next_prompts  # noqa: E402 - una sola implementazione della regola, condivisa con STATUS.html
 import coda  # noqa: E402 - la coda delle transizioni: il registro che non sa cosa e' successo
+import accetta  # noqa: E402 - l'atto di accettazione firmato da chi lo prende in carico
 import rework  # noqa: E402 - quante volte una fase torna indietro, per la domanda in parole povere
 import timeline  # noqa: E402 - la linea del tempo, con le date dichiarate dagli artefatti
 from workspace import Workspace, lock_file  # noqa: E402 - il contratto dei nomi: qui non c'e' nessun progetto
@@ -1034,6 +1035,25 @@ def build_handler(state):
 
         def do_POST(self):
             route = urlparse(self.path).path
+            if route == "/api/accept":
+                # «Dove accolgo i cambiamenti»: qui. Scrive un ATTO di accettazione firmato `utente`
+                # (una mano che quei byte non li ha scritti), col cancello davanti: se la base non e'
+                # pronta, non firma e dice perche'.
+                length = int(self.headers.get("Content-Length") or 0)
+                try:
+                    payload = json.loads(self.rfile.read(length) or b"{}")
+                except json.JSONDecodeError as error:
+                    return self._json(400, {"error": f"JSON non valido: {error}"})
+                fase = str(payload.get("phase") or "").strip()
+                if not fase:
+                    return self._json(400, {"error": "serve phase"})
+                try:
+                    esito = accetta.per(state.workspace, fase, payload.get("nota"))
+                except ValueError as error:
+                    return self._json(409, {"error": str(error)})
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
+                return self._json(200, {"ok": True, **esito})
             if route == "/api/coda/apply":
                 # Il pulsante che fa il lavoro: la coda si applica in un PROCESSO A PARTE. Perche' non
                 # in un thread: misurato il 2026-10-16, un'applicazione da 90 richieste su un server a

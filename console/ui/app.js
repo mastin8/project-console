@@ -1969,6 +1969,12 @@ function activationRow(voce, attesa, rilasciabile, apriPrompt) {
       ? activationButton(voce.phase, "release", "Rilascia", message, false)
       : activationButton(voce.phase, "activate", "Attiva", message, attesa)
   );
+  // Sulla fase di ACCETTAZIONE c'e' anche il pulsante per accoglierla: e' la risposta a «dove accolgo
+  // i cambiamenti», e prima non esisteva. Compare anche sulla fase RISERVATA (in attesa di un
+  // esecutore): chi accetta e' il padrone, e la prenotazione non lo blocca.
+  if (/R$/.test(voce.phase) || /acceptance|accettazione/i.test(String(voce.kind || ""))) {
+    azioni.append(acceptButton(voce.phase, message));
+  }
   riga.append(azioni, message);
   if (!rilasciabile) riga.append(activationPromptButton(voce.phase, Boolean(apriPrompt)));
   return riga;
@@ -2162,6 +2168,43 @@ function activationPromptButton(phase, apri) {
   return contenitore;
 }
 
+/* DOVE SI ACCOGLIE UN CAMBIAMENTO. Fino a ieri: da nessuna parte — l'accettazione era un atto che
+   scriveva un agente, e chi ha l'autorita' di firmare non ha un terminale. Qui il pulsante scrive
+   l'ATTO firmato `utente` (una mano che quei byte non li ha scritti): report, puntatore e stato nel
+   registro, sotto il lock. Il cancello decide se si puo': se la base non e' pronta, non firma e dice
+   perche' — e l'atto dichiara cosa ha letto e cosa NON ha rieseguito. */
+function acceptButton(phase, message) {
+  const bottone = h("button", {
+    type: "button",
+    class: "actbtn",
+    text: "Accetta (firmato da te)",
+    title:
+      "scrive l'atto di accettazione firmato da te: dichiara cosa hai letto e che non hai rieseguito le prove",
+  });
+  bottone.addEventListener("click", async () => {
+    bottone.disabled = true;
+    message.className = "msg show pending";
+    message.textContent = "controllo la base, poi firmo…";
+    try {
+      const risposta = await fetch("/api/accept", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phase }),
+      });
+      const payload = await risposta.json();
+      if (!risposta.ok) throw new Error(payload.error || `errore ${risposta.status}`);
+      message.className = "msg show ok";
+      message.textContent = `ACCETTATA: atto ${payload.atto} (attempt ${payload.numero}), registro aggiornato. Firmato da te: l'atto dichiara che non hai rieseguito le prove.`;
+      setTimeout(load, 1500);
+    } catch (error) {
+      message.className = "msg show err";
+      message.textContent = `non accettata: ${error.message}`;
+      bottone.disabled = false;
+    }
+  });
+  return bottone;
+}
+
 function activationButton(phase, action, label, message, disabled) {
   const button = h("button", {
     type: "button",
@@ -2187,10 +2230,23 @@ function activationButton(phase, action, label, message, disabled) {
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || `errore ${response.status}`);
       message.className = "msg show ok";
-      message.textContent =
-        action === "release"
-          ? "rilasciata: la fase e' di nuovo disponibile, l'ordine resta su disco."
-          : `ordine in ${payload.order}. Riserva scritta nel registro: una seconda attivazione della stessa fase viene rifiutata. Adesso cerca un esecutore.`;
+      if (action === "release") {
+        message.textContent = "rilasciata: la fase è di nuovo disponibile, l'ordine resta su disco.";
+      } else {
+        // ATTIVARE NON AVVIA NESSUNO — e il passo dopo dev'essere a portata di mano, non raccontato.
+        // Dopo l'ordine si apre il PROMPT col pulsante per copiarlo, e la riga dice le tre cose che
+        // servono: dov'è l'ordine, che la fase è riservata, e che adesso il prompt va consegnato.
+        message.textContent = `ORDINE DEPOSITATO: ${payload.order} — la fase è RISERVATA e non la sta facendo nessuno. Ecco il prompt: copialo e dallo a una corsia.`;
+        try {
+          const testo = await chiediPrompt(phase);
+          apriTesto(`${phase} — il prompt da consegnare a una corsia`, testo.text, {
+            copia: true,
+            file: `prompt-${phase}.md`,
+          });
+        } catch (error) {
+          message.textContent += ` (il prompt non si è aperto: ${error.message})`;
+        }
+      }
       setTimeout(load, 1600);
     } catch (error) {
       message.className = "msg show err";
