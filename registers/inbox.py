@@ -198,8 +198,14 @@ def voci(ws, tutte: bool = False):
 
 
 def non_lavorate(ws):
-    """Quante ricevute nessuno ha ancora lavorato: e' il numero che va tenuto a zero."""
-    return len(voci(ws, tutte=False))
+    """Quante ricevute nessuno ha ancora lavorato: e' il numero che va tenuto a zero.
+
+    Le ricevute di tipo `prompt-consegnato` non contano: sono la traccia che un prompt e' stato
+    consegnato a una chat (lo scrive la pagina quando premi «Copia il prompt»), non un messaggio da
+    lavorare. Servono a un'altra cosa: distinguere «nessuno l'ha preso» da «l'hai mandato e nessuno
+    l'ha dichiarato» — il buco misurato il 2026-10-16 su `NAV03T`.
+    """
+    return len([voce for voce in voci(ws, tutte=False) if voce["kind"] != "prompt-consegnato"])
 
 
 def _nome(ws, fase: str, quando: datetime) -> Path:

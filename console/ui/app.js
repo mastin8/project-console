@@ -1251,6 +1251,31 @@ function linkSalvaFile(testo, nome) {
 }
 
 /* Quante unita' ferma una fase: e' la LEVA, ed e' il criterio con cui si ordina la coda. */
+/* L'ultimo prompt consegnato per quella fase, se la pagina se l'e' segnato. */
+function consegnaDiFase(code) {
+  const posta = (snapshot && snapshot.inbox && snapshot.inbox.items) || [];
+  return posta
+    .filter((voce) => voce.kind === "prompt-consegnato" && voce.phase === code)
+    .sort((a, b) => String(b.when).localeCompare(String(a.when)))[0];
+}
+
+/* «L'ho mandato e nessuno l'ha dichiarato»: e' diverso da «non l'ho ancora mandato», e il registro
+   da solo non li distingue. Questa riga li distingue. */
+function rigaConsegna(code) {
+  const traccia = consegnaDiFase(code);
+  if (!traccia) return null;
+  const inCorso = ((snapshot && snapshot.claims) || []).some((voce) => voce.task_id === code);
+  const quando = String(traccia.when || "").slice(11, 16);
+  return h("div", { class: "actmeta" }, [
+    h("b", { class: "warnnote", text: inCorso ? "prompt consegnato, presa dichiarata" : "prompt consegnato, NESSUNA presa dichiarata" }),
+    document.createTextNode(
+      inCorso
+        ? ` — alle ${quando}.`
+        : ` — alle ${quando}: chi l'ha ricevuto non ha depositato la presa, quindi il registro lo vede libero. Guarda quella chat, non rifare il lavoro qui.`
+    ),
+  ]);
+}
+
 function leva(fase) {
   const unita = ((snapshot && snapshot.blocks) || [])
     .flatMap((blocco) => blocco.units)
@@ -1479,6 +1504,8 @@ function owedRow(voce) {
     })
   );
   riga.append(testo);
+  const tracce = codici.map((codice) => rigaConsegna(codice.code)).filter(Boolean);
+  tracce.forEach((t) => testo.append(t));
   const azioni = h("div", { class: "actactions" });
   codici.forEach((codice) => {
     // Una cosa già presa non si manda una seconda volta: al posto del pulsante c'e' la misura —
@@ -1519,12 +1546,37 @@ function owedPromptButton(code) {
     onclick: async () => {
       try {
         const payload = await chiediPrompt(code);
+        annotaPromptConsegnato(code);
         apriTesto(`${code} — il prompt`, payload.text, { copia: true, file: `prompt-${code}.md` });
       } catch (error) {
         apriTesto(`${code} — il prompt`, `non disponibile: ${error.message}`);
       }
     },
   });
+}
+
+/* QUANDO CONSEGNI UN PROMPT, LA PAGINA SE LO SEGNA.
+
+   Perche'. Il registro sa solo quello che gli agenti DICHIARANO: finche' chi riceve un prompt non
+   deposita la presa, la fase risulta libera — e «non l'ho ancora mandato» e «l'ho mandato e nessuno
+   l'ha dichiarato» diventano la stessa cosa in pagina. Misurato il 2026-10-16: l'utente aveva mandato
+   `NAV03T` e la pagina non lo mostrava in corso (registro pulito, nessuna presa), mentre `TODO03T`
+   lo mostrava. Qui si deposita una RICEVUTA (un file in `inbox/`, non una scrittura nei registri):
+   cosi' la riga puo' dire «consegnato alle 14:52, nessuna presa dichiarata» — e tu sai che c'e' un
+   agente da controllare, non un lavoro da rifare. */
+function annotaPromptConsegnato(code) {
+  if (!code) return;
+  const adesso = new Date().toISOString().slice(11, 16);
+  fetch("/api/inbox", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      phase: code,
+      sender: "utente",
+      kind: "prompt-consegnato",
+      text: `Prompt di ${code} copiato dalla pagina alle ${adesso} e consegnato a una chat. Nessuna presa dichiarata nel registro finché chi l'ha ricevuto non la deposita.`,
+    }),
+  }).catch(() => {});
 }
 
 function postaRow(voce) {
@@ -1826,6 +1878,8 @@ function activationRow(voce, attesa, rilasciabile, apriPrompt) {
   }
   // IL MANDATO SCADUTO: l'ordine si dichiara superato al proprio interno, e consegnarlo di nuovo
   // brucia il turno di chi lo riceve. Attivare ne deposita uno nuovo.
+  const traccia = rigaConsegna(voce.phase);
+  if (traccia) testo.append(traccia);
   const mandato = voce.mandato;
   // «SI SBLOCCA IN UN MODO SOLO: LA FIRMA». Qui il prompt non basta, ed e' il difetto che l'utente
   // ha segnalato: non e' un lavoro da mandare a qualcuno, sono due condizioni da mettere a posto —
