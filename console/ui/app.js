@@ -1395,12 +1395,21 @@ function codaRow(voce) {
     .filter((altra) => altra.task_id !== voce.code && String(altra.task_id).startsWith(unita))
     .map((altra) => altra.task_id);
   if (sorelle.length) {
+    // CHI MISURA: la verifica indipendente (`T`). La `R` non riesegue niente, giudica; la `E` scrive;
+    // la `A` progetta. L'avviso quindi non può dire «se misuri» a tutti: parla del gesto che QUELLA
+    // fase fa davvero.
+    const chi = sorelle.join(", ");
+    const suffisso = (voce.code.match(/([A-Z])$/) || [])[1] || "";
+    const gesto = {
+      T: `Se fai girare i casi adesso, misuri byte che si stanno muovendo: derivali dal design e aspetta che ${chi} consegni.`,
+      R: `Se giudichi adesso, giudichi byte che si stanno muovendo: aspetta la consegna di ${chi} (o accetta dichiarando il limite).`,
+      E: `Attenzione: ${chi} lavora nella stessa unità. Due mani sugli stessi file è il difetto più caro: leggi i path che dichiara prima del primo byte.`,
+      A: `${chi} lavora nella stessa unità: puoi procedere, ma dichiara il perimetro sapendo che quei byte si muovono.`,
+    }[suffisso] || `Nella stessa unità c'è ${chi} in corso.`;
     testo.append(
       h("div", { class: "actmeta" }, [
         h("b", { class: "warnnote", text: "unità già in corso: " }),
-        document.createTextNode(
-          `${sorelle.join(", ")}. Se misuri adesso, misuri byte che si stanno muovendo: deriva i casi e aspetta la sua consegna.`
-        ),
+        document.createTextNode(gesto),
       ])
     );
   }

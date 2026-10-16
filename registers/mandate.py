@@ -153,12 +153,31 @@ def componi(ws, fase, state=None, tasks_doc=None):
         and not str(voce.get("released_at") or "").strip()
     ]
     if altre:
+        # Chi misura: la verifica indipendente. La R giudica, la E scrive, la A progetta: la frase si
+        # adatta al gesto che questa fase fa davvero.
+        suffisso = str(fase)[len(str(task.get("unit_id") or "")) :] or str(fase)
+        elenco = ", ".join(sorted(set(altre)))
+        gesto = {
+            "T": (
+                "Derivare i casi dal design adesso va bene; FARLI GIRARE no. Aspetta che quella fase "
+                "consegni: se i byte si muovono sotto la corsa, il verdetto nasce vecchio e va rifatto."
+            ),
+            "R": (
+                "Giudicare adesso significa giudicare byte che si stanno muovendo: aspetta la consegna, "
+                "oppure accetta dichiarando il limite — ma dichiaralo."
+            ),
+            "E": (
+                "Stai per scrivere nella stessa unità in cui quella fase lavora: leggi i path che ha "
+                "dichiarato prima del primo byte, e se sono gli stessi, fermati e dillo."
+            ),
+        }.get(
+            suffisso.upper(),
+            "Puoi procedere, ma dichiara il perimetro sapendo che quei byte si muovono.",
+        )
         righe += [
             "",
-            f"ATTENZIONE — QUESTA UNITA' HA UN'ALTRA FASE IN CORSO: {', '.join(sorted(set(altre)))}.",
-            "Derivare i casi dal design adesso va bene; MISURARE no. Aspetta che quella fase consegni:",
-            "il tuo verdetto nomina la revisione che hai misurato, e se i byte si muovono sotto la",
-            "corsa, l'atto nasce vecchio e va rifatto (e' costato undici atti su una sola unita').",
+            f"ATTENZIONE — QUESTA UNITA' HA UN'ALTRA FASE IN CORSO: {elenco}.",
+            gesto,
         ]
     righe += [
         "",
