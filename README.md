@@ -185,6 +185,7 @@ python3 registers/next_prompts.py --workspace <progetto> [--json|--explain]
 python3 registers/handoff.py --workspace <progetto>                          # cosa c'e' da fare dopo
 python3 registers/inbox.py --workspace <progetto> --list [--tutte]           # la posta in arrivo
 python3 registers/inbox.py --workspace <progetto> --add --file <messaggio> [--phase <FASE>]
+python3 registers/rework.py --workspace <progetto> [--fase <FASE>|--json]        # cosa si ripete
 python3 registers/static_view.py --workspace <progetto>             # la stessa cosa, in una pagina statica
 python3 registers/apply_transitions.py --workspace <progetto> --dir <progetto>/pending-transitions
 ```
@@ -271,6 +272,50 @@ La riserva si toglie con **Rilascia** (o `--release`): la fase torna disponibile
 sul disco come prova di cosa era stato chiesto. Un ordine senza riserva viene cancellato da solo se
 la scrittura nel registro fallisce: non resta mai sul disco un ordine che qualcuno potrebbe
 raccogliere mentre la fase e' libera.
+
+### Un ordine superato si dichiara dentro l'ordine
+
+Chi si accorge che un ordine non va piu' eseguito — perche' il lavoro che ordinava e' atterrato da
+un'altra corsia — lo scrive **dentro l'ordine**, con un campo che comincia per `stale`:
+
+```yaml
+stale_20260101T1600: >-
+  QUEST'ORDINE NON VA PIU' ESEGUITO: il rientro e' atterrato, la prova e' in produzione.
+```
+
+L'ordine resta sul disco come storia, ma la pagina non lo riconsegna piu': attivare quella fase ne
+deposita uno **nuovo**, con le impronte di adesso. Il motivo di questa regola e' misurato, non
+teorico: il 2026-10-16 lo stesso ordine scaduto di una fase era stato consegnato a **quattro**
+attivazioni, e **sette sessioni** l'hanno ricevuto e rifiutato — ognuna spendendo il proprio turno
+per scrivere che quell'ordine era morto. Un tool che riconsegna un mandato scaduto brucia il lavoro
+di chi lo riceve.
+
+## Quando una fase non si sblocca con un altro tentativo
+
+«Respinta in verifica» non distingue una fase respinta ieri dalla prima volta da una che torna
+indietro da dieci atti **sempre per lo stesso motivo**. La seconda non e' lavoro da rifare: e' un
+ostacolo che nessun tentativo in piu' rimuove, e serve che qualcuno decida. La coda lo dice, con la
+misura presa dai report:
+
+```
+UPL04ZR  10 tentativi · 10 respinte · lo stesso ostacolo in 10 su 10: UPL04Z-T-ON-CURRENT-REVISION
+         · bloccante · chi lo deve: UPL04ZT attempt 2, con un tester distinto dall'autore
+```
+
+In pagina, la riga della coda porta tre cose: quanti tentativi e quante respinte, qual e' l'ostacolo
+che torna (col nome, non con una parafrasi), e — quando il report lo dichiara — **chi lo deve**. Se
+li' c'e' scritto l'utente, vuol dire che nessun agente lo chiude: la leva e' una decisione.
+
+Due avvertenze nei conti, che sono la parte onesta della misura: gli identificatori **locali**
+(`R1`, `F2`, `T4`, la numerazione di ogni singolo atto) non si contano insieme — l'`R1` dell'atto 1
+e l'`R1` dell'atto 7 sono due cose diverse, e contarle direbbe una cosa falsa. E quando nessun
+ostacolo torna con lo stesso nome, la pagina lo dice con quelle parole: «ogni atto nomina punti
+nuovi», che e' il segno che la leva sta altrove.
+
+```bash
+python3 registers/rework.py --workspace <progetto>            # le fasi che tornano indietro
+python3 registers/rework.py --workspace <progetto> --fase X --json
+```
 
 ## La posta in arrivo: perche' un messaggio non deve morire
 

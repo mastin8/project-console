@@ -1275,6 +1275,30 @@ function activationRow(voce, attesa, rilasciabile, apriPrompt) {
         .join(" · "),
     })
   );
+  // LA MISURA DELLA RIPETIZIONE. Una fase respinta dieci volte, sempre per lo stesso motivo, non e'
+  // la stessa cosa di una respinta ieri: li' un altro tentativo non e' la leva, e chi legge deve
+  // saperlo PRIMA di premere «Attiva». I numeri vengono dai report, non da una stima.
+  const misura = voce.misura;
+  if (misura && misura.tentativi > 1) {
+    testo.append(misuraRow(misura));
+  }
+  // IL MANDATO SCADUTO: l'ordine si dichiara superato al proprio interno, e consegnarlo di nuovo
+  // brucia il turno di chi lo riceve. Attivare ne deposita uno nuovo.
+  const mandato = voce.mandato;
+  if (mandato && mandato.scaduto) {
+    testo.append(
+      h("div", { class: "actmeta" }, [
+        h("b", { class: "warnnote", text: "mandato scaduto" }),
+        document.createTextNode(
+          mandato.consegnato_a
+            ? ` — già consegnato a ${mandato.consegnato_a} attivazion${
+                mandato.consegnato_a === 1 ? "e" : "i"
+              }: chi l'ha ricevuto l'ha rifiutato. Attivare deposita un ordine NUOVO, con le impronte di adesso.`
+            : " — l'ordine si dichiara superato al proprio interno. Attivare deposita un ordine NUOVO, con le impronte di adesso."
+        ),
+      ])
+    );
+  }
   riga.append(testo);
   const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });
   const azioni = h("div", { class: "actactions" });
@@ -1295,6 +1319,38 @@ function activationRow(voce, attesa, rilasciabile, apriPrompt) {
   riga.append(azioni, message);
   if (!rilasciabile) riga.append(activationPromptButton(voce.phase, Boolean(apriPrompt)));
   return riga;
+}
+
+/* Quante volte questa fase e' tornata indietro, e per cosa. Quando l'ostacolo ha lo stesso nome in
+   tutte le prove, la riga lo dice con quelle parole: e' la differenza fra «rifai» e «non e' cosi'
+   che si sblocca». Chi lo deve e' un campo del report, non una deduzione: se li' c'e' scritto
+   l'utente, vuol dire che nessun altro tentativo lo chiude. */
+function misuraRow(misura) {
+  const primo = (misura.ricorrenti || [])[0];
+  const riga = h("div", { class: "actmeta" }, [
+    h("b", { text: `${misura.tentativi} tentativi · ${misura.respinte} respinte` }),
+    document.createTextNode(
+      primo
+        ? ` · lo stesso ostacolo in ${primo.volte} su ${misura.tentativi}: ${primo.id}${
+            primo.bloccante ? " (bloccante)" : ""
+          }`
+        : " · nessun ostacolo con lo stesso nome: ogni atto nomina punti nuovi"
+    ),
+  ]);
+  const parti = [riga];
+  if (primo && primo.chi) {
+    const chi = primo.chi.length > 160 ? `${primo.chi.slice(0, 157)}…` : primo.chi;
+    parti.push(h("div", { class: "actmeta", title: primo.chi, text: `chi lo deve: ${chi}` }));
+  }
+  if (misura.ripetuta) {
+    parti.push(
+      h("div", { class: "actmeta" }, [
+        h("b", { class: "warnnote", text: "questo non si sblocca con un altro tentativo" }),
+        document.createTextNode(" — l'ostacolo torna identico in ogni prova."),
+      ])
+    );
+  }
+  return parti.length === 1 ? riga : h("div", {}, parti);
 }
 
 /* Il prompt di una fase: copiato in un clic, o letto nel dialogo. Le due funzioni chiedono il testo

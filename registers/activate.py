@@ -50,6 +50,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import apply_transitions  # noqa: E402 - la scrittura sui registri passa sempre da li'
 import next_prompts  # noqa: E402 - il quaderno, per il testo del prompt
+import rework  # noqa: E402 - quante volte una fase e' tornata indietro, e per cosa
 from workspace import Workspace, lock_file  # noqa: E402
 
 LIVE = ("active", "taken", "pre_registered", "ready", "active_extension")
@@ -135,6 +136,57 @@ def ordini_aperti(ws):
     return fuori
 
 
+def _motivo_scaduto(documento):
+    """Perche' un ordine non va piu' consegnato, o None se vale ancora.
+
+    Convenzione nata sul campo: chi si accorge che un ordine e' superato lo scrive DENTRO l'ordine,
+    con un campo che comincia per `stale` (`stale_declared_20261015T1600`, `stale_20261015T1620`).
+    L'ordine resta sul disco — e' la storia di cosa era stato chiesto — ma non si consegna piu'.
+
+    Perche' serve un guardiano qui: misurato il 2026-10-16, la pagina ha consegnato lo stesso ordine
+    stantio di `TODO03E` a QUATTRO attivazioni (e sette sessioni l'hanno ricevuto e rifiutato, con la
+    misura scritta nei loro atti). La causa era questa funzione che non c'era: `attiva()` riusava il
+    primo ordine aperto, anche quando l'ordine dichiarava di essere morto. Un tool che riconsegna un
+    mandato scaduto brucia il turno di chi lo riceve.
+    """
+    for chiave, valore in (documento or {}).items():
+        if str(chiave).lower().startswith("stale") and str(valore or "").strip():
+            return str(valore).strip()
+    return None
+
+
+def mandati(ws):
+    """Ogni ordine in coda, col motivo per cui e' scaduto: {percorso: motivo o None}."""
+    fuori = {}
+    coda = ws.path("dispatch-queue")
+    if not coda.is_dir():
+        return fuori
+    for percorso in sorted(coda.glob("*.yaml")):
+        try:
+            documento = _carica(percorso.read_text(encoding="utf-8")) or {}
+        except (yaml.YAMLError, OSError):
+            continue
+        if isinstance(documento, dict):
+            fuori[str(percorso.relative_to(ws.root))] = _motivo_scaduto(documento)
+    return fuori
+
+
+def _spedizioni(state, fase):
+    """Quante volte un ordine di questa fase e' gia' stato consegnato (voci di presa nel registro).
+
+    E' il numero che rende visibile lo spreco: un mandato consegnato quattro volte e rifiutato
+    quattro volte non e' un mandato da consegnare una quinta.
+    """
+    conta = {}
+    for voce in state.get("active_claims") or []:
+        if str(voce.get("task_id") or "") != str(fase):
+            continue
+        percorso = str(voce.get("order") or "").strip()
+        if percorso:
+            conta[percorso] = conta.get(percorso, 0) + 1
+    return conta
+
+
 def attivabili(ws, state=None, tasks_doc=None):
     """Cosa si puo' far partire adesso, e perche' — misurato, non indovinato.
 
@@ -148,6 +200,7 @@ def attivabili(ws, state=None, tasks_doc=None):
     registrate = state.get("tasks") or {}
     vive = prese(state)
     ordini = ordini_aperti(ws)
+    scaduti = {percorso: motivo for percorso, motivo in mandati(ws).items() if motivo}
     unita = {str(u.get("id")): u for u in tasks_doc.get("units") or [] if u.get("id")}
     per_id = {str(t.get("id")): t for t in tasks_doc.get("tasks") or [] if t.get("id")}
 
@@ -169,6 +222,12 @@ def attivabili(ws, state=None, tasks_doc=None):
         if elenco and all((registrate.get(f) or {}).get("status") == "accepted" for f in elenco)
     }
     fuori = []
+    # La misura della ripetizione, solo per le fasi respinte: e' li' che serve, e sono poche. Una
+    # fase respinta dieci volte per lo stesso motivo non si sblocca con un altro tentativo, e chi
+    # legge la coda deve vederlo PRIMA di premere «Attiva».
+    misure = rework.per_fase(
+        ws, [fase for fase, *_ in fasi(tasks_doc) if stato_di(fase) in STALLED]
+    )
     for fase, unit_id, kind, titolo in fasi(tasks_doc):
         stato = stato_di(fase)
         if stato == "accepted" or fase in vive:
@@ -198,10 +257,14 @@ def attivabili(ws, state=None, tasks_doc=None):
                 "title": titolo or str(unita_dati.get("title") or ""),
                 "status": stato,
                 "rework": stato in STALLED,
+                "misura": misure.get(fase),
                 "waiting_on": attese,
                 # Se un ordine c'e' gia', la pagina lo mostra invece di offrire un pulsante che
                 # verrebbe rifiutato.
                 "orders": ordini.get(fase, []),
+                # Il mandato che questa attivazione consegnerebbe: se e' scaduto, la pagina lo dice
+                # e `attiva` ne deposita uno NUOVO invece di riconsegnare quello morto.
+                "mandato": _mandato_di(ordini.get(fase, []), scaduti, _spedizioni(state, fase)),
                 # Il file di consegna e' il PROSSIMO tentativo, non sempre il primo: un rifacimento
                 # che chiedesse `attempt-1` chiederebbe di riscrivere un artefatto consegnato.
                 "deliverable": f"{ws.deliverable_prefix}{fase}/attempt-{prossimo_tentativo(state, fase)}.yaml",
@@ -209,6 +272,27 @@ def attivabili(ws, state=None, tasks_doc=None):
         )
     fuori.sort(key=lambda voce: (bool(voce["waiting_on"]), voce["rework"] is False, voce["phase"]))
     return fuori
+
+
+def _mandato_di(percorsi, scaduti, spedizioni):
+    """L'ordine che verrebbe consegnato, riusabile o scaduto, con quante volte e' gia' andato.
+
+    Fra piu' ordini aperti si sceglie l'ultimo RIUSABILE: se il piu' recente e' scaduto, quello che
+    conta e' che esiste un ordine ancora vivo da consegnare.
+    """
+    riusabili = [percorso for percorso in percorsi if percorso not in scaduti]
+    if riusabili:
+        scelto = riusabili[-1]
+    elif percorsi:
+        scelto = percorsi[-1]
+    else:
+        return None
+    return {
+        "path": scelto,
+        "scaduto": bool(scaduti.get(scelto)),
+        "motivo": scaduti.get(scelto) or "",
+        "consegnato_a": spedizioni.get(scelto, 0),
+    }
 
 
 def radici(ws):
@@ -288,7 +372,15 @@ def impronte(ws, state, fase):
 
 def _order_path(ws, fase):
     quando = datetime.now().strftime("%Y%m%dT%H%M%S")
-    return ws.path("dispatch-queue") / f"{quando}-{fase}-attivazione.yaml"
+    coda = ws.path("dispatch-queue")
+    percorso = coda / f"{quando}-{fase}-attivazione.yaml"
+    # Due attivazioni nello stesso secondo non devono sovrascriversi: un ordine e' la prova di cosa
+    # era stato chiesto, e una prova sovrascritta non prova niente.
+    for tentativo in range(2, 100):
+        if not percorso.exists():
+            return percorso
+        percorso = coda / f"{quando}-{fase}-attivazione-{tentativo}.yaml"
+    return percorso
 
 
 def costruisci_ordine(ws, voce, state, prompt=None):
@@ -444,16 +536,21 @@ def attiva(ws, fase, dry_run=False):
     import mandate  # noqa: PLC0415 - import locale: `mandate` usa `activate` per le impronte
 
     ordine = costruisci_ordine(ws, voce, state, mandate.per(ws, fase))
-    # Un ordine per fase: se ce n'e' gia' uno aperto si usa QUELLO, non se ne scrive un secondo.
+    # Un ordine per fase: se ce n'e' gia' uno aperto e ANCORA VALIDO si usa QUELLO, non se ne scrive
+    # un secondo. Un ordine che si dichiara scaduto non si riconsegna: chi lo riceverebbe lo
+    # rifiuterebbe, e il turno e' perso. Misurato il 2026-10-16 su `TODO03E`: quattro attivazioni
+    # sullo stesso mandato morto, sette sessioni spese a rifiutarlo.
     esistenti = voce.get("orders") or []
-    percorso = (ws.root / esistenti[-1]) if esistenti else _order_path(ws, fase)
+    scaduti = {percorso: motivo for percorso, motivo in mandati(ws).items() if motivo}
+    riusabili = [percorso for percorso in esistenti if percorso not in scaduti]
+    percorso = (ws.root / riusabili[-1]) if riusabili else _order_path(ws, fase)
     # L'ancora si calcola PRIMA di scrivere l'ordine: se il registro non la regge (per esempio
     # `active_claims` vuoto su un progetto al primo giorno) si fallisce senza lasciare un ordine
     # orfano sul disco — che qualcun altro raccoglierebbe mentre la fase e' ancora libera.
     ancora, occorrenza = _ultima_ancora(state, ws)
     if dry_run:
         return {"order": str(percorso), "order_body": ordine, "applied": []}
-    if not esistenti:
+    if not riusabili:
         percorso.parent.mkdir(parents=True, exist_ok=True)
         percorso.write_text(
             yaml.safe_dump(ordine, allow_unicode=True, sort_keys=False), encoding="utf-8"
@@ -481,9 +578,10 @@ def attiva(ws, fase, dry_run=False):
     except Exception:
         # Un ordine senza riserva e' un ordine che qualcun altro puo' raccogliere mentre la fase
         # resta libera: si toglie invece di lasciarlo sul disco (misurato al primo giro, quando un
-        # ancora ambigua ha lasciato un ordine orfano). Se l'ordine c'era GIA' — un rilancio
-        # depositato prima — non si tocca: non e' mio.
-        if not esistenti:
+        # ancora ambigua ha lasciato un ordine orfano). Se l'ordine c'era GIA' e vale ancora — un
+        # rilancio depositato prima — non si tocca: non e' mio. Un ordine scaduto, invece, non si
+        # tocca in nessun caso: e' la storia di cosa era stato chiesto.
+        if not riusabili:
             percorso.unlink(missing_ok=True)
         raise
     return {

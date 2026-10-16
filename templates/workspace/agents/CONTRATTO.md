@@ -158,6 +158,7 @@ ancora — un prompt nuovo, un'idea — lascia `phase` vuoto: verrà letta lo st
 | il prompt congelato | dentro l'ordine (`prompt`, `prompt_sha256`) | e' il testo che ti e' stato consegnato: **usa quello**, non ricomporlo |
 | i registri | `state.yaml`, `tasks.yaml`, `questions.yaml`, `decisions.yaml`, `user_decisions.yaml` | lo stato, i criteri di accettazione, le decisioni |
 | i report altrui | `reports/` | cosa e' gia' stato fatto e cosa ha lasciato chi c'e' stato prima |
+| la storia dei ritorni | `reports/<fase>/attempt-*.yaml` letti da `registers/rework.py` | quante volte quella fase e' tornata indietro e per cosa: se l'ostacolo e' sempre lo stesso, non e' un altro tentativo che lo toglie |
 | la posta | `inbox/` | i messaggi depositati interi: quello che nei report non ci sta |
 | il quaderno | `PARALLEL-PROMPTS.md` | i prompt pronti, con il codice di riconoscimento |
 
@@ -168,6 +169,7 @@ python3 registers/next_prompts.py --workspace .            # i prompt e il loro 
 python3 registers/handoff.py --workspace .                 # cosa c'e' da fare dopo
 python3 registers/handoff.py --workspace . --gaps           # chi ha consegnato senza direzione
 python3 registers/inbox.py --workspace . --list             # i messaggi depositati e non lavorati
+python3 registers/rework.py --workspace .                   # le fasi che tornano indietro, e per cosa
 python3 registers/activate.py --workspace . --list          # cosa si puo' far partire
 python3 registers/mandate.py --workspace . --phase <FASE>   # il prompt di una fase
 python3 registers/validate_registries.py --workspace .      # i registri sono leggibili?
@@ -186,6 +188,7 @@ python3 registers/validate_registries.py --workspace .      # i registri sono le
 | **Un controllo che non puoi fare si dichiara non fatto** | un fail-open si scopre in produzione |
 | **Lascia il testimone** (`next` / `next_tasks`) | la pagina mostra «consegna senza direzione» |
 | **Quello che non entra in un report va in `inbox/`** | resta in una chat, cioe' in nessun posto: non lo legge nessuno |
+| **Un ordine superato si dichiara DENTRO l'ordine** (un campo che comincia per `stale`) | la pagina lo riconsegna, e chi lo riceve brucia un turno per rifiutarlo |
 
 ## Un ciclo completo, minimo
 
