@@ -210,6 +210,17 @@ che dichiari di rimisurare. Se una prova manca, l'atto e' respinto con quella pr
 E le dipendenze: **da artefatti, non da firme.** Un'unita' di lavoro puo' aspettare il report di
 un'altra (E o T), mai la sua **accettazione**. Solo le unita' di integrazione guardano le `R`.
 
+### Dentro un'unita' le fasi sono SEQUENZIALI
+
+`A → E → T → R`, una alla volta: **una sola presa viva per unita'**. Ognuna misura l'output della
+precedente, e misurarne una mentre l'altra scrive produce un atto che nasce vecchio — e' costato
+undici atti su una sola unita'. Chi prova ad attivare la seconda trova il rifiuto, col motivo.
+
+**L'unica eccezione e' la derivazione dei casi**: la fase `T` puo' scrivere i suoi casi dal design
+congelato mentre la `E` lavora, perche' i casi vanno derivati PRIMA di vedere l'esecuzione. Ma
+finche' la `E` non ha consegnato, la `T` **non fa girare niente**: derivare e' testo, misurare e'
+una presa.
+
 Un atto di verifica o di accettazione deve essere **indipendente da chi ha eseguito**. Cosa vuol dire
 "indipendente" non lo decide chi scrive l'atto: lo decide il contratto del progetto, e quello che il
 progetto non ha scritto non e' una regola.

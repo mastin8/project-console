@@ -316,6 +316,21 @@ def attivabili(ws, state=None, tasks_doc=None, dovuto=None):
         if elenco and all((registrate.get(f) or {}).get("status") == "accepted" for f in elenco)
     }
     fuori = []
+    # UNA SOLA FASE VIVA PER UNITA'. Le fasi di un'unita' sono una catena (A -> E -> T -> R) perche'
+    # ognuna misura l'output della precedente: due fasi vive insieme significano misurare byte che si
+    # stanno muovendo — la classe di difetto che ha bruciato 11 atti su `UPL04ZR` (`T-ON-CURRENT-
+    # REVISION` in 10 su 10) e invalidato piu' ratifiche di `NAV03R`. L'eccezione — derivare i casi dal
+    # design mentre la E lavora — e' TESTO nel mandato, non una presa: non passa da qui.
+    occupate = {}
+    for fase_viva, voce_viva in vive.items():
+        unita_viva = str(voce_viva.get("unit") or "")
+        if not unita_viva:
+            unita_viva = next(
+                (uid for uid in sorted(unita, key=len, reverse=True) if str(fase_viva).startswith(uid)),
+                "",
+            )
+        if unita_viva:
+            occupate.setdefault(unita_viva, []).append(str(fase_viva))
     # La misura della ripetizione, solo per le fasi respinte: e' li' che serve, e sono poche. Una
     # fase respinta dieci volte per lo stesso motivo non si sblocca con un altro tentativo, e chi
     # legge la coda deve vederlo PRIMA di premere «Attiva».
@@ -355,6 +370,10 @@ def attivabili(ws, state=None, tasks_doc=None, dovuto=None):
                 # Cosa la sua ultima dichiarazione dice che va fatto dopo — e se manda altrove.
                 "next_act": (per_fase.get(fase) or {}).get("codes") or [],
                 "altrove": bool((per_fase.get(fase) or {}).get("altrove")),
+                # La sua unita' ha gia' una fase viva: questa aspetta, e la pagina lo dice.
+                "bloccata_da_unita": [
+                    altra for altra in occupate.get(str(unit_id), []) if altra != str(fase)
+                ],
                 "waiting_on": attese,
                 # Se un ordine c'e' gia', la pagina lo mostra invece di offrire un pulsante che
                 # verrebbe rifiutato.
@@ -645,6 +664,14 @@ def attiva(ws, fase, dry_run=False):
             f"{fase} non va attivata: la sua ultima consegna dice che il prossimo atto e' un "
             f"tentativo NUOVO su {dovuti}. Deposita l'ordine per quella fase, invece di rimettere "
             "in coda questa."
+        )
+    # Le fasi di un'unita' sono sequenziali: se un'altra e' viva, questa aspetta.
+    if voce.get("bloccata_da_unita"):
+        raise apply_transitions.TransitionError(
+            f"{fase} non si attiva adesso: nella sua unita' e' gia' in corso "
+            f"{', '.join(voce['bloccata_da_unita'])}. Le fasi della stessa unita' sono sequenziali — "
+            "ognuna misura l'output della precedente — e misurarne una mentre l'altra scrive produce "
+            "un atto gia' vecchio. Aspetta che quella consegni."
         )
     # Il prompt che l'esecutore trova NELL'ORDINE: dal quaderno se c'e', altrimenti composto dal
     # registro. Senza questo, attivare una fase senza sezione nel quaderno lasciava l'ordine con

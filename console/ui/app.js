@@ -1290,6 +1290,10 @@ function renderActivation(data) {
   const count = $("#activation-count");
   if (!box || !count) return;
   const aperte = (data.activatable || []).filter((voce) => !(voce.waiting_on || []).length);
+  // LE FASI CHE ASPETTANO UN'ALTRA FASE DELLA LORO UNITA': non sono «da mandare» (le fasi di una
+  // unità sono sequenziali) ma non spariscono — si vedono, con scritto chi aspettano.
+  const inAttesaUnita = aperte.filter((voce) => (voce.bloccata_da_unita || []).length);
+  const libere = aperte.filter((voce) => !(voce.bloccata_da_unita || []).length);
   const attivate = (data.activated || []).filter((voce) =>
     ["pre_registered", "ready"].includes(voce.status)
   );
@@ -1306,6 +1310,7 @@ function renderActivation(data) {
       coda.push({
         code: codice.code,
         status: codice.status,
+        busy: codice.busy || [],
         da: voce.from_phase,
         perche: voce.text,
         quando: voce.when,
@@ -1313,15 +1318,18 @@ function renderActivation(data) {
       });
     });
   });
-  aperte.forEach((voce) => {
+  libere.forEach((voce) => {
     if (visti.has(voce.phase)) return;
     visti.add(voce.phase);
     coda.push({ code: voce.phase, da: null, perche: "", quando: "", fase: voce });
   });
 
   const inCorso = (data.claims || []).filter((voce) => voce.status === "taken");
+  // Contano solo quelle MANDABILI: una riga in attesa della sua unita' non e' un'azione.
+  const mandabili = coda.filter((voce) => !(voce.busy || []).length);
   count.textContent = [
-    coda.length ? `${coda.length} da mandare` : "niente da mandare",
+    mandabili.length ? `${mandabili.length} da mandare` : "niente da mandare",
+    coda.length > mandabili.length ? `${coda.length - mandabili.length} in attesa della loro unità` : null,
     attivate.length ? `${attivate.length} riservate` : null,
     inCorso.length ? `${inCorso.length} in corso` : null,
   ]
@@ -1338,7 +1346,7 @@ function renderActivation(data) {
     );
   }
 
-  if (!coda.length) {
+  if (!mandabili.length) {
     box.replaceChildren(
       h("p", { class: "empty" }, [
         h("b", { text: "Niente da mandare. " }),
@@ -1371,6 +1379,27 @@ function renderActivation(data) {
           h("span", { class: "actcount", text: String(attivate.length) }),
         ]),
         ...attivate.map(riservataRow),
+      ])
+    );
+  }
+  if (inAttesaUnita.length) {
+    parti.push(
+      h("div", { class: "actbox" }, [
+        h("p", { class: "actgroup" }, [
+          h("b", { text: "In attesa della loro unità" }),
+          h("span", { class: "actcount", text: String(inAttesaUnita.length) }),
+        ]),
+        ...inAttesaUnita.map((voce) =>
+          h("div", { class: "actrow waiting" }, [
+            h("div", { class: "acttext" }, [
+              h("code", { class: "actcode", text: voce.phase }),
+              h("div", {
+                class: "actmeta",
+                text: `aspetta ${(voce.bloccata_da_unita || []).join(", ")}: le fasi della stessa unità sono sequenziali — ognuna misura l'output della precedente.`,
+              }),
+            ]),
+          ])
+        ),
       ])
     );
   }
@@ -1430,6 +1459,19 @@ function codaRow(voce) {
 
   const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });
   const azioni = h("div", { class: "actactions" });
+  if ((voce.busy || []).length) {
+    // Le fasi della stessa unità sono sequenziali: qui non c'è niente da mandare, si aspetta.
+    testo.append(
+      h("div", { class: "actmeta" }, [
+        h("b", { class: "warnnote", text: "in attesa: " }),
+        document.createTextNode(
+          `la sua unità ha ${voce.busy.join(", ")} in corso. Le fasi della stessa unità sono sequenziali: ognuna misura l'output della precedente.`
+        ),
+      ])
+    );
+    riga.append(azioni);
+    return riga;
+  }
   if (voce.fase && (voce.fase.misura || {}).solo_firma) {
     azioni.append(acceptButton(voce.code, message));
   } else if (voce.fase) {

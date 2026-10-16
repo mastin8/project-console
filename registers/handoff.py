@@ -238,6 +238,18 @@ def dovuto(ws, state=None, tasks_doc=None, limite: int = 8, prese=None):
     registrate = state.get("tasks") or {}
     noti = {str(t.get("id")) for t in tasks_doc.get("tasks") or [] if t.get("id")}
     vive = {str(fase) for fase in (prese or set())}
+    # Quali fasi sono vive, per unita': una fase che aspetta un'altra fase della sua unita' non e' «da
+    # mandare» — le fasi della stessa unita' sono sequenziali.
+    unita_di = {
+        str(t.get("id")): str(t.get("unit_id") or "")
+        for t in tasks_doc.get("tasks") or []
+        if t.get("id")
+    }
+    vive_per_unita = {}
+    for fase_viva in vive:
+        unita_viva = unita_di.get(fase_viva, "")
+        if unita_viva:
+            vive_per_unita.setdefault(unita_viva, []).append(fase_viva)
 
     def consegnata_dopo(fase, quando):
         """Se quella fase si e' mossa DOPO la dichiarazione: due `stat`, non una lettura.
@@ -278,6 +290,12 @@ def dovuto(ws, state=None, tasks_doc=None, limite: int = 8, prese=None):
                     "attempt": registrata.get("attempt") or 0,
                     # Presa viva: l'atto e' in mano a qualcuno adesso.
                     "live": codice in vive,
+                    # Le altre fasi della sua unita' con una presa viva: questa aspetta.
+                    "busy": [
+                        altra
+                        for altra in vive_per_unita.get(unita_di.get(codice, ""), [])
+                        if altra != codice
+                    ],
                     # Consegnata dopo la dichiarazione: l'atto che questa riga chiedeva c'e' gia'.
                     "done": consegnata_dopo(codice, voce["when"]),
                 }
