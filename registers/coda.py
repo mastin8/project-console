@@ -197,6 +197,22 @@ def leggi(ws, adesso=None, limite_sospette: int = 12):
                 motivi.append(
                     f"inserirebbe una voce all'attempt {voce['item']['attempt']} mentre su disco c'e' il {su_disco}"
                 )
+        # Un INSERIMENTO di presa (`item:` con uno stato vivo) e' la richiesta piu' delicata: non
+        # corregge un campo, aggiunge una voce che resta li'. Se la fase ha gia' una presa viva, o se
+        # e' andata avanti, quella voce diventa un titolare che non esiste — e la fase resta «in
+        # corso» per sempre, perche' nessuno rilascera' la presa di un fantasma. Misurato il
+        # 2026-10-16: in coda ci sono due inserimenti di presa del giorno prima, mai applicati.
+        stato_item = str(voce["item"].get("status") or "")
+        if voce["item"] and stato_item in ("taken", "active", "pre_registered", "ready"):
+            if voce["fase"] in vive:
+                motivi.append("la fase ha GIA' una presa viva: questa ne aggiunge una seconda")
+            else:
+                su_disco = _attempt_su_disco(ws, voce["fase"])
+                if su_disco and int(voce["item"].get("attempt") or 0) <= su_disco:
+                    motivi.append(
+                        f"inserisce una presa vecchia (attempt {voce['item'].get('attempt')}) su una fase "
+                        f"gia' al attempt {su_disco}: resterebbe «in corso» con un titolare che non c'e' piu'"
+                    )
         if voce["field"] == "status" and str(voce["text"]).strip() == "released":
             if voce["fase"] and voce["fase"] not in vive:
                 motivi.append("il registro non mostra prese vive su questa fase: forse il rilascio e' gia' applicato")
@@ -205,11 +221,29 @@ def leggi(ws, adesso=None, limite_sospette: int = 12):
             if righe.get(voce["anchor"].strip(), 0) > 1:
                 motivi.append("ancora ambigua e nessuna `occurrence`: l'applicatore la rifiuta")
         if motivi:
-            sospette.append({**{k: voce[k] for k in ("file", "fase", "field", "by")}, "motivi": motivi})
+            # Prima quelle che possono CORROMPERE il registro (una presa fantasma, un numero che
+            # torna indietro, un'ancora che l'applicatore rifiuta), poi quelle solo superate: l'elenco
+            # in pagina e' tagliato, e a chi applica servono in quest'ordine.
+            grave = any(
+                parola in " ".join(motivi)
+                for parola in ("GIA'", "inserisce", "riporterebbe", "inserirebbe", "ambigua")
+            )
+            sospette.append(
+                {
+                    **{k: voce[k] for k in ("file", "fase", "field", "by")},
+                    "motivi": motivi,
+                    "grave": grave,
+                }
+            )
+    sospette.sort(key=lambda voce: (not voce["grave"], voce["file"]))
 
     per_fase = Counter(voce["fase"] or "(senza fase)" for voce in richieste)
     ferme = [voce for voce in richieste if voce["at"] and adesso - voce["at"] > timedelta(hours=SOGLIA_ORE)]
     radice = str(ws.root)
+    # I comandi: la COPIA per prima, perche' i registri di questo progetto NON sono tracciati da git
+    # e non c'e' nessun «annulla». E la prova a vuoto su UNA richiesta sola: sui 129 file stamperebbe
+    # il registro INTERO (2,3 MB) una volta per ciascuno.
+    prima = richieste[0]["percorso"] if richieste else "pending-transitions/<una-richiesta>.yaml"
     return {
         "totale": len(richieste),
         "ferme": len(ferme),
@@ -221,7 +255,8 @@ def leggi(ws, adesso=None, limite_sospette: int = 12):
         "da_applicare": len(richieste) - len(sospette),
         "indietro": _registro_indietro(ws, state),
         "comandi": {
-            "prova": f"cd {radice} && python3 tools/apply_transitions.py --dir pending-transitions --dry-run",
+            "copia": f"cd {radice} && cp state.yaml /tmp/state-prima-della-coda.yaml",
+            "prova": f"cd {radice} && python3 tools/apply_transitions.py {prima} --dry-run | head -40",
             "applica": f"cd {radice} && python3 tools/registry_runner.py --once",
         },
     }

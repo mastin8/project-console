@@ -1056,7 +1056,19 @@ function renderCoda(coda) {
     document.createTextNode("Applicarle non è una lettura: lo fa chi coordina, una volta sola, con gli strumenti del progetto.")
   );
 
-  const comandi = `# 1. prova a vuoto: mostra cosa farebbe, non scrive\n${coda.comandi.prova}\n\n# 2. applica davvero: applica, archivia in applied/ e rigenera la vista\n${coda.comandi.applica}`;
+  // Tre passi, e il primo non e' una formalita': i registri di questo progetto non sono tracciati da
+  // git, quindi la copia E' l'unico «annulla» che esiste. La prova va su UNA richiesta sola: il
+  // dry-run stampa il registro intero (2,3 MB) una volta per file, e su 129 file sono 300 MB.
+  const comandi = [
+    "# 0. la copia, prima: i registri non sono in git, questa e' l'unica via del ritorno",
+    coda.comandi.copia,
+    "",
+    "# 1. cosa farebbe, su UNA richiesta (su tutte stamperebbe il registro 129 volte)",
+    coda.comandi.prova,
+    "",
+    "# 2. applica la coda: una riga per richiesta; le riuscite vanno in applied/",
+    coda.comandi.applica,
+  ].join("\n");
   azioni.replaceChildren(
     h("button", { type: "button", class: "ghost", id: "coda-copia-bottone", text: "Copia i due comandi" })
   );
