@@ -76,8 +76,10 @@ def per(ws, fase, nota=None, firmatario="utente", dry_run=False):
             "l'atto sarebbe su byte che qualcun altro sta muovendo"
         )
     cartella = ws.reports_dir / str(fase)
+    import re
+
     tentativi = sorted(
-        (int(p.name.split("-")[1]) for p in cartella.glob("attempt-*.yaml") if p.name.split("-")[1].isdigit())
+        (int(trovato.group(1)) for p in cartella.glob("attempt-*.yaml") if (trovato := re.match(r"attempt-(\d+)\.yaml$", p.name)))
     ) if cartella.is_dir() else []
     numero = (tentativi[-1] + 1) if tentativi else 1
     giudicato = _leggi(ws.reports_dir / f"{fase}.yaml")

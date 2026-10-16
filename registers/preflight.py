@@ -142,17 +142,31 @@ def leggi(ws, fase, state=None, tasks_doc=None):
     #    diventerebbe un freno generale — la coda e' quasi sempre piena — e non farebbe giudicare piu'
     #    niente, che e' la malattia curata con un altro nome.
     richieste = coda.richieste(ws)
+    # SEGNALATE ≠ BLOCCANTI. Una richiesta che il tool stesso non applichera' (una presa fantasma, un
+    # numero che tornerebbe indietro) non puo' bloccare per sempre la firma: altrimenti la fase resta
+    # non accettabile all'infinito, e il cancello diventa una gabbia — misurato il 2026-10-16 su
+    # `UPL04ZR` (3 richieste segnalate, 0 applicabili, firma rifiutata).
+    segnalate = {voce["file"] for voce in coda.leggi(ws)["sospette"]}
     sulla_fase = [voce for voce in richieste if voce["fase"] == str(fase)]
+    bloccanti = [voce for voce in sulla_fase if voce["file"] not in segnalate]
     sulla_unita = [
         voce for voce in richieste
-        if unita and str(voce["fase"]).startswith(unita) and voce["fase"] != str(fase)
+        if unita
+        and str(voce["fase"]).startswith(unita)
+        and voce["fase"] != str(fase)
+        and voce["file"] not in segnalate
     ]
     misure["coda_sulla_fase"] = len(sulla_fase)
     misure["coda_sulla_unita"] = len(sulla_unita)
-    if sulla_fase:
+    if bloccanti:
         motivi.append(
-            f"la coda ha {len(sulla_fase)} richieste non applicate SU QUESTA FASE: il registro non ha "
+            f"la coda ha {len(bloccanti)} richieste applicabili SU QUESTA FASE: il registro non ha "
             "ancora imparato cosa e' successo a lei, e si giudicherebbe una base vecchia"
+        )
+    elif sulla_fase:
+        avvisi.append(
+            f"{len(sulla_fase)} richieste su questa fase sono SEGNALATE e non si applicano da sole "
+            "(guardale nell'elenco della coda): se toccano i byte che giudichi, la base e' vecchia"
         )
     if sulla_unita:
         avvisi.append(
@@ -166,7 +180,7 @@ def leggi(ws, fase, state=None, tasks_doc=None):
     riferimento = documento_puntatore.get("report") or documento_puntatore.get("report_ref")
     cartella = ws.reports_dir / str(fase)
     tentativi = sorted(
-        (int(p.name.split("-")[1]) for p in cartella.glob("attempt-*.yaml") if p.name.split("-")[1].isdigit())
+        (int(trovato.group(1)) for p in cartella.glob("attempt-*.yaml") if (trovato := __import__("re").match(r"attempt-(\d+)\.yaml$", p.name)))
     ) if cartella.is_dir() else []
     misure["tentativi"] = tentativi[-1] if tentativi else 0
     misure["puntatore"] = str(documento_puntatore.get("attempt") or "")
