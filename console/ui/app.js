@@ -1790,8 +1790,11 @@ function activationRow(voce, attesa, rilasciabile, apriPrompt) {
   if (misura && misura.solo_firma) {
     const inCoda = ((snapshot && snapshot.queue && snapshot.queue.per_fase_tutte) || {})[voce.phase] || 0;
     const firme = (snapshot && snapshot.signers) || { distinte: 0, elenco: [] };
+    // Il comando copiato e' QUELLO INTERO, con la `cd` dentro: «applicalo dalla radice del progetto»
+    // e' un'istruzione che pretende che tu sappia qual e' la radice — e l'utente non lo sa, ne' deve.
     const comando =
-      "python3 tools/registry_runner.py --once   # dalla radice del progetto: applica la coda";
+      ((snapshot && snapshot.queue && snapshot.queue.comandi) || {}).applica ||
+      "python3 tools/registry_runner.py --once";
     copiaCoda = h("button", {
       type: "button",
       class: "actbtn release",
@@ -1800,7 +1803,7 @@ function activationRow(voce, attesa, rilasciabile, apriPrompt) {
         try {
           await navigator.clipboard.writeText(comando);
           message.className = "msg show ok";
-          message.textContent = "copiato: applicalo dalla radice del progetto, poi il cancello dira' PRONTA.";
+          message.textContent = "copiato: incollalo nel terminale così com'è — contiene già la cartella del progetto.";
         } catch (error) {
           message.className = "msg show err";
           message.textContent = `non copiato (${error.message}): ${comando}`;
