@@ -309,7 +309,7 @@ class ReviewState:
         # Le direzioni dichiarate dai report (i campi `next`/`next_tasks`): si leggono UNA volta e
         # servono a due cose — la coda (quali fasi hanno la palla altrove) e il blocco «quello che il
         # registro dice che e' dovuto». Leggerle due volte costava il doppio su ogni caricamento.
-        dovuto = handoff.dovuto(self.workspace, state, tasks_doc)
+        dovuto = handoff.dovuto(self.workspace, state, tasks_doc, prese=set(activate.prese(state)))
         return {
             "generated": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "summary": {

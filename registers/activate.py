@@ -285,7 +285,7 @@ def attivabili(ws, state=None, tasks_doc=None, dovuto=None):
     ordini = ordini_aperti(ws)
     stato_ordini = mandati(ws)
     if dovuto is None:
-        dovuto = handoff.dovuto(ws, state, tasks_doc, limite=30)
+        dovuto = handoff.dovuto(ws, state, tasks_doc, limite=30, prese=set(vive))
     # `altrove` vuol dire: la sua ultima dichiarazione manda SOLO a fasi gia' accettate, quindi
     # l'atto e' un tentativo nuovo su quelle, non su questa.
     per_fase = {}

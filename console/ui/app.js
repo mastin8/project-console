@@ -1293,7 +1293,17 @@ function owedRow(voce) {
   );
   riga.append(testo);
   const azioni = h("div", { class: "actactions" });
-  codici.forEach((codice) => azioni.append(owedPromptButton(codice.code)));
+  codici.forEach((codice) => {
+    // Una cosa già presa non si manda una seconda volta: al posto del pulsante c'e' la misura —
+    // qualcuno la sta facendo adesso, e la scheda «In corso adesso» lo dice per esteso.
+    azioni.append(
+      codice.live
+        ? h("span", { class: "actbtn release taken", text: `${codice.code}: in corso` })
+        : codice.done
+          ? h("span", { class: "actbtn release taken", text: `${codice.code}: consegnata` })
+          : owedPromptButton(codice.code)
+    );
+  });
   azioni.append(
     h("button", {
       type: "button",

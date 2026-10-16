@@ -212,7 +212,7 @@ def lacune(ws, state=None):
     return fuori
 
 
-def dovuto(ws, state=None, tasks_doc=None, limite: int = 8):
+def dovuto(ws, state=None, tasks_doc=None, limite: int = 8, prese=None):
     """Le fasi che i report NOMINANO come prossimo passo, con lo stato in cui sono adesso.
 
     Perche' esiste. Il registro dice GIA' cosa e' dovuto — «la palla e' di `UPL04ZT` (attempt 2
@@ -227,11 +227,35 @@ def dovuto(ws, state=None, tasks_doc=None, limite: int = 8):
     Qui non si deduce niente: si leggono i campi `next`/`next_tasks` dei report, si prendono i
     CODICI che nominano (confrontati coi task del registro, non indovinati) e si mostra con che
     stato sono. Se il registro non nomina nessuna fase, l'elenco e' vuoto.
+
+    `prese` sono le fasi con una presa VIVA. Un atto dovuto che qualcuno ha gia' preso non e' piu'
+    una cosa da mandare: e' una cosa in corso, e resta scritto accanto al codice invece di
+    scomparire. Misurato il 2026-10-16: l'utente ha mandato cinque prompt e la pagina continuava a
+    offrirgli gli stessi cinque, perche' la dichiarazione non sa che qualcuno l'ha raccolta.
     """
     state = state if state is not None else (_leggi(ws.state_path))
     tasks_doc = tasks_doc if tasks_doc is not None else (_leggi(ws.path(ws.tasks)))
     registrate = state.get("tasks") or {}
     noti = {str(t.get("id")) for t in tasks_doc.get("tasks") or [] if t.get("id")}
+    vive = {str(fase) for fase in (prese or set())}
+
+    def consegnata_dopo(fase, quando):
+        """Se quella fase si e' mossa DOPO la dichiarazione: due `stat`, non una lettura.
+
+        Il puntatore (`reports/<fase>.yaml`) e la cartella dei tentativi si riscrivono quando
+        qualcuno consegna. E' la misura del «l'atto che questa dichiarazione chiedeva e' stato
+        fatto» — e senza di essa la pagina continua a chiedere una cosa gia' arrivata: misurato il
+        2026-10-16, `NAV03E` consegnata alle 10:53 mentre `NAV03R` la chiedeva ancora.
+        """
+        if not quando:
+            return False
+        for percorso in (ws.reports_dir / f"{fase}.yaml", ws.reports_dir / str(fase)):
+            try:
+                if datetime.fromtimestamp(percorso.stat().st_mtime, tz=timezone.utc) > quando:
+                    return True
+            except OSError:
+                continue
+        return False
     fuori = {}
     for voce in dichiarazioni(ws, state, tasks_doc):
         # Tutte le dichiarazioni della stessa fase insieme: un report ne fa spesso due o tre (una
@@ -252,9 +276,16 @@ def dovuto(ws, state=None, tasks_doc=None, limite: int = 8):
                     "code": codice,
                     "status": registrata.get("status", "pending"),
                     "attempt": registrata.get("attempt") or 0,
+                    # Presa viva: l'atto e' in mano a qualcuno adesso.
+                    "live": codice in vive,
+                    # Consegnata dopo la dichiarazione: l'atto che questa riga chiedeva c'e' gia'.
+                    "done": consegnata_dopo(codice, voce["when"]),
                 }
             )
-        if not codici:
+        # Se TUTTI gli atti che questa dichiarazione nomina sono gia' in mano a qualcuno, la
+        # dichiarazione non chiede piu' niente: non si mostra una riga per dire «e' in corso» quando
+        # e' proprio la scheda «In corso adesso» a dirlo.
+        if not codici or all(codice["live"] or codice["done"] for codice in codici):
             continue
         fuori[voce["phase"]] = {
             "from_phase": voce["phase"],

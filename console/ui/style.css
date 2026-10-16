@@ -475,6 +475,10 @@ details[open] > .acthead::before{content:"▾ "}
   cursor:pointer;transition:transform 160ms var(--ease-out), background-color 160ms var(--ease-out)}
 .actbtn.release{background:var(--surface);color:var(--ink-2);border-color:var(--line-strong);
   font-weight:550}
+/* «In corso» non e' un pulsante: e' la misura che quell'atto e' in mano a qualcuno. Nessun bordo
+   d'accento, nessun cursore a mano — non c'e' niente da premere. */
+.actbtn.taken{background:var(--surface-2);color:var(--ink-3);border-color:var(--line);
+  border-style:dashed;font-weight:550;cursor:default}
 .actbtn:active:not(:disabled){transform:scale(.97)}
 .actbtn:disabled{opacity:.5;cursor:default}
 /* «Salva come file» e' un <a download>: deve pesare come un pulsante ovunque compaia — sulla riga,
