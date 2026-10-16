@@ -1751,6 +1751,10 @@ function activationGroup(titolo, tono, voci, rilasciabili, apriPrompt = false) {
 
 function activationRow(voce, attesa, rilasciabile, apriPrompt) {
   const riga = h("div", { class: `actrow${attesa ? " waiting" : ""}` });
+  // Il pulsante della coda nasce qui ma si aggancia DOPO, quando `azioni` esiste: metterlo dentro
+  // il blocco qui sotto faceva esplodere il disegno («Cannot access 'azioni' before initialization»)
+  // e la pagina restava ferma dalla coda in giù — segnalato dall'utente come «si è impallato».
+  let copiaCoda = null;
   const testo = h("div", { class: "acttext" });
   testo.append(h("code", { class: "actcode", text: voce.phase }));
   testo.append(document.createTextNode(` ${voce.title || ""}`));
@@ -1788,7 +1792,7 @@ function activationRow(voce, attesa, rilasciabile, apriPrompt) {
     const firme = (snapshot && snapshot.signers) || { distinte: 0, elenco: [] };
     const comando =
       "python3 tools/registry_runner.py --once   # dalla radice del progetto: applica la coda";
-    const copia = h("button", {
+    copiaCoda = h("button", {
       type: "button",
       class: "actbtn release",
       text: "Copia il comando della coda",
@@ -1816,7 +1820,6 @@ function activationRow(voce, attesa, rilasciabile, apriPrompt) {
         ),
       ])
     );
-    azioni.append(copia);
   }
   if (mandato && mandato.scaduto) {
     // Due casi, e la differenza conta: un ordine dichiarato scaduto e un ordine GIA' ESEGUITO. Il
@@ -1849,6 +1852,7 @@ function activationRow(voce, attesa, rilasciabile, apriPrompt) {
   riga.append(testo);
   const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });
   const azioni = h("div", { class: "actactions" });
+  if (copiaCoda) azioni.append(copiaCoda);
   // Una fase gia' attivata serve a UNA cosa: dare il prompt a un esecutore. Quindi copia in un clic,
   // leggi nel dialogo, oppure togli la riserva. Il testo non sta in linea: era il muro.
   if (rilasciabile) {
