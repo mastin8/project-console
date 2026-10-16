@@ -817,22 +817,79 @@ function renderClaims(claims) {
     );
     return;
   }
+  // «IN CORSO» NON VUOL DIRE «QUALCUNO STA LAVORANDO». Il registro dice chi ha preso la fase e quando:
+  // se sono passate ore e non c'e' un tentativo nuovo, quello che la pagina chiamava «in corso» e' una
+  // presa MORTA — e il difetto peggiore e' che non c'era modo di scioglierla. Misurato il 2026-10-16:
+  // `REG03T` tenuta da 25 ore da una corsia che non ha scritto un byte, e l'utente convinto che
+  // qualcuno ci stesse lavorando.
   box.replaceChildren(
     h(
       "ul",
       { class: "claims" },
-      claims.map((claim) =>
-        h("li", {}, [
+      claims.map((claim) => {
+        const ore = oreDa(claim.taken_at);
+        const morta = ore !== null && ore >= 2;
+        const riga = h("li", {}, [
           h("span", { class: "id" }, [
             document.createTextNode(claim.task_id || ""),
             claim.phase ? h("span", { class: "phase", text: ` · ${claim.phase}` }) : null,
           ]),
           h("span", { class: "who", title: claim.owner || "", text: claim.owner || "" }),
-          h("span", { class: "when", text: claim.taken_at || "" }),
-        ])
-      )
+          h("span", {
+            class: morta ? "when warnnote" : "when",
+            text: `${claim.taken_at || ""}${ore !== null ? ` · ${ore < 1 ? "meno di un'ora" : `${ore.toFixed(0)} ore`} fa` : ""}`,
+          }),
+        ]);
+        if (morta) {
+          const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });
+          riga.append(
+            h("div", { class: "actmeta" }, [
+              h("b", { class: "warnnote", text: "presa probabilmente morta: " }),
+              document.createTextNode(
+                `da ${ore.toFixed(0)} ore, e nessun tentativo nuovo. Se quella corsia non è più viva, la presa la sta solo bloccando.`
+              ),
+            ]),
+            h("div", { class: "actactions" }, [
+              h("button", {
+                type: "button",
+                class: "actbtn release",
+                text: "Annulla la presa",
+                title: "toglie la presa dal registro: la fase torna libera e si può rimandare a una corsia viva",
+                onclick: async () => {
+                  try {
+                    const risposta = await fetch("/api/activate", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ target: claim.task_id, action: "release" }),
+                    });
+                    const payload = await risposta.json();
+                    if (!risposta.ok) throw new Error(payload.error || `errore ${risposta.status}`);
+                    message.className = "msg show ok";
+                    message.textContent = "presa annullata: la fase è di nuovo libera.";
+                    setTimeout(load, 1500);
+                  } catch (error) {
+                    message.className = "msg show err";
+                    message.textContent = `non fatto: ${error.message}`;
+                  }
+                },
+              }),
+            ]),
+            message
+          );
+        }
+        return riga;
+      })
     )
   );
+}
+
+/* Quante ore fa: `taken_at` arriva dal registro come data (anche senza fuso: allora vale l'ora
+   locale, come in tutto il resto del tool). */
+function oreDa(quando) {
+  if (!quando) return null;
+  const quandoData = new Date(String(quando).replace(" ", "T"));
+  if (Number.isNaN(quandoData.getTime())) return null;
+  return (Date.now() - quandoData.getTime()) / 3600000;
 }
 
 function renderAnswered(answered) {
