@@ -306,6 +306,10 @@ class ReviewState:
             for item in decisions_doc.get("decisions") or []
             if item.get("status") == "closed"
         ]
+        # Le direzioni dichiarate dai report (i campi `next`/`next_tasks`): si leggono UNA volta e
+        # servono a due cose — la coda (quali fasi hanno la palla altrove) e il blocco «quello che il
+        # registro dice che e' dovuto». Leggerle due volte costava il doppio su ogni caricamento.
+        dovuto = handoff.dovuto(self.workspace, state, tasks_doc)
         return {
             "generated": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "summary": {
@@ -335,7 +339,9 @@ class ReviewState:
             "next_prompts": next_prompts.build(self.pack, state=state),
             # Cosa si puo' far partire adesso: e' l'input che manca quando non ci sono domande,
             # decisioni o prompt da lanciare. Il calcolo sta in `registers/activate.py`.
-            "activatable": activate.attivabili(self.workspace, state, tasks_doc),
+            # Una sola lettura delle direzioni dichiarate: la usano sia la coda (per sapere quali
+            # fasi hanno la palla altrove) sia il blocco «quello che il registro dice che e' dovuto».
+            "activatable": activate.attivabili(self.workspace, state, tasks_doc, dovuto=dovuto),
             # Cosa c'e' da fare dopo: le direzioni che chi ha finito ha GIA' lasciato nei report,
             # e chi invece non le ha lasciate. Sta qui perche' la pagina non l'ha mai mostrato e
             # l'unico modo di saperlo era leggere i report a mano.
@@ -373,7 +379,7 @@ class ReviewState:
                     "text": voce["text"],
                     "codes": voce["codes"],
                 }
-                for voce in handoff.dovuto(self.workspace, state, tasks_doc)
+                for voce in dovuto
             ],
             # La posta in arrivo: quello che e' arrivato e non e' ancora finito in un report. E'
             # l'unico posto della pagina che non legge i registri — legge una cartella di

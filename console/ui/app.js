@@ -950,18 +950,58 @@ function renderActivation(data) {
   const count = $("#activation-count");
   if (!box || !count) return;
   const tutte = data.activatable || [];
-  const aperte = tutte.filter((voce) => !(voce.waiting_on || []).length);
+  // «La palla e' altrove»: la sua ultima consegna manda a fasi GIA' accettate, quindi il prossimo
+  // atto e' un tentativo nuovo su quelle. Queste NON vanno nei gruppi «da rifare/da attivare»:
+  // mostrare «Attiva» su una di loro mentre tre righe piu' sotto si legge che la palla e' di
+  // un'altra e' la contraddizione che l'utente ha segnalato — e non e' solo estetica, perche'
+  // attivarle deposita un ordine per un lavoro che il registro ha gia' spostato altrove.
+  const tutteAperte = tutte.filter((voce) => !(voce.waiting_on || []).length);
+  const altrove = tutteAperte.filter((voce) => voce.altrove);
+  const aperte = tutteAperte.filter((voce) => !voce.altrove);
   const attese = tutte.filter((voce) => (voce.waiting_on || []).length);
   const attivate = (data.activated || []).filter((voce) =>
     ["pre_registered", "ready"].includes(voce.status)
   );
   count.textContent = [
     aperte.length ? `${aperte.length} da attivare` : null,
+    altrove.length ? `${altrove.length} con la palla altrove` : null,
     attivate.length ? `${attivate.length} attivate` : null,
     attese.length ? `${attese.length} in attesa a monte` : null,
   ]
     .filter(Boolean)
     .join(" · ");
+  // La riga di spiegazione parla di «Attiva» solo se c'e' qualcosa da attivare: quando la coda e'
+  // vuota e il lavoro e' tutto nel blocco qui sotto, spiegare pulsanti che non ci sono e' rumore.
+  const suggerimento = $("#activation-hint");
+  if (suggerimento) {
+    suggerimento.replaceChildren(
+      ...(aperte.length
+        ? [
+            document.createTextNode(
+              "In ordine di leva: prima quello che sblocca più unità. "
+            ),
+            h("b", { text: "Attiva" }),
+            document.createTextNode(
+              " deposita l'ordine e riserva la fase (una seconda attivazione viene rifiutata); "
+            ),
+            h("b", { text: "Copia il prompt" }),
+            document.createTextNode(
+              " è il testo da incollare in una chat; "
+            ),
+            h("b", { text: "Rilascia" }),
+            document.createTextNode(" toglie la riserva. Non avvia nessun agente."),
+          ]
+        : [
+            document.createTextNode(
+              "Non c'è niente da attivare adesso: il lavoro è quello che il registro dichiara qui sotto. "
+            ),
+            h("b", { text: "Attiva" }),
+            document.createTextNode(
+              " resta per quando una fase dichiara che il prossimo atto è su di sé."
+            ),
+          ])
+    );
+  }
   const parti = [];
   // L'ordine della coda e' la LEVA: prima cio' che sblocca piu' unita'. E' il motivo per cui questa
   // pagina e' corta — non si legge tutto per decidere, si guarda la prima riga.
@@ -982,6 +1022,18 @@ function renderActivation(data) {
   // nessuna parte della pagina.
   const dovuto = (data.owed || []).slice(0, 5);
   if (dovuto.length) parti.push(owedGroup(dovuto));
+  // Le fasi in attesa di un'altra fase: una riga sola, senza pulsanti. Ci sono e si vedono — non si
+  // nasconde niente — ma non invitano a fare la cosa sbagliata.
+  if (altrove.length) {
+    parti.push(
+      h("p", { class: "actgroup" }, [
+        h("b", { text: `Non tocca a queste (${altrove.length}): ` }),
+        document.createTextNode(
+          `${altrove.map((voce) => voce.phase).join(", ")} — la loro ultima consegna manda a fasi già accettate: il prossimo atto è un tentativo nuovo su quelle nominate nel blocco qui sopra.`
+        ),
+      ])
+    );
+  }
   if (mancanti.length) {
     const riga = h("p", { class: "actgroup warn" }, [
       h("b", { text: `${mancanti.length} consegne senza direzione` }),

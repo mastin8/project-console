@@ -51,6 +51,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import apply_transitions  # noqa: E402 - la scrittura sui registri passa sempre da li'
 import next_prompts  # noqa: E402 - il quaderno, per il testo del prompt
 import rework  # noqa: E402 - quante volte una fase e' tornata indietro, e per cosa
+import handoff  # noqa: E402 - cosa il registro dice che e' dovuto dopo
 from workspace import Workspace, lock_file  # noqa: E402
 
 LIVE = ("active", "taken", "pre_registered", "ready", "active_extension")
@@ -260,13 +261,22 @@ def _spedizioni(state, fase):
     return conta
 
 
-def attivabili(ws, state=None, tasks_doc=None):
+def attivabili(ws, state=None, tasks_doc=None, dovuto=None):
     """Cosa si puo' far partire adesso, e perche' — misurato, non indovinato.
 
     Regola: una fase senza presa viva, i cui PREREQUISITI DICHIARATI (`depends_on`: la catena
     A -> E -> T -> R, e le dipendenze fra unita') sono tutti accettati. Le fasi respinte in
     verifica restano attivabili — sono lavoro da rifare, e nel caso normale il loro prerequisito
     e' accettato — e lo dichiarano.
+
+    Con un'eccezione misurata: una fase la cui ULTIMA dichiarazione manda a fasi tutte GIA'
+    accettate non e' la prossima cosa da fare. Vuol dire che l'atto dovuto e' un tentativo NUOVO su
+    una di quelle — «non e' questa fase a dover ripartire: la palla e' di `UPL04ZT` attempt 2» — e
+    offrirla col pulsante «Attiva» e' la stessa bugia dell'ordine riconsegnato. Misurato il
+    2026-10-16: era il caso di tutte e quattro le fasi in coda (`NAV03R`, `TODO03E`, `UPL04ZR`,
+    `OVR01R`), mentre `REG03T` e `REG03R`, che nominano una fase NON accettata, restavano in catena.
+    Quelle voci tornano con `altrove: True` e con `next_act`: la pagina le mostra in una riga sola,
+    senza pulsante, e `attiva()` le rifiuta dicendo perche'.
     """
     state = state if state is not None else (_carica(ws.state_path.read_text(encoding="utf-8")) or {})
     tasks_doc = tasks_doc if tasks_doc is not None else (_carica(ws.path(ws.tasks).read_text(encoding="utf-8")) or {})
@@ -274,6 +284,17 @@ def attivabili(ws, state=None, tasks_doc=None):
     vive = prese(state)
     ordini = ordini_aperti(ws)
     stato_ordini = mandati(ws)
+    if dovuto is None:
+        dovuto = handoff.dovuto(ws, state, tasks_doc, limite=30)
+    # `altrove` vuol dire: la sua ultima dichiarazione manda SOLO a fasi gia' accettate, quindi
+    # l'atto e' un tentativo nuovo su quelle, non su questa.
+    per_fase = {}
+    for voce in dovuto:
+        codici = voce.get("codes") or []
+        per_fase[voce["from_phase"]] = {
+            "codes": codici,
+            "altrove": bool(codici) and all(c["status"] == "accepted" for c in codici),
+        }
     unita = {str(u.get("id")): u for u in tasks_doc.get("units") or [] if u.get("id")}
     per_id = {str(t.get("id")): t for t in tasks_doc.get("tasks") or [] if t.get("id")}
 
@@ -331,6 +352,9 @@ def attivabili(ws, state=None, tasks_doc=None):
                 "status": stato,
                 "rework": stato in STALLED,
                 "misura": misure.get(fase),
+                # Cosa la sua ultima dichiarazione dice che va fatto dopo — e se manda altrove.
+                "next_act": (per_fase.get(fase) or {}).get("codes") or [],
+                "altrove": bool((per_fase.get(fase) or {}).get("altrove")),
                 "waiting_on": attese,
                 # Se un ordine c'e' gia', la pagina lo mostra invece di offrire un pulsante che
                 # verrebbe rifiutato.
@@ -612,6 +636,16 @@ def attiva(ws, fase, dry_run=False):
                 + ". Attivarla prima creerebbe una riserva su una fase che non puo' partire."
             )
         raise apply_transitions.TransitionError(f"fase non attivabile o inesistente: {fase}")
+    # Il caso «la palla e' altrove»: la sua ultima dichiarazione manda a fasi GIA' accettate, quindi
+    # l'atto dovuto e' un tentativo NUOVO su quelle. Attivare questa deposita un ordine per un lavoro
+    # che il registro stesso ha spostato — la bugia peggiore, perche' e' un ordine durevole.
+    if voce.get("altrove"):
+        dovuti = ", ".join(c["code"] for c in voce.get("next_act") or [])
+        raise apply_transitions.TransitionError(
+            f"{fase} non va attivata: la sua ultima consegna dice che il prossimo atto e' un "
+            f"tentativo NUOVO su {dovuti}. Deposita l'ordine per quella fase, invece di rimettere "
+            "in coda questa."
+        )
     # Il prompt che l'esecutore trova NELL'ORDINE: dal quaderno se c'e', altrimenti composto dal
     # registro. Senza questo, attivare una fase senza sezione nel quaderno lasciava l'ordine con
     # `prompt: null` e nessun testo da incollare (segnalato dall'utente).

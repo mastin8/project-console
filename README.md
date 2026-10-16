@@ -362,6 +362,15 @@ l'atto dovuto e' un tentativo nuovo. Niente di dedotto: si leggono i campi `next
 report e si prendono i codici che nominano. Se il registro non nomina nessuna fase, il gruppo non
 c'e'.
 
+E quei blocchi **non si vedono piu' anche fra «da rifare» e «da attivare»**. La regola e' misurata e
+sta in `activate.attivabili`: se l'ultima dichiarazione di una fase non accettata manda a fasi
+**tutte gia' accettate**, il prossimo atto e' un tentativo nuovo su quelle — non su questa. Quelle
+fasi restano in pagina, ma in **una riga sola** («Non tocca a queste: NAV03R, TODO03E, UPL04ZR,
+OVR01R»), senza pulsante, e `attiva()` le rifiuta dicendo perche'. Se invece la dichiarazione nomina
+anche una fase NON accettata (`REG03T` -> `REG03R`), la fase resta in catena e il pulsante c'e'.
+Misurato il 2026-10-16: tutte e quattro le fasi in coda erano «palla altrove», quindi la coda non
+aveva piu' nessun «Attiva» — e le due cose che la pagina diceva erano in contraddizione.
+
 «Respinta in verifica» non distingue una fase respinta ieri dalla prima volta da una che torna
 indietro da dieci atti **sempre per lo stesso motivo**. La seconda non e' lavoro da rifare: e' un
 ostacolo che nessun tentativo in piu' rimuove, e serve che qualcuno decida. La coda lo dice, con la
