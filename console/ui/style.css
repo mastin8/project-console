@@ -16,10 +16,17 @@
   --ink-3:#6b7280;
   --accent:#084040;
   --accent-ink:#f2f2e9;
+  /* L'hover dell'accento era un blu scritto a mano (`#1a44bd`) rimasto da una tavolozza vecchia:
+     in tema scuro ci finiva sopra l'inchiostro scuro del tema (2,3:1, misurato dal detector). Ora
+     e' un token per tema, come tutto il resto. */
+  --accent-hover:#0a5656;
   --accent-soft:#e4eeee;
   --ok:#0f6b2f;   --ok-soft:#e9f4ec;
   --warn:#8a5300; --warn-soft:#fdf3e3;
   --bad:#a51f18;  --bad-soft:#fdeceb;
+  /* Il riempimento del numero tondo: piu' scuro del colore semantico, perche' ci va sopra del
+     bianco. In tema chiaro coincide con `--bad`; in tema scuro no, ed e' li' che serve. */
+  --bad-fill:#a51f18; --ok-fill:#0f6b2f;
   --shadow-tight:0 1px 2px rgba(18,21,26,.07);
   --shadow:0 2px 4px rgba(18,21,26,.08), 0 16px 40px rgba(18,21,26,.14);
   --r-sm:8px; --r-md:12px; --r-lg:14px;
@@ -38,9 +45,11 @@
     --line:#252d38; --line-strong:#36404e;
     --ink:#e8eaed; --ink-2:#a8b0bb; --ink-3:#8d96a3;
     --accent:#7ec9c0; --accent-ink:#0e1116; --accent-soft:#12292a;
+    --accent-hover:#9ce0d7;
     --ok:#5fd08a;   --ok-soft:#12291d;
     --warn:#e2a33c; --warn-soft:#2b2213;
     --bad:#ff8a80;  --bad-soft:#2c1614;
+    --bad-fill:#b3261e; --ok-fill:#1b6b3f;
     --shadow-tight:0 1px 2px rgba(0,0,0,.5);
     --shadow:0 2px 6px rgba(0,0,0,.5), 0 18px 44px rgba(0,0,0,.45);
   }
@@ -195,7 +204,11 @@ button{font:inherit;font-weight:550;padding:9px 18px;border-radius:var(--r-sm);
 button.ghost{background:var(--surface);color:var(--ink);border-color:var(--line-strong)}
 button:disabled{opacity:.55;cursor:progress}
 @media (hover:hover) and (pointer:fine){
-  button:hover:not(:disabled){background-color:#1a44bd;border-color:#1a44bd}
+  /* Il colore del testo si dichiara anche qui: lo stato hover non eredita per caso, e senza questa
+     riga il testo del tema (chiaro) finiva sul riempimento chiaro dell'hover. */
+  button:hover:not(:disabled){background-color:var(--accent-hover);border-color:var(--accent-hover);
+    color:var(--accent-ink)}
+  button.ghost:hover:not(:disabled){color:var(--ink)}
   button.ghost:hover:not(:disabled){background:var(--surface-2)}
 }
 button:active:not(:disabled){transform:scale(.97)}
@@ -337,6 +350,71 @@ body[data-page="tempo"] main [data-page="tempo"],
 body[data-page="testimone"] main [data-page="testimone"],
 body[data-page="prompt"] main [data-page="prompt"],
 body[data-page="percorso"] main [data-page="percorso"]{display:block}
+/* La scheda chiusa vince sulla regola che accende le sezioni della pagina: senza questa riga
+   `display:block` rimetterebbe in pagina i pannelli che la barra delle schede ha appena chiuso
+   (l'attributo `hidden` da solo non basta, perche' la regola sopra e' piu' specifica di lui). */
+body[data-page="adesso"] main .scheda-pannello[hidden]{display:none}
+
+/* ------------------------------------------------------------- le schede */
+/* Dentro «Adesso» c'e' piu' di una cosa da guardare: cosa fare, cosa e' arrivato, cosa aspetta te,
+   cosa sta andando, cosa hai gia' risposto. Erano cinque sezioni una sotto l'altra — un muro da
+   scorrere per arrivare all'ultima. Qui sono cinque schede, con la riga di riferimento dei titoli
+   che le tiene insieme: la scheda scelta la porta con se'.
+
+   Il numero tondo dice quanto c'e' dentro PRIMA di aprirla: rosso e' quello che aspetta te, verde
+   e' quello che hai gia' fatto. Si vede solo quando c'e' qualcosa — un badge con dentro «0» e' un
+   allarme che suona per dire che non e' successo niente. */
+.schede{display:flex;gap:var(--s15);overflow-x:auto;overscroll-behavior-x:contain;
+  border-bottom:1px solid var(--line);margin:var(--s5) 0 var(--s5);padding:0;
+  scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}
+/* `overflow-y:hidden`: senza, il padding della scheda attiva (che sborda di 4px per coprire la riga
+   di riferimento) accende la barra verticale DENTRO la striscia — misurato: un trattino grigio
+   appeso a destra delle schede. */
+.schede{overflow-y:hidden}
+/* La barra porta `data-page` (serve a mostrarla solo dentro «Adesso»), e la regola di pagina piu'
+   in alto la vorrebbe `display:block`: una barra di schede in block si impila in verticale. Questa
+   riga ha la stessa specificita' ma viene dopo, quindi vince. */
+body[data-page="adesso"] main .schede{display:flex}
+.schede::-webkit-scrollbar{height:4px}
+.schede::-webkit-scrollbar-track{background:transparent}
+.schede::-webkit-scrollbar-thumb{background:var(--line-strong);border-radius:99px}
+.scheda{display:inline-flex;align-items:center;gap:var(--s2);flex:none;
+  padding:var(--s2) var(--s2) calc(var(--s2) + 4px);margin-bottom:-1px;border-radius:0;
+  background:none;border:0;border-bottom:2px solid transparent;
+  color:var(--ink-3);font-size:13.5px;font-weight:550;white-space:nowrap;cursor:pointer;
+  transition:color 140ms var(--ease-out),border-color 140ms var(--ease-out)}
+.scheda[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--accent)}
+.scheda:active{transform:none}
+.scheda:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:var(--r-sm)}
+@media (hover:hover) and (pointer:fine){
+  /* `.schede .scheda` e non `.scheda`: la regola generica dei pulsanti (`button:hover`) e' piu'
+     specifica di `.scheda:hover` e dipingerebbe la scheda di teal al passaggio del mouse. */
+  .schede .scheda:hover{color:var(--ink);background:none}
+  .schede .scheda[aria-selected="true"]:hover{color:var(--ink);background:none}
+}
+/* Il numero: tondo, bianco su rosso (o su verde). I token del tema chiaro hanno il testo bianco
+   sopra; in tema scuro i colori semantici sono chiari e il bianco sopra non si leggerebbe, quindi
+   il riempimento ha due valori propri, scelti per il contrasto. */
+.scheda-numero{display:inline-grid;place-items:center;min-width:20px;height:20px;padding:0 6px;
+  border-radius:99px;background:var(--bad-fill);color:#fff;
+  font-size:11.5px;font-weight:650;font-variant-numeric:tabular-nums;line-height:1}
+.scheda-numero[data-tono="ok"]{background:var(--ok-fill)}
+.vh{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+
+/* Il pannello prende il posto del precedente: un movimento solo, corto, dall'alto di due pixel —
+   serve a dire «il contenuto e' cambiato», non a fare spettacolo. */
+.scheda-pannello{margin-top:0}
+/* Il titolo del pannello ripete il nome della scheda che sta due centimetri sopra: la scheda E' il
+   titolo. Il paragrafo resta nel documento — e' l'etichetta del pannello per chi legge con uno
+   schermo — ma non si vede. Quello che si vede sotto la striscia e' il conteggio, che aggiunge
+   qualcosa invece di ripetere. */
+.scheda-pannello .sec-head h2{position:absolute;width:1px;height:1px;overflow:hidden;
+  clip-path:inset(50%);white-space:nowrap}
+@media (prefers-reduced-motion: no-preference){
+  .scheda-pannello:not([hidden]){animation:scheda-entra 160ms var(--ease-out) both}
+}
+@keyframes scheda-entra{from{opacity:0;transform:translateY(2px)}to{opacity:1;transform:none}}
+
 .pagenav{display:flex;gap:var(--s1);flex-wrap:wrap;margin-right:var(--s2)}
 .pagenav a{padding:var(--s1) var(--s2);border-radius:var(--r-sm);text-decoration:none;
   color:var(--ink-2);font-size:13px;font-weight:550}
@@ -451,6 +529,17 @@ a.actfile:active{transform:scale(.97)}
   section{margin-top:var(--s6);scroll-margin-top:var(--s3)}
   .tabs{flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none}
   .tabs::-webkit-scrollbar{display:none}
+  /* La striscia delle schede: su uno schermo stretto scorre in orizzontale, e la barra di
+     scorrimento nativa (spessa, grigia) mangerebbe l'altezza che serve alle etichette. Le schede
+     che si vedono tagliate dicono da sole che si scorre. */
+  .schede{scrollbar-width:none}
+  .schede::-webkit-scrollbar{display:none}
+  /* LA RIGA DELLE COSE DOVUTE: su 390px i pulsanti («Prompt TODO03T», «Prompt TODO03R», «Leggi»)
+     sono piu' larghi della riga intera, e la colonna del testo si schiacciava fino a spezzare UNA
+     PAROLA PER RIGA — il difetto che l'utente aveva gia' segnalato il 2026-10-15. Sotto i 720px la
+     riga diventa una colonna: il testo sopra, i pulsanti sotto che vanno a capo da soli. */
+  .actrow{grid-template-columns:minmax(0,1fr);gap:var(--s2)}
+  .actrow .actactions{flex-wrap:wrap}
   .unit{grid-template-columns:1fr;gap:var(--s3)}
   .claims li{grid-template-columns:1fr;grid-template-areas:"id" "who" "when";gap:2px}
   .claims .who{-webkit-line-clamp:3}

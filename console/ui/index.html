@@ -58,9 +58,22 @@
   </header>
 
   <main id="main">
+    <!-- LE SCHEDE DELLA PAGINA «ADESSO». Non e' una seconda navigazione: e' quello che c'e' dentro
+         una pagina sola — cosa fare, cosa e' arrivato, cosa aspetta te, cosa sta andando, cosa hai
+         gia' risposto. Il numero tondo dice quanto c'e' dentro PRIMA di aprirla: rosso per quello
+         che aspetta te, verde per quello che hai gia' fatto. I numeri li scrive la pagina
+         (`renderTabs`), le etichette sono qui. -->
+    <nav class="schede" role="tablist" aria-label="Cosa guardi dentro Adesso" data-page="adesso">
+      <button type="button" class="scheda" role="tab" id="tab-oggi" aria-controls="activation-section" data-scheda="oggi" aria-selected="true">Cosa fare adesso</button>
+      <button type="button" class="scheda" role="tab" id="tab-posta" aria-controls="inbox-section" data-scheda="posta" aria-selected="false" tabindex="-1">Posta in arrivo</button>
+      <button type="button" class="scheda" role="tab" id="tab-attesa" aria-controls="questions-section" data-scheda="attesa" aria-selected="false" tabindex="-1">Cosa aspetta te</button>
+      <button type="button" class="scheda" role="tab" id="tab-corso" aria-controls="now-section" data-scheda="corso" aria-selected="false" tabindex="-1">In corso adesso</button>
+      <button type="button" class="scheda" role="tab" id="tab-date" aria-controls="answered-section" data-scheda="date" aria-selected="false" tabindex="-1">Risposte che hai già dato</button>
+    </nav>
+
     <!-- LA CODA: una riga per cosa, un pulsante per riga, in ordine di leva. E' la pagina che si
          guarda tornando: cosa posso far partire, cosa sta andando, cosa e' tornato indietro. -->
-    <section id="activation-section" data-page="adesso" aria-labelledby="activation-head">
+    <section id="activation-section" class="scheda-pannello" data-scheda="oggi" role="tabpanel" aria-labelledby="activation-head" data-page="adesso">
       <div class="sec-head">
         <h2 id="activation-head">Cosa fare adesso</h2>
         <span class="count" id="activation-count"></span>
@@ -73,7 +86,7 @@
          Si incolla qui com'e' arrivato e resta intero. Nessun registro viene toccato: si scrive un
          file di testo in `inbox/`. Una ricevuta e' lavorata quando esiste un report di quella fase
          scritto dopo di lei: e' una misura, non una promessa. -->
-    <section id="inbox-section" data-page="adesso" aria-labelledby="inbox-head">
+    <section id="inbox-section" class="scheda-pannello" data-scheda="posta" role="tabpanel" aria-labelledby="inbox-head" data-page="adesso">
       <div class="sec-head">
         <h2 id="inbox-head">Posta in arrivo</h2>
         <span class="count" id="inbox-count"></span>
@@ -132,7 +145,7 @@
       <div id="gantt" class="gantt"><p class="empty">Caricamento della linea del tempo…</p></div>
     </section>
 
-    <section id="questions-section" data-page="adesso" aria-labelledby="q-head" hidden>
+    <section id="questions-section" class="scheda-pannello" data-scheda="attesa" role="tabpanel" aria-labelledby="q-head" data-page="adesso" hidden>
       <div class="sec-head"><h2 id="q-head">Cosa aspetta te</h2></div>
       <p class="hint">Una domanda per volta. La risposta viene scritta nei registri del progetto passando dal lock e dalla validazione: se un registro non regge, la scrittura viene annullata e te lo dice qui.</p>
       <div id="questions"></div>
@@ -162,12 +175,12 @@
       <div id="blocks"></div>
     </section>
 
-    <section id="now-section" data-page="adesso" aria-labelledby="now-head">
+    <section id="now-section" class="scheda-pannello" data-scheda="corso" role="tabpanel" aria-labelledby="now-head" data-page="adesso">
       <div class="sec-head"><h2 id="now-head">In corso adesso</h2></div>
       <div id="claims"></div>
     </section>
 
-    <section id="answered-section" data-page="adesso" aria-labelledby="done-head">
+    <section id="answered-section" class="scheda-pannello" data-scheda="date" role="tabpanel" aria-labelledby="done-head" data-page="adesso">
       <div class="sec-head"><h2 id="done-head">Risposte che hai già dato</h2></div>
       <p class="hint">Le risposte non si riscrivono: se una va cambiata, si apre una domanda nuova.</p>
       <div id="answered"></div>

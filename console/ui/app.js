@@ -120,6 +120,7 @@ function render(data) {
   renderAnswered(data.answered);
   renderBlocks();
   renderTally(data);
+  renderTabs(data);
   loadTimeline();
   refreshAge();
 }
@@ -129,15 +130,21 @@ function render(data) {
    un task e le decisioni di governo del lavoro. Prima le seconde stavano dentro la linea del
    tempo, fra i commit: erano raggiungibili ma fuori dal loro posto. */
 function renderQuestions(questions, decisions) {
-  const section = $("#questions-section");
   const box = $("#questions");
   const gov = decisions || [];
   if (!questions.length && !gov.length) {
-    section.hidden = true;
-    box.replaceChildren();
+    // La sezione non si nasconde piu' da sola: `hidden` lo governa la barra delle schede (una
+    // scheda vuota resta visibile e lo dice, invece di sparire e spostare le altre).
+    box.replaceChildren(
+      h("p", { class: "empty" }, [
+        h("b", { text: "Niente da decidere. " }),
+        document.createTextNode(
+          "Nessuna domanda di un task e nessuna decisione di governo aspettano una tua risposta."
+        ),
+      ])
+    );
     return;
   }
-  section.hidden = false;
   // Le decisioni di governo hanno la stessa forma delle domande, controllo compreso: si
   // registrano da qui, non serve che una corsia le promuova a domanda formale.
   box.replaceChildren(...questions.map(questionCard), ...gov.map(governanceCard));
@@ -410,6 +417,10 @@ function setFilter(value) {
 function jumpTo(target) {
   const node = typeof target === "string" ? document.getElementById(target) : target;
   if (!node) return;
+  // Se il bersaglio e' dentro una scheda chiusa, aprirla prima: dai tastini dello stato in alto
+  // («per te») si chiede di andare su una cosa, non di aprire una scheda a mano.
+  const scheda = SCHEDE.find((voce) => voce.sezione === node.id);
+  if (scheda && node.hidden) scegliScheda(scheda.chiave, true);
   // Salto Istantaneo, non animato: si ripete spesso e uno scorrimento lungo farebbe perdere il
   // punto. Il `scroll-margin-top` tiene conto dell'header che resta appiccicato in cima.
   node.scrollIntoView({ block: "start" });
@@ -864,6 +875,123 @@ function renderAnswered(answered) {
   );
 }
 
+/* ---------------------------------------------------------------- le schede */
+/* Dentro «Adesso» c'e' piu' di una cosa da guardare, e prima erano cinque sezioni una sotto
+   l'altra: per arrivare a «Risposte che hai gia' dato» si scorreva tutto. Qui sono schede.
+
+   Due regole che tengono insieme la cosa:
+
+   * il numero tondo e' una MISURA, non una decorazione: dice quante cose ci sono in quella scheda
+     prima di aprirla. Rosso = aspetta te; verde = l'hai gia' fatto. Si vede solo quando c'e'
+     qualcosa da dire, perche' un badge con dentro zero e' un allarme che suona per niente;
+   * la scheda scelta sta nell'indirizzo (`#posta`, `#corso`...): la pagina si ricarica da sola ogni
+     30 secondi e senza quello tornerebbe sempre alla prima, mentre tu stai leggendo la terza. */
+const SCHEDE = [
+  { chiave: "oggi", sezione: "activation-section", etichetta: "Cosa fare adesso" },
+  { chiave: "posta", sezione: "inbox-section", etichetta: "Posta in arrivo" },
+  { chiave: "attesa", sezione: "questions-section", etichetta: "Cosa aspetta te" },
+  { chiave: "corso", sezione: "now-section", etichetta: "In corso adesso" },
+  { chiave: "date", sezione: "answered-section", etichetta: "Risposte che hai già dato" },
+];
+let schedaScelta = null;
+
+function schedaDaIndirizzo() {
+  const richiesta = (location.hash || "").replace("#", "").toLowerCase();
+  return SCHEDE.some((scheda) => scheda.chiave === richiesta) ? richiesta : SCHEDE[0].chiave;
+}
+
+/* I pulsanti si costruiscono UNA volta: rifarli a ogni ricarica della pagina (ogni 30 secondi)
+   butterebbe via il fuoco da tastiera e la posizione di scorrimento della barra. Dopo, si aggiorna
+   solo quello che cambia: numero, scheda scelta, pannello visibile. */
+function preparaScheda() {
+  const barra = $(".schede");
+  if (!barra || barra.dataset.pronta) return;
+  barra.dataset.pronta = "1";
+  barra.addEventListener("click", (evento) => {
+    const bottone = evento.target.closest(".scheda");
+    if (bottone) scegliScheda(bottone.dataset.scheda, true);
+  });
+  barra.addEventListener("keydown", (evento) => {
+    const passo = { ArrowRight: 1, ArrowLeft: -1, Home: "prima", End: "ultima" }[evento.key];
+    if (!passo) return;
+    evento.preventDefault();
+    const bottoni = [...barra.querySelectorAll(".scheda")];
+    const attuale = bottoni.findIndex((bottone) => bottone.dataset.scheda === schedaScelta);
+    const prossima =
+      passo === "prima"
+        ? 0
+        : passo === "ultima"
+          ? bottoni.length - 1
+          : (attuale + passo + bottoni.length) % bottoni.length;
+    scegliScheda(bottoni[prossima].dataset.scheda, true);
+    bottoni[prossima].focus();
+  });
+  scegliScheda(schedaDaIndirizzo(), false);
+}
+
+function scegliScheda(chiave, scriviIndirizzo) {
+  if (!SCHEDE.some((scheda) => scheda.chiave === chiave)) return;
+  schedaScelta = chiave;
+  document.querySelectorAll(".schede .scheda").forEach((bottone) => {
+    const scelto = bottone.dataset.scheda === chiave;
+    bottone.setAttribute("aria-selected", scelto ? "true" : "false");
+    bottone.tabIndex = scelto ? 0 : -1;
+  });
+  SCHEDE.forEach((scheda) => {
+    const sezione = document.getElementById(scheda.sezione);
+    if (sezione) sezione.hidden = scheda.chiave !== chiave;
+  });
+  if (scriviIndirizzo && location.hash !== `#${chiave}`) {
+    history.replaceState(null, "", `#${chiave}`);
+  }
+}
+
+/* I numeri. Ognuno e' una cosa che si conta in pagina, non una stima: le righe che hai in quella
+   scheda. Per «Risposte che hai gia' dato» il numero e' quello che hai alle spalle, ed e' verde
+   perche' non chiede niente. */
+function numeriSchede(data) {
+  const posta = data.inbox || {};
+  const coda =
+    (data.owed || []).length +
+    (data.activatable || []).filter(
+      (voce) => !voce.altrove && !(voce.waiting_on || []).length
+    ).length +
+    (data.activated || []).filter((voce) => ["pre_registered", "ready"].includes(voce.status))
+      .length;
+  return {
+    oggi: { numero: coda, tono: "bad", cosa: "da mandare" },
+    posta: { numero: posta.non_lavorate || 0, tono: "bad", cosa: "da lavorare" },
+    attesa: { numero: data.summary.open_questions || 0, tono: "bad", cosa: "aspettano te" },
+    corso: { numero: (data.claims || []).length, tono: "bad", cosa: "in corso" },
+    date: { numero: (data.answered || []).length, tono: "ok", cosa: "già risposte" },
+  };
+}
+
+function renderTabs(data) {
+  const barra = $(".schede");
+  if (!barra) return;
+  const numeri = numeriSchede(data);
+  SCHEDE.forEach((scheda) => {
+    const bottone = barra.querySelector(`.scheda[data-scheda="${scheda.chiave}"]`);
+    if (!bottone) return;
+    const voce = numeri[scheda.chiave];
+    bottone.replaceChildren(document.createTextNode(scheda.etichetta));
+    if (voce.numero > 0) {
+      // Il numero e la sua spiegazione stanno nello stesso nodo — fuori, il `gap` della scheda
+      // aggiungerebbe una fessura dopo il numero. La cifra e' muta per chi legge con uno schermo
+      // (un «8» da solo non dice otto cosa) e la frase e' li' accanto, invisibile ma letta.
+      bottone.append(
+        h("span", { class: "scheda-numero", "data-tono": voce.tono }, [
+          h("span", { "aria-hidden": "true", text: String(voce.numero) }),
+          h("span", { class: "vh", text: `${voce.numero} ${voce.cosa}` }),
+        ])
+      );
+    }
+  });
+}
+
+window.addEventListener("hashchange", () => scegliScheda(schedaDaIndirizzo(), false));
+
 /* ------------------------------------------------------------- attivazione */
 /* PAGINE: intestazione e tastini restano su tutte; il contenuto cambia. La coda e' la pagina che si
    guarda tornando — corta, ordinata per leva, un pulsante per riga; il testo lungo va nel dialogo. */
@@ -1020,7 +1148,9 @@ function renderActivation(data) {
   // accettate), e' l'atto che i report indicano come prossimo — «la palla e' di X», «il prossimo
   // passo e' il rientro di copy in Y». Senza questo gruppo, quei quattro atti non comparivano da
   // nessuna parte della pagina.
-  const dovuto = (data.owed || []).slice(0, 5);
+  // Nessun taglio: il numero tondo sulla scheda conta queste righe, e un numero che promette otto
+  // righe mostrandone cinque e' peggio di nessun numero.
+  const dovuto = data.owed || [];
   if (dovuto.length) parti.push(owedGroup(dovuto));
   // Le fasi in attesa di un'altra fase: una riga sola, senza pulsanti. Ci sono e si vedono — non si
   // nasconde niente — ma non invitano a fare la cosa sbagliata.
@@ -2567,6 +2697,7 @@ function initHeaderHeight() {
 
 initLogo();
 initHeaderHeight();
+preparaScheda();
 loadConfig();
 load();
 
