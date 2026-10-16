@@ -31,7 +31,7 @@ PORTE = {
     "registers/handoff.py": ["dichiarazioni", "lacune", "dovuto", "scrivi", "main"],
     "registers/inbox.py": ["voci", "archivia", "trova", "chiudi", "non_lavorate", "main"],
     "registers/rework.py": ["per_fase", "frase", "stabile", "main"],
-    "registers/coda.py": ["leggi", "main"],
+    "registers/coda.py": ["leggi", "applica", "richieste", "main"],
     "registers/preflight.py": ["leggi", "main"],
     "registers/mandate.py": ["componi", "per", "impronta", "da_ordine", "main"],
     "registers/static_view.py": ["render", "main"],

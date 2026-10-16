@@ -35,7 +35,7 @@ import yaml
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from workspace import Workspace  # noqa: E402
+from workspace import Workspace, lock_file  # noqa: E402
 
 #: Oltre questa attesa, una richiesta non e' «in coda»: e' ferma.
 SOGLIA_ORE = 12
@@ -263,6 +263,118 @@ def leggi(ws, adesso=None, limite_sospette: int = 12):
             "prova": f"cd {radice} && python3 tools/apply_transitions.py {prima} --dry-run | head -40",
             "applica": f"cd {radice} && python3 tools/registry_runner.py --once",
         },
+        # Le stesse misure servono al pulsante «Applica la coda», che fa il lavoro al posto tuo.
+        "da_applicare": len(elenco) - len(sospette),
+    }
+
+
+def applica(ws, limite=None, blocco=10, avanzamento=None):
+    """APPLICA LA CODA. Un pulsante, non un comando da copiare.
+
+    Perche' esiste: l'utente ha detto «secondo me deve farlo... che cazzo ne so io cosa devo fare».
+    Ha ragione: chiedere a una persona di incollare un comando nel terminale e' chiedere di sapere
+    una cosa che il tool sa. Qui la fa il tool, con tre garanzie:
+
+    * **la copia prima**: ogni file che sta per essere toccato viene copiato in `/tmp` col suo nome e
+      l'ora. E' l'unica via del ritorno (i registri non sono in git);
+    * **le richieste segnalate si saltano**, con il motivo: quelle che inserirebbero una presa
+      fantasma, o che riporterebbero un numero indietro, non si applicano «tanto per»;
+    * **la validazione una volta sola alla fine**, come prescrive il tuo applicatore per le sequenze
+      («i sei campi di una risposta costano 27 s con la validazione per campo»). Se il registro non
+      regge, si rimettono le copie e si dice.
+
+    Le riuscite si spostano in `pending-transitions/applied/`, come fa il runner: cosi' la coda non
+    conta lavoro che non c'e'.
+    """
+    import datetime
+    import fcntl
+    import shutil
+
+    import apply_transitions
+
+    elenco = richieste(ws)
+    quadro = leggi(ws)
+    scartate = {voce["file"]: voce["motivi"] for voce in quadro["sospette"]}
+    da_fare = [voce for voce in elenco if voce["file"] not in scartate]
+    if limite:
+        da_fare = da_fare[: int(limite)]
+
+    applicate, rifiutate = [], []
+    if not da_fare:
+        return {
+            "applicate": [], "rifiutate": [], "scartate": scartate,
+            "restanti": len(elenco), "backup": [], "esito": "niente da applicare",
+        }
+
+    # La copia: di ogni file che quelle richieste nominano, prima di toccarlo.
+    marchio = datetime.datetime.now().strftime("%Y%m%dT%H%M%S")
+    backup = []
+    for nome in {voce["destinazione"] or ws.state for voce in da_fare}:
+        origine = ws.path(nome)
+        if origine.exists():
+            destinazione = Path(f"/tmp/console-{origine.name}-{marchio}.bak")
+            shutil.copy2(origine, destinazione)
+            backup.append(str(destinazione))
+
+    # Il lock si prende a BLOCCHI, non per tutta la coda: una passata intera sono minuti, e tenere il
+    # lucchetto per minuti bloccherebbe chiunque altro applichi. La validazione si paga sull'ultima
+    # richiesta di ogni blocco: cosi' un registro rotto si scopre subito, non alla fine.
+    for inizio in range(0, len(da_fare), max(1, int(blocco))):
+        gruppo = da_fare[inizio : inizio + max(1, int(blocco))]
+        with open(Path(lock_file(ws.root)), "a+") as maniglia:
+            fcntl.flock(maniglia, fcntl.LOCK_EX)
+            try:
+                for numero, voce in enumerate(gruppo):
+                    percorso = ws.path(voce["percorso"])
+                    ultima = numero == len(gruppo) - 1
+                    try:
+                        richiesta = apply_transitions.read_transition(percorso)
+                        apply_transitions.apply_request(
+                            richiesta, pack=ws.root, validate_after=ultima
+                        )
+                    except Exception as errore:  # noqa: BLE001 - l'applicatore rifiuta, non indovina
+                        rifiutate.append({"file": voce["file"], "motivo": str(errore)[:300]})
+                        continue
+                    applicate.append(voce["file"])
+                    destinazione = ws.transitions_dir / "applied" / f"{marchio}-{voce['file']}"
+                    destinazione.parent.mkdir(parents=True, exist_ok=True)
+                    try:
+                        percorso.rename(destinazione)
+                    except OSError:
+                        pass
+            finally:
+                fcntl.flock(maniglia, fcntl.LOCK_UN)
+        if avanzamento:
+            avanzamento(len(applicate), len(da_fare), len(richieste(ws)))
+
+    # La validazione, una volta: se un registro non regge, si rimettono le copie e si dice.
+    problemi = []
+    for nome in {voce["destinazione"] or ws.state for voce in da_fare}:
+        percorso = ws.path(nome)
+        try:
+            _carica(percorso.read_text(encoding="utf-8", errors="replace"))
+        except yaml.YAMLError as errore:
+            problemi.append(f"{nome}: {errore}")
+    if problemi:
+        for salvata in backup:
+            nome_originale = Path(salvata).name
+            # `/tmp/console-state.yaml-<marchio>.bak` -> `state.yaml`
+            nome_originale = nome_originale[len("console-") : -len(f"-{marchio}.bak")]
+            shutil.copy2(salvata, ws.path(nome_originale))
+        return {
+            "applicate": [], "rifiutate": rifiutate, "scartate": scartate,
+            "restanti": len(richieste(ws)), "backup": backup, "esito": "RIMESSE LE COPIE",
+            "problemi": problemi,
+        }
+
+    restanti = len(richieste(ws))
+    return {
+        "applicate": applicate,
+        "rifiutate": rifiutate,
+        "scartate": scartate,
+        "restanti": restanti,
+        "backup": backup,
+        "esito": f"{len(applicate)} applicate, {len(rifiutate)} rifiutate, {len(scartate)} saltate, {restanti} in coda",
     }
 
 
@@ -270,8 +382,29 @@ def main(argv=None):
     analizzatore = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     analizzatore.add_argument("--workspace", required=True)
     analizzatore.add_argument("--json", action="store_true")
+    analizzatore.add_argument(
+        "--applica",
+        action="store_true",
+        help="applica la coda (copia di sicurezza, salta le segnalate, valida a blocchi)",
+    )
+    analizzatore.add_argument("--blocco", type=int, default=10, help="quante richieste per blocco")
     argomenti = analizzatore.parse_args(argv)
     ws = Workspace.load(argomenti.workspace)
+    if argomenti.applica:
+        # In un PROCESSO a parte: cosi' un'applicazione lunga non puo' bloccare la pagina, e se
+        # qualcosa va storto si uccide un pid invece di un server.
+        esito = applica(
+            ws,
+            blocco=argomenti.blocco,
+            avanzamento=lambda fatte, totali, restanti: print(
+                f"  {fatte}/{totali} · restanti in coda: {restanti}", flush=True
+            ),
+        )
+        print(esito["esito"], flush=True)
+        for rifiutata in esito["rifiutate"]:
+            print(f"  rifiutata: {rifiutata['file']} — {rifiutata['motivo'][:160]}", flush=True)
+        print("copie: " + (", ".join(esito["backup"]) or "nessuna"), flush=True)
+        return 0
     esito = leggi(ws)
     if argomenti.json:
         print(json.dumps(esito, ensure_ascii=False, default=str, indent=1))

@@ -92,6 +92,8 @@ class ReviewState:
         self.pack = workspace.root
         #: I registri letti, con il loro tempo di modifica: vedi `_load`.
         self._loaded = {}
+        #: L'ultima applicazione della coda, per il pulsante: `in_corso`, `esito`, quante fatte.
+        self.applicazione = {"in_corso": False, "esito": "", "quando": ""}
         #: Il lock e' per PROGETTO e il nome si deriva dal percorso con un digest STABILE: `hash()`
         #: cambia a ogni processo (sale casuale), quindi due processi non si vedrebbero.
         self.lock_path = lock_file(self.pack)
@@ -418,6 +420,9 @@ class ReviewState:
             # 2026-10-16: 129 richieste in coda, 93 depositate da piu' di dodici ore, e una fase
             # consegnata alle 10:53 che il registro leggeva ancora «respinta, attempt 3».
             "queue": coda.leggi(self.workspace),
+            # Lo stato dell'applicazione della coda avviata dal pulsante: la pagina lo mostra mentre
+            # lavora e quando ha finito, senza che nessuno debba guardare un terminale.
+            "applicazione": dict(self.applicazione),
             "activated": [
                 {
                     "phase": fase,
@@ -1029,6 +1034,47 @@ def build_handler(state):
 
         def do_POST(self):
             route = urlparse(self.path).path
+            if route == "/api/coda/apply":
+                # Il pulsante che fa il lavoro: la coda si applica in un PROCESSO A PARTE. Perche' non
+                # in un thread: misurato il 2026-10-16, un'applicazione da 90 richieste su un server a
+                # un processo solo (con tre browser che interrogavano la pagina) ha portato la CPU al
+                # 97% e l'API a non rispondere piu'. Un figlio si puo' uccidere; un server no.
+                if state.applicazione.get("in_corso"):
+                    return self._json(409, {"error": "una applicazione e' gia' in corso"})
+                import threading
+
+                registro = Path("/tmp/console-coda.log")
+                def sorveglia(processo):
+                    processo.wait()
+                    righe = []
+                    try:
+                        righe = registro.read_text("utf-8", errors="replace").strip().splitlines()
+                    except OSError:
+                        pass
+                    esito = next((r for r in reversed(righe) if "applicate" in r), "")
+                    state.applicazione = {
+                        "in_corso": False,
+                        "esito": esito or f"finito (uscita {processo.returncode})",
+                        "quando": datetime.now().strftime("%H:%M:%S"),
+                        "rifiutate": [r.strip() for r in righe if "rifiutata" in r][:8],
+                        "copie": [r.split("copie:", 1)[1].strip() for r in righe if r.startswith("copie:")][:1],
+                    }
+                state.applicazione = {"in_corso": True, "esito": "", "quando": "", "fatte": 0, "totali": 0}
+                with open(registro, "w", encoding="utf-8") as uscita:
+                    processo = subprocess.Popen(
+                        [
+                            sys.executable,
+                            str(ROOT / "registers" / "coda.py"),
+                            "--workspace",
+                            str(state.workspace.root),
+                            "--applica",
+                        ],
+                        stdout=uscita,
+                        stderr=subprocess.STDOUT,
+                        cwd=str(state.workspace.root),
+                    )
+                threading.Thread(target=sorveglia, args=(processo,), daemon=True).start()
+                return self._json(200, {"ok": True, "avviata": True})
             if route == "/api/inbox":
                 # Depositare un messaggio nella posta: e' l'unica scrittura della pagina che non
                 # passa dai registri, e per questo non puo' rompere niente. Il testo si salva

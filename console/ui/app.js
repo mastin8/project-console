@@ -121,7 +121,7 @@ function render(data) {
   renderBlocks();
   renderTally(data);
   renderTabs(data);
-  renderCoda(data.queue);
+  renderCoda(data.queue, data.applicazione);
   loadTimeline();
   refreshAge();
 }
@@ -1028,7 +1028,7 @@ window.addEventListener("hashchange", () => scegliScheda(schedaDaIndirizzo(), fa
 
    Perche' sta SOPRA le schede e non dentro una: vale per tutte. Se la coda e' vuota, non si vede:
    un avviso che c'e' sempre e' un avviso che non si legge piu'. */
-function renderCoda(coda) {
+function renderCoda(coda, applicazione) {
   const sezione = $("#coda-section");
   if (!sezione) return;
   const numeri = $("#coda-numeri");
@@ -1053,25 +1053,70 @@ function renderCoda(coda) {
     document.createTextNode(
       `Le ${coda.totale} richieste degli agenti non sono ancora state applicate: stato delle fasi, respinte e ratifiche possono essere vecchi. `
     ),
-    document.createTextNode("Applicarle non è una lettura: lo fa chi coordina, una volta sola, con gli strumenti del progetto.")
+    document.createTextNode(
+      (coda.da_applicare || 0)
+        ? "Il pulsante le applica: fa prima una copia dei registri, salta quelle segnalate e ti dice com'è andata."
+        : `Nessuna di queste si può applicare da sola: ${coda.sospette_totali} vanno guardate prima (elenco qui sotto), e l'applicatore ha già rifiutato le altre.`
+    )
   );
 
   // Tre passi, e il primo non e' una formalita': i registri di questo progetto non sono tracciati da
   // git, quindi la copia E' l'unico «annulla» che esiste. La prova va su UNA richiesta sola: il
   // dry-run stampa il registro intero (2,3 MB) una volta per file, e su 129 file sono 300 MB.
   const comandi = [
-    "# 0. la copia, prima: i registri non sono in git, questa e' l'unica via del ritorno",
+    "# se preferisci farlo a mano, questi sono i tre passi (la copia E' l'unica via del ritorno)",
     coda.comandi.copia,
-    "",
-    "# 1. cosa farebbe, su UNA richiesta (su tutte stamperebbe il registro 129 volte)",
     coda.comandi.prova,
-    "",
-    "# 2. applica la coda: una riga per richiesta; le riuscite vanno in applied/",
     coda.comandi.applica,
   ].join("\n");
-  azioni.replaceChildren(
-    h("button", { type: "button", class: "ghost", id: "coda-copia-bottone", text: "Copia i due comandi" })
-  );
+  // IL PULSANTE CHE FA IL LAVORO. L'utente: «secondo me deve farlo... che cazzo ne so io cosa devo
+  // fare». Ha ragione: il tool sa cos'e' la coda e come si applica, quindi la applica lui — copia di
+  // sicurezza compresa — e ti dice cosa ha fatto.
+  const stato = applicazione || {};
+  // Quando le uniche rimaste sono quelle segnalate, il pulsante non ha niente da fare: dirlo, invece
+  // di offrire un clic che non cambia niente e far credere che il tool non funzioni.
+  const daApplicare = coda.da_applicare || 0;
+  const avvia = h("button", {
+    type: "button",
+    id: "coda-applica",
+    text: daApplicare ? `Applica la coda (${daApplicare})` : "Niente da applicare",
+    disabled: Boolean(stato.in_corso) || !daApplicare,
+    onclick: async () => {
+      avvia.disabled = true;
+      esito.className = "msg show pending";
+      esito.textContent = "avvio…";
+      try {
+        const risposta = await fetch("/api/coda/apply", { method: "POST" });
+        const payload = await risposta.json();
+        if (!risposta.ok) throw new Error(payload.error || `errore ${risposta.status}`);
+        esito.className = "msg show ok";
+        esito.textContent =
+          "applicazione avviata: fa una copia dei registri, applica a blocchi e salta quelle segnalate. La pagina si aggiorna da sola.";
+      } catch (error) {
+        esito.className = "msg show err";
+        esito.textContent = `non avviata: ${error.message}`;
+        avvia.disabled = false;
+      }
+    },
+  });
+  const copiaTutto = h("button", {
+    type: "button",
+    class: "ghost",
+    id: "coda-copia-bottone",
+    text: "Copia i comandi (a mano)",
+  });
+  azioni.replaceChildren(avvia, copiaTutto);
+  if (stato.in_corso) {
+    esito.className = "msg show pending";
+    esito.textContent = `in corso: ${stato.fatte || 0} di ${stato.totali || "?"} applicate, ${
+      stato.restanti ?? "?"
+    } in coda.`;
+  } else if (stato.esito) {
+    esito.className = "msg show ok";
+    esito.textContent = `${stato.quando}: ${stato.esito}${
+      (stato.copie || []).length ? ` — copie: ${stato.copie.join(", ")}` : ""
+    }`;
+  }
   $("#coda-copia-bottone").addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(comandi);
