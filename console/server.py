@@ -856,7 +856,11 @@ class ReviewState:
     def _report_age(self, report_path, task_id):
         """Da quanto tempo quel report e' fermo: una fase respinta da giorni su un'unita' che
         intanto e' stata accettata e' un residuo di registro, non un lavoro da riprendere."""
-        for candidate in (report_path, f"{prefix}{task_id}/attempt-1.yaml"):
+        # Il prefisso delle consegne lo dichiara il workspace: `reports/` e' solo il predefinito.
+        for candidate in (
+            report_path,
+            f"{self.workspace.deliverable_prefix}{task_id}/attempt-1.yaml",
+        ):
             if not candidate:
                 continue
             path = self.pack / candidate
