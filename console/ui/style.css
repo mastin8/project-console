@@ -378,6 +378,18 @@ details[open] > .acthead::before{content:"▾ "}
   font-weight:550}
 .actbtn:active:not(:disabled){transform:scale(.97)}
 .actbtn:disabled{opacity:.5;cursor:default}
+/* «Salva come file» e' un <a download>: deve pesare come un pulsante ovunque compaia — sulla riga,
+   nel box del prompt e nel dialogo — e non come una riga di testo sottolineata. */
+a.actfile{display:inline-flex;align-items:center;justify-content:center;text-decoration:none;
+  padding:var(--s2) var(--s3);border-radius:var(--r-sm);border:1px solid var(--line-strong);
+  background:var(--surface);color:var(--ink);font:inherit;font-size:12.5px;font-weight:600;
+  cursor:pointer;white-space:nowrap;transition:background-color 140ms var(--ease-out),
+  transform 160ms var(--ease-out)}
+.row a.actfile{padding:9px 18px;font-size:inherit;font-weight:550}
+a.actfile:active{transform:scale(.97)}
+@media (hover:hover) and (pointer:fine){
+  a.actfile:hover{background:var(--surface-2)}
+}
 @media (hover: hover) and (pointer: fine){
   .actbtn:not(:disabled):hover{background:var(--accent-soft);color:var(--accent)}
   .actbtn.release:not(:disabled):hover{background:var(--surface-2);color:var(--ink)}

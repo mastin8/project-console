@@ -185,6 +185,10 @@ python3 registers/static_view.py --workspace <progetto>             # la stessa 
 python3 registers/apply_transitions.py --workspace <progetto> --dir <progetto>/pending-transitions
 ```
 
+Il servizio manda `index.html`, `app.js` e `style.css` con `Cache-Control: no-store`: dopo un
+`git pull` un ricaricamento normale basta, e non si finisce a guardare pulsanti che nel file non ci
+sono piu'.
+
 ## Se un progetto ha gia' un punto d'ingresso suo
 
 Capita che un progetto abbia imparato un comando proprio — per esempio
@@ -210,21 +214,32 @@ esiste in due posti.
 
 ## Cosa si vede, e cosa puoi fare
 
-0. **Cosa puoi attivare** — l'input, e la prima cosa in pagina: le fasi che si possono far partire
-   adesso, con il pulsante per attivarle. Vedi la sezione qui sotto.
-1. **Il percorso nel tempo** — blocchi, unita', fasi, con le barre datate da cio' che gli artefatti
-   DICHIARANO (`published_at`) o, in mancanza, dall'mtime; e la riga dei commit del repository, con i
-   commit che toccano i path dichiarati da ogni blocco. Nessuna previsione: solo misure. Un progetto
-   al primo giorno resta disegnato, senza barre: «nessuna data: non ancora iniziata».
-2. **Cosa aspetta te** — le domande di un task e le decisioni di governo, col controllo per
-   rispondere. La risposta si scrive nei registri e appende una decisione.
-3. **I prossimi prompt da eseguire** — i prompt del quaderno, raggruppati per stato d'azione (da
-   lanciare, in azione, consegna respinta, gia' consegnati) e col testo da copiare.
-4. **Percorso per blocchi** — una scheda per blocco: unita', risultato atteso, fasi che aprono il
-   report, respinte in verifica, e i commit che toccano i path dichiarati dal blocco.
+Il contenuto e' diviso in cinque pagine, una per domanda. Il testo lungo (prompt, dichiarazioni,
+report) non sta mai in pagina: si apre in un dialogo, con **Copia** e **Salva come file** accanto.
+
+- **Adesso** (`/`) — la coda, ed e' la pagina che si guarda tornando. In ordine di leva, tre gruppi:
+  *da rifare* (respinte in verifica), *da attivare*, *in attesa di un esecutore*. Una riga per cosa,
+  un pulsante per riga: **Attiva** (deposita l'ordine e riserva la fase), **Copia il prompt**,
+  **Salva come file**, **Leggi**, **Rilascia**. Sotto: le domande che aspettano te, chi sta lavorando
+  adesso, e le risposte che hai gia' dato.
+- **Tempo** (`/tempo`) — il percorso nel tempo: blocchi, unita', fasi, con le barre datate da cio' che
+  gli artefatti DICHIARANO (`published_at`) o, in mancanza, dall'mtime; e la riga dei commit del
+  repository, con i commit che toccano i path dichiarati da ogni blocco. Nessuna previsione: solo
+  misure. Un progetto al primo giorno resta disegnato, senza barre: «nessuna data: non ancora
+  iniziata».
+- **Testimone** (`/testimone`) — cosa c'e' da fare dopo, parola per parola: quello che chi ha finito
+  ha lasciato scritto nel suo report. Filtro (unita' aperte / tutte / senza direzione) e ricerca.
+- **Prompt** (`/prompt`) — i prompt del quaderno, raggruppati per stato d'azione: da fare, fatti,
+  con consegna respinta. Ognuno col testo da copiare e da salvare come file.
+- **Percorso** (`/percorso`) — una scheda per blocco: unita', risultato atteso, fasi che aprono il
+  report, respinte in verifica, e i commit che toccano i path dichiarati dal blocco.
+
+«Salva come file» scarica un `.md` col testo esatto del prompt, senza passare dalla clipboard: serve
+a isolare dove si rompe un testo — se il file e' giusto e il testo incollato no, il difetto e' nel
+posto che lo riceve, non nel prompt.
 
 Nell'intestazione: il marchio (dal tuo `brand/`, o un monogramma), il nome del progetto, quattro
-tastini coi conteggi — aperte, respinte, in corso, per te — e il filtro condiviso dalle due viste.
+tastini coi conteggi — aperte, respinte, in corso, per te — e il filtro condiviso dalle viste.
 Il tastino delle respinte filtra e atterra sulla prima fase `needs_changes`.
 
 ## Attivare una fase: l'input

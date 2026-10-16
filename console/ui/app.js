@@ -589,6 +589,15 @@ function promptCard(prompt) {
           }),
       }),
       copy,
+      prompt.prompt
+        ? h("button", {
+            type: "button",
+            class: "ghost",
+            text: "Salva come file",
+            onclick: () =>
+              scaricaFile(prompt.prompt, `prompt-${prompt.anchor || prompt.number}.md`),
+          })
+        : null,
       ...attiva,
       message,
     ]),
@@ -836,14 +845,18 @@ function apriTesto(titolo, testo, opzioni = {}) {
     azioni.append(copia, esito);
   }
   if (opzioni.file) {
-    // «Salva .md»: serve a isolare dove si rompe un testo. Se il file e' giusto e il testo incollato
-    // no, il difetto e' nel box che riceve — non nel prompt.
-    const indirizzo = URL.createObjectURL(new Blob([testo || ""], { type: "text/plain;charset=utf-8" }));
-    azioni.append(
-      h("a", { class: "ghost", href: indirizzo, download: opzioni.file, text: "Salva come file" })
-    );
+    azioni.append(linkSalvaFile(testo, opzioni.file));
   }
   if (!dialog.open) dialog.showModal();
+}
+
+/* «Salva come file»: il prompt come .md. Sta OVUNQUE si apra un prompt — nel dialogo e nel box che
+   si apre sulla riga — perche' chi cerca il pulsante non deve sapere quale dei due ha aperto. */
+function linkSalvaFile(testo, nome) {
+  const indirizzo = URL.createObjectURL(
+    new Blob([testo || ""], { type: "text/plain;charset=utf-8" })
+  );
+  return h("a", { class: "ghost actfile", href: indirizzo, download: nome, text: "Salva come file" });
 }
 
 /* Quante unita' ferma una fase: e' la LEVA, ed e' il criterio con cui si ordina la coda. */
@@ -1129,7 +1142,13 @@ function activationRow(voce, attesa, rilasciabile, apriPrompt) {
   const azioni = h("div", { class: "actactions" });
   // Una fase gia' attivata serve a UNA cosa: dare il prompt a un esecutore. Quindi copia in un clic,
   // leggi nel dialogo, oppure togli la riserva. Il testo non sta in linea: era il muro.
-  if (rilasciabile) azioni.append(promptCopiaButton(voce.phase), promptLeggiButton(voce.phase));
+  if (rilasciabile) {
+    azioni.append(
+      promptCopiaButton(voce.phase),
+      promptSalvaButton(voce.phase),
+      promptLeggiButton(voce.phase)
+    );
+  }
   azioni.append(
     rilasciabile
       ? activationButton(voce.phase, "release", "Rilascia", message, false)
@@ -1189,6 +1208,39 @@ function promptLeggiButton(phase) {
   return bottone;
 }
 
+/* «Salva come file» sulla riga: il prompt scende come .md senza aprire niente. Serve a portare il
+   testo fuori dal browser intatto — se il file e' giusto e quello incollato no, il difetto e' nel
+   posto che lo riceve, non nel prompt. */
+function promptSalvaButton(phase) {
+  const etichetta = "Salva come file";
+  const bottone = h("button", { type: "button", class: "actbtn release", text: etichetta });
+  const ripiglia = () => setTimeout(() => (bottone.textContent = etichetta), 2500);
+  bottone.addEventListener("click", async () => {
+    bottone.disabled = true;
+    try {
+      const payload = await chiediPrompt(phase);
+      scaricaFile(payload.text || "", `prompt-${phase}.md`);
+      bottone.textContent = "salvato";
+    } catch (error) {
+      bottone.textContent = "non salvato";
+      bottone.title = error.message;
+    } finally {
+      ripiglia();
+      bottone.disabled = false;
+    }
+  });
+  return bottone;
+}
+
+/* Il file scende da un <a download> creato al volo: nessun dialogo, nessuna clipboard di mezzo. */
+function scaricaFile(testo, nome) {
+  const link = linkSalvaFile(testo, nome);
+  link.hidden = true;
+  document.body.append(link);
+  link.click();
+  setTimeout(() => link.remove(), 0);
+}
+
 /* Il prompt della fase, a richiesta: quello del quaderno se c'e' una sezione per quella fase,
    altrimenti composto dal registro (criteri di accettazione, perimetro, protocollo). */
 function activationPromptButton(phase, apri) {
@@ -1225,7 +1277,11 @@ function activationPromptButton(phase, apri) {
       scatola.replaceChildren(
         h("p", { class: "actmeta", text: `fonte: ${payload.source}` }),
         h("pre", { class: "acttext-pre", text: payload.text }),
-        h("div", { class: "actactions" }, [copia, esito])
+        h("div", { class: "actactions" }, [
+          copia,
+          linkSalvaFile(payload.text, `prompt-${phase}.md`),
+          esito,
+        ])
       );
     } catch (error) {
       caricato = null;

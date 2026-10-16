@@ -735,11 +735,15 @@ def build_handler(state):
         def log_message(self, fmt, *args):  # silenzio: il log e' la pagina, non la console
             return
 
-        def _send(self, status, body, content_type):
+        def _send(self, status, body, content_type, no_store=False):
             payload = body.encode("utf-8") if isinstance(body, str) else body
             self.send_response(status)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(payload)))
+            if no_store:
+                # La pagina cambia mentre la si guarda: il browser non deve tenere la copia vecchia
+                # di app.js e mostrare pulsanti che nel file non ci sono piu'.
+                self.send_header("Cache-Control", "no-store, must-revalidate")
             self.end_headers()
             self.wfile.write(payload)
 
@@ -751,11 +755,11 @@ def build_handler(state):
             parsed = urlparse(self.path)
             route = parsed.path
             if route in ("/", "/index.html"):
-                return self._send(200, (UI_DIR / "index.html").read_text("utf-8"), "text/html; charset=utf-8")
+                return self._send(200, (UI_DIR / "index.html").read_text("utf-8"), "text/html; charset=utf-8", no_store=True)
             if route == "/app.js":
-                return self._send(200, (UI_DIR / "app.js").read_text("utf-8"), "application/javascript; charset=utf-8")
+                return self._send(200, (UI_DIR / "app.js").read_text("utf-8"), "application/javascript; charset=utf-8", no_store=True)
             if route == "/style.css":
-                return self._send(200, (UI_DIR / "style.css").read_text("utf-8"), "text/css; charset=utf-8")
+                return self._send(200, (UI_DIR / "style.css").read_text("utf-8"), "text/css; charset=utf-8", no_store=True)
             if route == "/config.json":
                 # L'interfaccia non sa niente del progetto: nome, vista e fasi arrivano da qui, e
                 # il workspace li dichiara. Un progetto nuovo non tocca una riga di HTML.
