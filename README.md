@@ -345,6 +345,23 @@ dalle prese nel registro. Dove una domanda non dichiara `blocked_scope` o le opz
 
 ## Quando una fase non si sblocca con un altro tentativo
 
+### E cosa si manda adesso: «quello che il registro dice che è dovuto»
+
+La coda mostra le fasi **non accettate**. Ma l'atto che chiude un blocco spesso non e' li': i report
+lo dicono con parole loro — «la palla e' di `UPL04ZT` attempt 2», «il prossimo passo NON e' un altro
+attempt di questa fase: e' il rientro di copy in `NAV03E` attempt 4» — e quelle fasi sono **gia'
+accettate**, quindi in coda non compaiono. Misurato il 2026-10-16: i quattro atti dovuti di quel
+momento (`NAV03E` attempt 4, `TODO03T` attempt 5, `TODO03R` attempt 2, `UPL04ZT` attempt 2) non
+comparivano in nessun punto della pagina. La domanda «devo rimandare quei prompt?» non aveva risposta
+nel tool.
+
+Adesso c'e' un gruppo, in fondo alla coda: **Quello che il registro dice che e' dovuto**. Una riga
+per dichiarazione — chi l'ha scritta, quando, e quali fasi nomina col loro stato — col pulsante
+**Prompt** su ogni fase nominata: compone il prompt di quella fase anche se e' gia' accettata, perche'
+l'atto dovuto e' un tentativo nuovo. Niente di dedotto: si leggono i campi `next`/`next_tasks` dei
+report e si prendono i codici che nominano. Se il registro non nomina nessuna fase, il gruppo non
+c'e'.
+
 «Respinta in verifica» non distingue una fase respinta ieri dalla prima volta da una che torna
 indietro da dieci atti **sempre per lo stesso motivo**. La seconda non e' lavoro da rifare: e' un
 ostacolo che nessun tentativo in piu' rimuove, e serve che qualcuno decida. La coda lo dice, con la

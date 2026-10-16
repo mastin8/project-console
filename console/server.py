@@ -357,6 +357,24 @@ class ReviewState:
                 ],
                 "gaps": handoff.lacune(self.workspace, state),
             },
+            # Cosa il registro dice che e' DOVUTO adesso: le fasi nominate nei `next` dei report.
+            # Perche' serve, misurato il 2026-10-16: i quattro atti dovuti di quel momento
+            # (NAV03E attempt 4, TODO03T attempt 5, TODO03R attempt 2, UPL04ZT attempt 2) erano
+            # invisibili in pagina, perche' ognuno nominava una fase GIA' ACCETTATA e la coda mostra
+            # solo le non accettate. Chi cercava «cosa mando adesso?» non aveva risposta.
+            "owed": [
+                {
+                    "from_phase": voce["from_phase"],
+                    "from_unit": voce["from_unit"],
+                    "from_status": voce["from_status"],
+                    "from_open": voce["from_open"],
+                    "source": voce["source"],
+                    "when": voce["when"],
+                    "text": voce["text"],
+                    "codes": voce["codes"],
+                }
+                for voce in handoff.dovuto(self.workspace, state, tasks_doc)
+            ],
             # La posta in arrivo: quello che e' arrivato e non e' ancora finito in un report. E'
             # l'unico posto della pagina che non legge i registri — legge una cartella di
             # messaggi — perche' un messaggio non deve morire solo perche' non ha un campo dove

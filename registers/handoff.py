@@ -29,6 +29,7 @@ Uso::
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
@@ -51,6 +52,9 @@ from workspace import Workspace, lock_file  # noqa: E402
 #: Le chiavi che dicono la direzione, in ordine di fiducia.
 CHIAVI = ("next", "next_tasks", "next_task", "next_actions", "next_required")
 DONE = ("accepted",)
+#: Il fondo della scala per chi non ha una data: una dichiarazione senza data non vince su una
+#: datata (e il confronto fra due `None` non deve esplodere).
+_MINIMO = datetime.min.replace(tzinfo=timezone.utc)
 LIVE = ("active", "taken", "pre_registered", "ready", "active_extension")
 
 
@@ -206,6 +210,69 @@ def lacune(ws, state=None):
     # Prima le lacune che contano adesso: quelle di un'unita' ancora aperta.
     fuori.sort(key=lambda v: (not v["unit_open"], -(v["when"].timestamp() if v["when"] else 0)))
     return fuori
+
+
+def dovuto(ws, state=None, tasks_doc=None, limite: int = 8):
+    """Le fasi che i report NOMINANO come prossimo passo, con lo stato in cui sono adesso.
+
+    Perche' esiste. Il registro dice GIA' cosa e' dovuto — «la palla e' di `UPL04ZT` (attempt 2
+    sulla revisione viva)», «il prossimo passo NON e' un altro attempt di questa fase: e' il RIENTRO
+    DI COPY in `NAV03E` attempt 4» — ma quelle frasi vivono dentro i report, e chi apre la pagina
+    vede solo le fasi respinte e attivabili. Misurato il 2026-10-16: i quattro atti dovuti di quel
+    momento (NAV03E attempt 4, TODO03T attempt 5, TODO03R attempt 2, UPL04ZT attempt 2) erano TUTTI
+    invisibili, perche' ognuno nominava una fase gia' ACCETTATA, e la coda mostra le non accettate.
+    L'utente ha chiesto «devo rimandare quei prompt?»: la risposta era «no, quelli: questi», e la
+    pagina non era in grado di dirlo.
+
+    Qui non si deduce niente: si leggono i campi `next`/`next_tasks` dei report, si prendono i
+    CODICI che nominano (confrontati coi task del registro, non indovinati) e si mostra con che
+    stato sono. Se il registro non nomina nessuna fase, l'elenco e' vuoto.
+    """
+    state = state if state is not None else (_leggi(ws.state_path))
+    tasks_doc = tasks_doc if tasks_doc is not None else (_leggi(ws.path(ws.tasks)))
+    registrate = state.get("tasks") or {}
+    noti = {str(t.get("id")) for t in tasks_doc.get("tasks") or [] if t.get("id")}
+    fuori = {}
+    for voce in dichiarazioni(ws, state, tasks_doc):
+        # Tutte le dichiarazioni della stessa fase insieme: un report ne fa spesso due o tre (una
+        # per `next`, una per i residui), e il prossimo atto puo' stare nella seconda.
+        testi = [str(item.get("text") or "") for item in voce["items"]]
+        nominati = [
+            codice
+            for testo in testi
+            for codice in re.findall(r"[A-Z][A-Z0-9]{2,}", testo)
+        ]
+        codici = []
+        for codice in dict.fromkeys(nominati):
+            if codice not in noti or codice == voce["phase"]:
+                continue
+            registrata = registrate.get(codice) or {}
+            codici.append(
+                {
+                    "code": codice,
+                    "status": registrata.get("status", "pending"),
+                    "attempt": registrata.get("attempt") or 0,
+                }
+            )
+        if not codici:
+            continue
+        fuori[voce["phase"]] = {
+            "from_phase": voce["phase"],
+            "from_unit": voce["unit"],
+            "from_status": voce["status"],
+            "from_open": voce["unit_open"],
+            "source": voce["source"],
+            "when": voce["when"],
+            # Il testo integrale resta leggibile nel dialogo; qui si tiene quello che nomina un
+            # atto, perche' e' quello che si deve poter copiare.
+            "text": " · ".join(testi),
+            "codes": codici,
+        }
+    ordinati = sorted(
+        fuori.values(),
+        key=lambda voce: (not voce["from_open"], -(voce["when"].timestamp() if voce["when"] else 0)),
+    )
+    return ordinati[:limite]
 
 
 def scrivi(ws, fase, testo):

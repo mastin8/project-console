@@ -976,6 +976,12 @@ function renderActivation(data) {
     parti.push(activationGroup("In attesa di un esecutore", "warn", attivate, true, false));
   }
   const mancanti = ((data.handoff && data.handoff.gaps) || []).filter((voce) => voce.unit_open);
+  // Quello che il registro dice che e' DOVUTO: non e' una fase da attivare (molte sono gia'
+  // accettate), e' l'atto che i report indicano come prossimo — «la palla e' di X», «il prossimo
+  // passo e' il rientro di copy in Y». Senza questo gruppo, quei quattro atti non comparivano da
+  // nessuna parte della pagina.
+  const dovuto = (data.owed || []).slice(0, 5);
+  if (dovuto.length) parti.push(owedGroup(dovuto));
   if (mancanti.length) {
     const riga = h("p", { class: "actgroup warn" }, [
       h("b", { text: `${mancanti.length} consegne senza direzione` }),
@@ -1062,6 +1068,84 @@ function postaGroup(titolo, tono, voci) {
     h("p", { class: `actgroup ${tono}` }, [h("b", { text: titolo })]),
     ...voci.map(postaRow),
   ]);
+}
+
+/* QUELLO CHE IL REGISTRO DICE CHE È DOVUTO. Ogni riga è una dichiarazione di chi ha finito: «il
+   prossimo passo è il rientro di copy in NAV03E attempt 4», «la palla è di UPL04ZT attempt 2».
+   Accanto, il pulsante che compone il prompt di QUELLA fase (anche se è già accettata: l'atto
+   dovuto è un tentativo nuovo). È la risposta alla domanda «cosa mando adesso?». */
+function owedGroup(voci) {
+  return h("div", { class: "actbox" }, [
+    h("p", { class: "actgroup accent" }, [
+      h("b", { text: "Quello che il registro dice che è dovuto" }),
+      h("span", { class: "actcount", text: String(voci.length) }),
+    ]),
+    ...voci.map(owedRow),
+  ]);
+}
+
+function owedRow(voce) {
+  const riga = h("div", { class: "actrow" });
+  const testo = h("div", { class: "acttext" });
+  const codici = (voce.codes || []).slice(0, 3);
+  testo.append(h("code", { class: "actcode", text: voce.from_phase }));
+  testo.append(
+    document.createTextNode(
+      ` dice che il prossimo atto è ${codici
+        .map((c) => `${c.code} (${c.status}${c.attempt ? `, attempt ${c.attempt}` : ""})`)
+        .join(" e ")}`
+    )
+  );
+  testo.append(
+    h("div", {
+      class: "actmeta",
+      text: [
+        voce.from_status,
+        String(voce.when || "").slice(0, 16).replace("T", " "),
+        voce.from_open ? "unità aperta" : "unità chiusa",
+        voce.source,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    })
+  );
+  riga.append(testo);
+  const azioni = h("div", { class: "actactions" });
+  codici.forEach((codice) => azioni.append(owedPromptButton(codice.code)));
+  azioni.append(
+    h("button", {
+      type: "button",
+      class: "actbtn release",
+      text: "Leggi",
+      title: "la dichiarazione intera, come l'ha scritta chi ha finito",
+      onclick: () =>
+        apriTesto(`${voce.from_phase} — cosa c'è da fare dopo`, voce.text, {
+          copia: true,
+          file: `dichiarazione-${voce.from_phase}.md`,
+        }),
+    })
+  );
+  riga.append(azioni);
+  return riga;
+}
+
+/* Il prompt di una fase nominata: si apre nel dialogo (che ha Copia e Salva come file), perché la
+   fase può essere già accettata e non avere nessuna riga nella coda. */
+function owedPromptButton(code) {
+  return h("button", {
+    type: "button",
+    class: "actbtn",
+    text: `Prompt ${code}`,
+    title: `il prompt da incollare per far partire/rifare ${code}`,
+    onclick: async () => {
+      try {
+        const payload = await chiediPrompt(code);
+        apriTesto(`${code} — il prompt`, payload.text, { copia: true, file: `prompt-${code}.md` });
+      } catch (error) {
+        apriTesto(`${code} — il prompt`, `non disponibile: ${error.message}`);
+      }
+    },
+  });
 }
 
 function postaRow(voce) {

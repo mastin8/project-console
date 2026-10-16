@@ -28,7 +28,7 @@ PORTE = {
     "registers/validate_registries.py": ["main"],
     "registers/next_prompts.py": ["build", "configure", "render_html", "main"],
     "registers/activate.py": ["attivabili", "attiva", "rilascia", "aggiorna_ordini", "elenco", "main"],
-    "registers/handoff.py": ["dichiarazioni", "lacune", "scrivi", "main"],
+    "registers/handoff.py": ["dichiarazioni", "lacune", "dovuto", "scrivi", "main"],
     "registers/inbox.py": ["voci", "archivia", "trova", "chiudi", "non_lavorate", "main"],
     "registers/rework.py": ["per_fase", "frase", "stabile", "main"],
     "registers/mandate.py": ["componi", "per", "impronta", "da_ordine", "main"],
