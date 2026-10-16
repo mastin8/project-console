@@ -1289,126 +1289,211 @@ function renderActivation(data) {
   const box = $("#activation");
   const count = $("#activation-count");
   if (!box || !count) return;
-  const tutte = data.activatable || [];
-  // «La palla e' altrove»: la sua ultima consegna manda a fasi GIA' accettate, quindi il prossimo
-  // atto e' un tentativo nuovo su quelle. Queste NON vanno nei gruppi «da rifare/da attivare»:
-  // mostrare «Attiva» su una di loro mentre tre righe piu' sotto si legge che la palla e' di
-  // un'altra e' la contraddizione che l'utente ha segnalato — e non e' solo estetica, perche'
-  // attivarle deposita un ordine per un lavoro che il registro ha gia' spostato altrove.
-  const tutteAperte = tutte.filter((voce) => !(voce.waiting_on || []).length);
-  const altrove = tutteAperte.filter((voce) => voce.altrove);
-  const aperte = tutteAperte.filter((voce) => !voce.altrove);
-  const attese = tutte.filter((voce) => (voce.waiting_on || []).length);
+  const aperte = (data.activatable || []).filter((voce) => !(voce.waiting_on || []).length);
   const attivate = (data.activated || []).filter((voce) =>
     ["pre_registered", "ready"].includes(voce.status)
   );
+
+  // Da mandare: gli atti che il registro dichiara e che nessuno ha ancora preso ne' consegnato,
+  // piu' le fasi libere. Un codice, una riga; se lo stesso codice arriva da due dichiarazioni vince
+  // la piu' recente.
+  const visti = new Set();
+  const coda = [];
+  (data.owed || []).forEach((voce) => {
+    (voce.codes || []).forEach((codice) => {
+      if (codice.live || codice.done || visti.has(codice.code)) return;
+      visti.add(codice.code);
+      coda.push({ code: codice.code, da: voce.from_phase, perche: voce.text, quando: voce.when, fase: null });
+    });
+  });
+  aperte.forEach((voce) => {
+    if (visti.has(voce.phase)) return;
+    visti.add(voce.phase);
+    coda.push({ code: voce.phase, da: null, perche: "", quando: "", fase: voce });
+  });
+
+  const inCorso = (data.claims || []).filter((voce) => voce.status === "taken");
   count.textContent = [
-    aperte.length ? `${aperte.length} da attivare` : null,
-    altrove.length ? `${altrove.length} con la palla altrove` : null,
-    attivate.length ? `${attivate.length} attivate` : null,
-    attese.length ? `${attese.length} in attesa a monte` : null,
+    coda.length ? `${coda.length} da mandare` : "niente da mandare",
+    attivate.length ? `${attivate.length} riservate` : null,
+    inCorso.length ? `${inCorso.length} in corso` : null,
   ]
     .filter(Boolean)
-    .join(" · ");
-  // La riga di spiegazione parla di «Attiva» solo se c'e' qualcosa da attivare: quando la coda e'
-  // vuota e il lavoro e' tutto nel blocco qui sotto, spiegare pulsanti che non ci sono e' rumore.
+    .join(" \u00b7 ");
   const suggerimento = $("#activation-hint");
   if (suggerimento) {
     suggerimento.replaceChildren(
-      ...(aperte.length
-        ? [
-            document.createTextNode(
-              "In ordine di leva: prima quello che sblocca più unità. "
-            ),
-            h("b", { text: "Attiva" }),
-            document.createTextNode(
-              " deposita l'ordine e riserva la fase (una seconda attivazione viene rifiutata); "
-            ),
-            h("b", { text: "Copia il prompt" }),
-            document.createTextNode(
-              " è il testo da incollare in una chat; "
-            ),
-            h("b", { text: "Rilascia" }),
-            document.createTextNode(" toglie la riserva. Non avvia nessun agente."),
-          ]
-        : [
-            document.createTextNode(
-              "Non c'è niente da attivare adesso: il lavoro è quello che il registro dichiara qui sotto. "
-            ),
-            h("b", { text: "Attiva" }),
-            document.createTextNode(
-              " resta per quando una fase dichiara che il prossimo atto è su di sé."
-            ),
-          ])
+      document.createTextNode(
+        coda.length
+          ? "Una riga, un'azione: premi il pulsante e incolla il prompt in una chat. Non avvia nessun agente \u2014 la presa la dichiara chi lo riceve."
+          : "Niente da mandare: il lavoro e' in mano a qualcuno (vedi \u00abIn corso adesso\u00bb) o aspetta la tua firma."
+      )
     );
   }
-  const parti = [];
-  // L'ordine della coda e' la LEVA: prima cio' che sblocca piu' unita'. E' il motivo per cui questa
-  // pagina e' corta — non si legge tutto per decidere, si guarda la prima riga.
-  const rifare = aperte.filter((voce) => voce.rework);
-  const fare = aperte.filter((voce) => !voce.rework);
-  const perLeva = (elenco) => elenco.slice().sort((a, b) => leva(b.phase) - leva(a.phase));
-  if (rifare.length) parti.push(activationGroup("Da rifare: respinte in verifica", "bad", perLeva(rifare)));
-  if (fare.length) parti.push(activationGroup("Da attivare", "accent", perLeva(fare)));
-  if (attivate.length) {
-    // Senza `apriPrompt`: la riga resta una riga. Il prompt si COPIA in un clic (o si legge nel
-    // dialogo), invece di stare in linea: 1.500-2.700 caratteri per riga erano il muro.
-    parti.push(activationGroup("In attesa di un esecutore", "warn", attivate, true, false));
-  }
-  const mancanti = ((data.handoff && data.handoff.gaps) || []).filter((voce) => voce.unit_open);
-  // Quello che il registro dice che e' DOVUTO: non e' una fase da attivare (molte sono gia'
-  // accettate), e' l'atto che i report indicano come prossimo — «la palla e' di X», «il prossimo
-  // passo e' il rientro di copy in Y». Senza questo gruppo, quei quattro atti non comparivano da
-  // nessuna parte della pagina.
-  // Nessun taglio: il numero tondo sulla scheda conta queste righe, e un numero che promette otto
-  // righe mostrandone cinque e' peggio di nessun numero.
-  const dovuto = data.owed || [];
-  if (dovuto.length) parti.push(owedGroup(dovuto));
-  // Le fasi in attesa di un'altra fase: una riga sola, senza pulsanti. Ci sono e si vedono — non si
-  // nasconde niente — ma non invitano a fare la cosa sbagliata.
-  if (altrove.length) {
-    parti.push(
-      h("p", { class: "actgroup" }, [
-        h("b", { text: `Non tocca a queste (${altrove.length}): ` }),
-        document.createTextNode(
-          `${altrove.map((voce) => voce.phase).join(", ")} — la loro ultima consegna manda a fasi già accettate: il prossimo atto è un tentativo nuovo su quelle nominate nel blocco qui sopra.`
-        ),
-      ])
-    );
-  }
-  if (mancanti.length) {
-    const riga = h("p", { class: "actgroup warn" }, [
-      h("b", { text: `${mancanti.length} consegne senza direzione` }),
-      document.createTextNode(" — chi ha finito non ha lasciato cosa fare dopo: si scrivono in "),
-      h("a", { class: "dlink", href: "/testimone", text: "Testimone" }),
-      document.createTextNode("."),
-    ]);
-    parti.push(riga);
-  }
-  if (attese.length) {
-    parti.push(
-      h("details", { class: "actbox" }, [
-        h("summary", { class: "acthead" }, [
-          h("b", { text: `In attesa a monte (${attese.length})` }),
-          document.createTextNode(
-            " — attivarle adesso chiederebbe lavoro che non si puo' ancora fare: prima le unita' elencate."
-          ),
-        ]),
-        ...attese.map((voce) => activationRow(voce, true, false)),
-      ])
-    );
-  }
-  if (!parti.length) {
-    parti.push(
+
+  if (!coda.length) {
+    box.replaceChildren(
       h("p", { class: "empty" }, [
-        h("b", { text: "Niente da attivare: " }),
+        h("b", { text: "Niente da mandare. " }),
         document.createTextNode(
-          "tutte le fasi dichiarate hanno una presa viva o sono accettate. E' il caso in cui la pagina aspetta, non ti chiede niente."
+          inCorso.length
+            ? `${inCorso.length} fasi sono in mano a qualcuno adesso: quando consegnano, la prossima riga compare qui.`
+            : "Tutto quello che il registro dichiara e' preso, consegnato o in attesa della tua firma."
         ),
+      ])
+    );
+    return;
+  }
+
+  const parti = [h("div", { class: "actbox" }, coda.slice(0, 12).map(codaRow))];
+  if (coda.length > 12) {
+    parti.push(
+      h("p", {
+        class: "actmeta",
+        text: `e altre ${coda.length - 12} righe: premi \u00abRicarica\u00bb quando hai mandato queste.`,
+      })
+    );
+  }
+  // LE RISERVATE: l'ordine c'e', manca chi lo prende. Ci hai gia' messo l'ordine, quindi non sono
+  // «da mandare» \u2014 ma sono le uniche righe dove resta un gesto: il prompt, o togliere la riserva.
+  if (attivate.length) {
+    parti.push(
+      h("div", { class: "actbox" }, [
+        h("p", { class: "actgroup warn" }, [
+          h("b", { text: "Riservate: nessuno le sta facendo" }),
+          h("span", { class: "actcount", text: String(attivate.length) }),
+        ]),
+        ...attivate.map(riservataRow),
       ])
     );
   }
   box.replaceChildren(...parti);
+}
+
+/* Una riga della coda: il codice, l'eventuale traccia del prompt consegnato, UN pulsante. La
+   spiegazione («perche' lo dice X», la misura delle respinte) sta chiusa in un `details`. */
+function codaRow(voce) {
+  const riga = h("div", { class: "actrow" });
+  const testo = h("div", { class: "acttext" });
+  testo.append(h("code", { class: "actcode", text: voce.code }));
+  const titolo = ((voce.fase || {}).title || "").trim().replace(/^(Accettare|Implementare|Verificare|Analizzare):\s*/, "");
+  if (titolo) testo.append(document.createTextNode(` ${titolo}`));
+  const traccia = rigaConsegna(voce.code);
+  if (traccia) testo.append(traccia);
+  const dentro = [];
+  if (voce.perche) {
+    dentro.push(
+      h("summary", {
+        text: `perché: lo dice ${voce.da}${voce.quando ? `, ${String(voce.quando).slice(0, 16).replace("T", " ")}` : ""}`,
+      }),
+      h("pre", { class: "coda-perche", text: voce.perche })
+    );
+  }
+  if (voce.fase && (voce.fase.misura || {}).tentativi > 1) {
+    dentro.push(h("div", { class: "actmeta", text: reworkLine(voce.fase.misura) }));
+  }
+  if (dentro.length) testo.append(h("details", { class: "coda-dettaglio" }, dentro));
+  riga.append(testo);
+
+  const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });
+  const azioni = h("div", { class: "actactions" });
+  if (voce.fase && (voce.fase.misura || {}).solo_firma) {
+    azioni.append(acceptButton(voce.code, message));
+  } else {
+    azioni.append(attivaEConsegna(voce.code, message));
+  }
+  if (voce.fase) azioni.append(attivaButtonPlain(voce.code, message));
+  riga.append(azioni, message);
+  return riga;
+}
+
+function riservataRow(voce) {
+  const riga = h("div", { class: "actrow waiting" });
+  const testo = h("div", { class: "acttext" });
+  testo.append(h("code", { class: "actcode", text: voce.phase }));
+  testo.append(
+    h("div", {
+      class: "actmeta",
+      text: `ordine ${voce.order || "\u2014"} \u00b7 riservata ${String(voce.since || "").slice(0, 16).replace("T", " ")}`,
+    })
+  );
+  riga.append(testo);
+  const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });
+  riga.append(
+    h("div", { class: "actactions" }, [
+      promptCopiaButton(voce.phase),
+      activationButton(voce.phase, "release", "Rilascia", message, false),
+    ]),
+    message
+  );
+  return riga;
+}
+
+function reworkLine(misura) {
+  const primo = (misura.ricorrenti || [])[0];
+  if (misura.solo_firma) return `respinta ${misura.respinte} volte \u00b7 l'ostacolo che torna è la firma, non il prodotto`;
+  if (primo) return `respinta ${misura.respinte} volte \u00b7 ostacolo in ${primo.volte} su ${misura.tentativi}: ${primo.id}`;
+  return `respinta ${misura.respinte} volte \u00b7 ogni atto nomina punti nuovi`;
+}
+
+/* UN PULSANTE SOLO: attiva (ordine + riserva) e poi COPIA il prompt, aprendolo come ripiego. */
+function attivaEConsegna(phase, message) {
+  const bottone = h("button", { type: "button", class: "actbtn", text: "Attiva e copia il prompt" });
+  bottone.addEventListener("click", async () => {
+    bottone.disabled = true;
+    message.className = "msg show pending";
+    message.textContent = "deposito l'ordine\u2026";
+    try {
+      const risposta = await fetch("/api/activate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ target: phase, action: "activate" }),
+      });
+      const payload = await risposta.json();
+      if (!risposta.ok) throw new Error(payload.error || `errore ${risposta.status}`);
+      const testo = await chiediPrompt(phase);
+      await navigator.clipboard.writeText(testo.text || "");
+      annotaPromptConsegnato(phase);
+      message.className = "msg show ok";
+      message.textContent = `fatto: ordine in ${payload.order}, fase riservata, prompt COPIATO (${(testo.text || "").length} caratteri). Incollalo in una chat.`;
+      apriTesto(`${phase} \u2014 il prompt (già copiato)`, testo.text, {
+        copia: true,
+        file: `prompt-${phase}.md`,
+      });
+      setTimeout(load, 1500);
+    } catch (error) {
+      message.className = "msg show err";
+      message.textContent = `non fatto: ${error.message}`;
+      bottone.disabled = false;
+    }
+  });
+  return bottone;
+}
+
+function attivaButtonPlain(phase, message) {
+  return h("button", {
+    type: "button",
+    class: "actbtn release",
+    text: "Solo l'ordine",
+    title: "deposita l'ordine e riserva la fase, senza copiare il prompt",
+    onclick: async () => {
+      try {
+        const risposta = await fetch("/api/activate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ target: phase, action: "activate" }),
+        });
+        const payload = await risposta.json();
+        if (!risposta.ok) throw new Error(payload.error || `errore ${risposta.status}`);
+        message.className = "msg show ok";
+        message.textContent = `ordine in ${payload.order}, fase riservata.`;
+        setTimeout(load, 1500);
+      } catch (error) {
+        message.className = "msg show err";
+        message.textContent = `non fatto: ${error.message}`;
+      }
+    },
+  });
 }
 
 /* LA PAGINA TESTIMONE: le dichiarazioni di chi ha consegnato, e chi non le ha lasciate. E' un
