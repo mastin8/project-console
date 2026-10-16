@@ -481,6 +481,10 @@ class ReviewState:
             # 2026-10-16: 129 richieste in coda, 93 depositate da piu' di dodici ore, e una fase
             # consegnata alle 10:53 che il registro leggeva ancora «respinta, attempt 3».
             "queue": coda.leggi(self.workspace),
+            # IL PERCORSO: una riga per unità aperta, col suo prossimo atto. È la sorgente della coda
+            # in pagina — non le dichiarazioni dei report, che nominano anche fasi vecchie o di unità
+            # mai iniziate (49 «mandabili» su Binche, fra cui la R di un'unità ferma alla A).
+            "percorso": activate.prossimi(self.workspace, state, tasks_doc),
             # Lo stato dell'applicazione della coda avviata dal pulsante: la pagina lo mostra mentre
             # lavora e quando ha finito, senza che nessuno debba guardare un terminale.
             "applicazione": dict(self.applicazione),

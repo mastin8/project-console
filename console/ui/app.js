@@ -1346,117 +1346,91 @@ function renderActivation(data) {
   const box = $("#activation");
   const count = $("#activation-count");
   if (!box || !count) return;
-  const aperte = (data.activatable || []).filter((voce) => !(voce.waiting_on || []).length);
-  // LE FASI CHE ASPETTANO UN'ALTRA FASE DELLA LORO UNITA': non sono «da mandare» (le fasi di una
-  // unità sono sequenziali) ma non spariscono — si vedono, con scritto chi aspettano.
-  const inAttesaUnita = aperte.filter((voce) => (voce.bloccata_da_unita || []).length);
-  const libere = aperte.filter((voce) => !(voce.bloccata_da_unita || []).length);
-  const attivate = (data.activated || []).filter((voce) =>
+  // LA SORGENTE E' IL PERCORSO, non le dichiarazioni dei report: quelle nominano anche fasi vecchie o
+  // di unità mai iniziate (49 «mandabili» su un progetto, fra cui la R di un'unità ferma alla A).
+  // Una riga per unità aperta, nell'ordine del percorso critico.
+  const percorso = data.percorso || [];
+  const pronti = percorso.filter((voce) => !(voce.attesa || []).length && !voce.live);
+  const attese = percorso.filter((voce) => (voce.attesa || []).length && !voce.live);
+  const inCorso = percorso.filter((voce) => voce.live);
+  const riservate = (data.activated || []).filter((voce) =>
     ["pre_registered", "ready"].includes(voce.status)
   );
-
-  // Da mandare: gli atti che il registro dichiara e che nessuno ha ancora preso ne' consegnato,
-  // piu' le fasi libere. Un codice, una riga; se lo stesso codice arriva da due dichiarazioni vince
-  // la piu' recente.
-  const visti = new Set();
-  const coda = [];
-  (data.owed || []).forEach((voce) => {
-    (voce.codes || []).forEach((codice) => {
-      if (codice.live || codice.done || visti.has(codice.code)) return;
-      visti.add(codice.code);
-      coda.push({
-        code: codice.code,
-        status: codice.status,
-        busy: codice.busy || [],
-        da: voce.from_phase,
-        perche: voce.text,
-        quando: voce.when,
-        fase: null,
-      });
-    });
-  });
-  libere.forEach((voce) => {
-    if (visti.has(voce.phase)) return;
-    visti.add(voce.phase);
-    coda.push({ code: voce.phase, da: null, perche: "", quando: "", fase: voce });
-  });
-
-  const inCorso = (data.claims || []).filter((voce) => voce.status === "taken");
-  // Contano solo quelle MANDABILI: una riga in attesa della sua unita' non e' un'azione.
-  const mandabili = coda.filter((voce) => !(voce.busy || []).length);
   count.textContent = [
-    mandabili.length ? `${mandabili.length} da mandare` : "niente da mandare",
-    coda.length > mandabili.length ? `${coda.length - mandabili.length} in attesa della loro unità` : null,
-    attivate.length ? `${attivate.length} riservate` : null,
+    pronti.length ? `${pronti.length} da mandare` : "niente da mandare",
     inCorso.length ? `${inCorso.length} in corso` : null,
+    riservate.length ? `${riservate.length} riservate` : null,
+    attese.length ? `${attese.length} in attesa` : null,
   ]
     .filter(Boolean)
-    .join(" \u00b7 ");
+    .join(" · ");
   const suggerimento = $("#activation-hint");
   if (suggerimento) {
     suggerimento.replaceChildren(
       document.createTextNode(
-        coda.length
-          ? "Una riga, un'azione: premi il pulsante e incolla il prompt in una chat. Non avvia nessun agente \u2014 la presa la dichiara chi lo riceve."
-          : "Niente da mandare: il lavoro e' in mano a qualcuno (vedi \u00abIn corso adesso\u00bb) o aspetta la tua firma."
+        pronti.length
+          ? "Il percorso è obbligato: una unità alla volta, e si parte solo con i prerequisiti accettati. Una riga, un'azione — premi e incolla il prompt in una chat."
+          : "Niente da mandare adesso: il lavoro è in mano a qualcuno, oppure aspetta che un'altra unità sia accettata (vedi «in attesa»)."
       )
     );
   }
-
-  if (!mandabili.length) {
-    box.replaceChildren(
-      h("p", { class: "empty" }, [
-        h("b", { text: "Niente da mandare. " }),
-        document.createTextNode(
-          inCorso.length
-            ? `${inCorso.length} fasi sono in mano a qualcuno adesso: quando consegnano, la prossima riga compare qui.`
-            : "Tutto quello che il registro dichiara e' preso, consegnato o in attesa della tua firma."
-        ),
-      ])
-    );
-    return;
-  }
-
-  const parti = [h("div", { class: "actbox" }, coda.slice(0, 12).map(codaRow))];
-  if (coda.length > 12) {
-    parti.push(
-      h("p", {
-        class: "actmeta",
-        text: `e altre ${coda.length - 12} righe: premi \u00abRicarica\u00bb quando hai mandato queste.`,
-      })
-    );
-  }
-  // LE RISERVATE: l'ordine c'e', manca chi lo prende. Ci hai gia' messo l'ordine, quindi non sono
-  // «da mandare» \u2014 ma sono le uniche righe dove resta un gesto: il prompt, o togliere la riserva.
-  if (attivate.length) {
+  const parti = [];
+  if (pronti.length) parti.push(h("div", { class: "actbox" }, pronti.map(codaRow)));
+  if (inCorso.length) {
     parti.push(
       h("div", { class: "actbox" }, [
         h("p", { class: "actgroup warn" }, [
-          h("b", { text: "Riservate: nessuno le sta facendo" }),
-          h("span", { class: "actcount", text: String(attivate.length) }),
+          h("b", { text: "In corso: aspetta la loro consegna" }),
+          h("span", { class: "actcount", text: String(inCorso.length) }),
         ]),
-        ...attivate.map(riservataRow),
-      ])
-    );
-  }
-  if (inAttesaUnita.length) {
-    parti.push(
-      h("div", { class: "actbox" }, [
-        h("p", { class: "actgroup" }, [
-          h("b", { text: "In attesa della loro unità" }),
-          h("span", { class: "actcount", text: String(inAttesaUnita.length) }),
-        ]),
-        ...inAttesaUnita.map((voce) =>
+        ...inCorso.map((voce) =>
           h("div", { class: "actrow waiting" }, [
             h("div", { class: "acttext" }, [
               h("code", { class: "actcode", text: voce.phase }),
               h("div", {
                 class: "actmeta",
-                text: `aspetta ${(voce.bloccata_da_unita || []).join(", ")}: le fasi della stessa unità sono sequenziali — ognuna misura l'output della precedente.`,
+                text: `${voce.status} · presa da ${voce.owner || "—"}. Quando consegna, la riga dopo è la sua.`,
               }),
             ]),
           ])
         ),
+      ])
+    );
+  }
+  if (riservate.length) {
+    parti.push(
+      h("div", { class: "actbox" }, [
+        h("p", { class: "actgroup warn" }, [
+          h("b", { text: "Riservate: nessuno le sta facendo" }),
+          h("span", { class: "actcount", text: String(riservate.length) }),
+        ]),
+        ...riservate.map(riservataRow),
+      ])
+    );
+  }
+  if (attese.length) {
+    parti.push(
+      h("div", { class: "actbox" }, [
+        h("p", { class: "actgroup" }, [
+          h("b", { text: "In attesa: il percorso non è ancora arrivato lì" }),
+          h("span", { class: "actcount", text: String(attese.length) }),
+        ]),
+        ...attese.map((voce) =>
+          h("div", { class: "actrow waiting" }, [
+            h("div", { class: "acttext" }, [
+              h("code", { class: "actcode", text: voce.phase }),
+              h("div", { class: "actmeta", text: `aspetta ${(voce.attesa || []).join(", ")}` }),
+            ]),
+          ])
+        ),
+      ])
+    );
+  }
+  if (!parti.length) {
+    parti.push(
+      h("p", { class: "empty" }, [
+        h("b", { text: "Tutto chiuso. " }),
+        document.createTextNode("Nessuna unità aperta: il progetto è alla fine del percorso."),
       ])
     );
   }
@@ -1516,6 +1490,14 @@ function codaRow(voce) {
 
   const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });
   const azioni = h("div", { class: "actactions" });
+  // Il pulsante giusto dipende da cosa la fase è: attivabile (nessun ordine depositato) → si attiva
+  // e si copia il prompt; già accettata e con un atto dovuto → si copia e basta; accettazione → si può
+  // anche firmare.
+  const attivabile = ((snapshot && snapshot.activatable) || []).some((voce2) => voce2.phase === voce.code);
+  const fasi = (consoleConfig && consoleConfig.phases) || [];
+  const accettazione = fasi.length
+    ? String(voce.code).toUpperCase().endsWith(String(fasi[fasi.length - 1]).toUpperCase())
+    : false;
   if ((voce.busy || []).length) {
     // Le fasi della stessa unità sono sequenziali: qui non c'è niente da mandare, si aspetta.
     testo.append(
@@ -1531,7 +1513,7 @@ function codaRow(voce) {
   }
   if (voce.fase && (voce.fase.misura || {}).solo_firma) {
     azioni.append(acceptButton(voce.code, message));
-  } else if (voce.fase) {
+  } else if (attivabile) {
     azioni.append(attivaEConsegna(voce.code, message));
   } else {
     // La fase NON è attivabile: quasi sempre perché è GIÀ ACCETTATA, e l'atto dovuto è un tentativo
@@ -1540,6 +1522,7 @@ function codaRow(voce) {
     // attivabile o inesistente: NAV03E» su un clic perfettamente legittimo.
     azioni.append(copiaPromptButton(voce.code, message));
   }
+  if (accettazione && !(voce.busy || []).length) azioni.append(acceptButton(voce.code, message));
   if (voce.fase) azioni.append(attivaButtonPlain(voce.code, message));
   riga.append(azioni, message);
   return riga;

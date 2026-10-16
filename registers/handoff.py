@@ -212,6 +212,37 @@ def lacune(ws, state=None):
     return fuori
 
 
+def _attesa(ws, tasks_doc, registrate, codice):
+    """Perche' quel codice NON e' ancora un atto da mandare: le fasi prima di lui, i prerequisiti.
+
+    Il percorso e' obbligato dall'alfa all'omega: la `R` di un'unita' ferma alla `A` non si manda, e
+    nemmeno una fase il cui prerequisito dichiarato non e' accettato. Il parallelismo che resta e'
+    quello vero — fra unita' che non si condizionano.
+    """
+    ordine = [str(s).upper() for s in (ws.phases or ("A", "E", "T", "R"))]
+    unita = next(
+        (uid for uid, *_ in (
+            (str(t.get("id")), str(t.get("unit_id") or "")) for t in tasks_doc.get("tasks") or [] if t.get("id")
+        ) if str(codice).startswith(uid)),
+        str(codice)[:-1],
+    )
+    suffisso = str(codice)[len(unita) :].upper()
+    prima = [unita + s for s in ordine[: ordine.index(suffisso)]] if suffisso in ordine else []
+    aperte = [
+        f"{fase} ({(registrate.get(fase) or {}).get('status') or 'pending'})"
+        for fase in prima
+        if (registrate.get(fase) or {}).get("status") != "accepted"
+    ]
+    fase_doc = next(
+        (t for t in tasks_doc.get("tasks") or [] if str(t.get("id")) == str(codice)), {}
+    )
+    for dipendenza in fase_doc.get("depends_on") or []:
+        dipendenza = str(dipendenza)
+        if (registrate.get(dipendenza) or {}).get("status") != "accepted":
+            aperte.append(f"{dipendenza} ({(registrate.get(dipendenza) or {}).get('status') or 'pending'})")
+    return aperte
+
+
 def dovuto(ws, state=None, tasks_doc=None, limite: int = 8, prese=None):
     """Le fasi che i report NOMINANO come prossimo passo, con lo stato in cui sono adesso.
 
@@ -296,6 +327,12 @@ def dovuto(ws, state=None, tasks_doc=None, limite: int = 8, prese=None):
                         for altra in vive_per_unita.get(unita_di.get(codice, ""), [])
                         if altra != codice
                     ],
+                    # IL PERCORSO E' OBBLIGATO. Un codice che il registro nomina non e' per questo un
+                    # atto da mandare: se le fasi che nel ciclo vengono PRIMA di lui non sono
+                    # accettate, o se un prerequisito dichiarato e' aperto, quello che si produrrebbe
+                    # e' un atto su niente. Misurato il 2026-10-16: la coda offriva `HIST01R`,
+                    # l'ultima fase di un'unita' ferma alla prima.
+                    "attesa": _attesa(ws, tasks_doc, registrate, codice),
                     # Consegnata dopo la dichiarazione: l'atto che questa riga chiedeva c'e' gia'.
                     "done": consegnata_dopo(codice, voce["when"]),
                 }

@@ -218,6 +218,30 @@ un'altra (E o T), mai la sua **accettazione**. Solo le unita' di integrazione gu
 
 ### Dentro un'unita' le fasi sono SEQUENZIALI
 
+### I blocchi devono essere indipendenti
+
+Si consegna **per blocchi**, e un blocco che si chiude senza toccare gli altri e' un blocco che puo'
+andare **in parallelo** con gli altri: piu' persone, piu' agenti, branch diverse. Il numero di
+dipendenze fra blocchi e' la misura di quanto il progetto si puo' muovere — non un dettaglio di stile.
+
+Chi scrive `tasks.yaml` rispetta cinque regole, tutte verificabili:
+
+1. **un'unita' si chiude coi byte del suo perimetro**: i suoi criteri di accettazione non citano il
+   **verdetto** di un'altra unita';
+2. **dipendenze da artefatti, non da firme**: si aspetta un report (`E` o `T`) di un'altra unita',
+   **mai la sua `R`**. Se serve la `R`, le due unita' sono una sola; le uniche che guardano le `R`
+   altrui sono le unita' di **integrazione**;
+3. **al massimo UNA dipendenza fuori dal blocco per unita'**, e con l'**interfaccia nominata** (file,
+   endpoint, contratto), congelata prima della fase `A`;
+4. **nessun file condiviso fra due unita'**: due mani sugli stessi byte rompe la misura, non solo
+   l'ordine;
+5. **i colli di bottiglia si dichiarano**: un'unita' che tiene N altre e' il percorso critico, e va
+   scritto invece di essere scoperto a meta' progetto.
+
+Un blocco non si rende indipendente duplicando il lavoro di un altro: se due blocchi hanno bisogno
+della stessa cosa, quella cosa e' **un'unita' a se'** che entrambi consumano — dichiarata una volta, con
+la sua interfaccia.
+
 `A → E → T → R`, una alla volta: **una sola presa viva per unita'**. Ognuna misura l'output della
 precedente, e misurarne una mentre l'altra scrive produce un atto che nasce vecchio — e' costato
 undici atti su una sola unita'. Chi prova ad attivare la seconda trova il rifiuto, col motivo.

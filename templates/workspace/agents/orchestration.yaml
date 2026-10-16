@@ -11,3 +11,7 @@ regole:
   what: "Si prova solo cio' che si e' toccato, una volta sola, subito prima di consegnare."
 - id: fail-closed
   what: "Un controllo che non si puo' fare non si dichiara passato: si dichiara non fatto."
+- id: sequential-in-unit
+  what: "Dentro un'unita' le fasi sono sequenziali (A -> E -> T -> R): una sola presa viva per unita'. L'eccezione e' la derivazione dei casi da parte della T, che e' testo e non una presa."
+- id: independent-blocks
+  what: "I blocchi devono essere il piu' possibile indipendenti: dipendenze da artefatti e mai da firme, al massimo una fuori dal blocco con l'interfaccia nominata, nessun file condiviso fra due unita'. Cosi' blocchi diversi procedono in parallelo, su branch diverse."

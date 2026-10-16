@@ -25,6 +25,10 @@ piattaforma veda il lavoro e cosa leggere per sapere cosa fare.
 * **quando scrivi `tasks.yaml`**: le unita' di lavoro dipendono da **artefatti** (i report di E o T di
   un'altra unita'), mai dalla sua **accettazione**; solo le unita' di integrazione guardano le `R`.
   Una unita' deve potersi chiudere con i byte del suo perimetro;
+* **i blocchi devono essere il piu' possibile indipendenti**: e' la condizione perche' piu' persone e
+  piu' agenti lavorino insieme, su branch diverse. Al massimo **una** dipendenza fuori dal blocco per
+  unita', con l'interfaccia nominata e congelata prima della fase A; **nessun file condiviso** fra due
+  unita'; e cio' che due blocchi consumano entrambi e' **un'unita' a se'**, non una copia;
 * in fase di accettazione (`R`) l'atto e' **corto**: prima il cancello
   (`registers/preflight.py --phase <FASE>`), poi leggi criteri e byte, giudica, dichiara limiti e
   residui. **Non** rieseguire le batterie del tester: se una prova manca, l'atto e' respinto e quella

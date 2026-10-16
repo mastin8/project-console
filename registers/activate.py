@@ -106,6 +106,28 @@ def fasi(tasks_doc):
     ]
 
 
+def _prima_di(ws, tasks_doc, fase):
+    """Le fasi della stessa unita' che nel ciclo vengono PRIMA di questa, e che non sono accettate.
+
+    IL PERCORSO E' OBBLIGATO DALL'ALFA ALL'OMEGA. Il ciclo (`ws.phases`: A, E, T, R) non e' una
+    convenzione: ogni fase MISURA l'output della precedente, quindi partire dalla `R` di un'unita' mai
+    iniziata — cosa che la pagina offriva, perche' un report la nominava — produce atti su niente.
+    Misurato il 2026-10-16: la coda offriva `HIST01R`, l'ultima fase di un'unita' ferma alla prima.
+
+    Il parallelismo resta possibile dove NON c'e' dipendenza: fra unita' diverse i cui prerequisiti
+    dichiarati sono accettati. Questo cancello e' per unita', non per progetto.
+    """
+    ordine = [str(s).upper() for s in (ws.phases or ("A", "E", "T", "R"))]
+    unita = next(
+        (uid for uid, *_ in fasi(tasks_doc) if str(fase).startswith(uid)),
+        str(fase)[:-1],
+    )
+    suffisso = str(fase)[len(unita) :].upper()
+    if suffisso not in ordine:
+        return []
+    return [unita + s for s in ordine[: ordine.index(suffisso)]]
+
+
 def ordini_aperti(ws):
     """Gli ordini depositati e non ancora chiusi, per fase.
 
@@ -374,6 +396,12 @@ def attivabili(ws, state=None, tasks_doc=None, dovuto=None):
                 "bloccata_da_unita": [
                     altra for altra in occupate.get(str(unit_id), []) if altra != str(fase)
                 ],
+                # Il ciclo interno dell'unita': le fasi che vengono prima e non sono accettate.
+                "bloccata_da_ciclo": [
+                    precedente
+                    for precedente in _prima_di(ws, tasks_doc, fase)
+                    if stato_di(precedente) != "accepted"
+                ],
                 "waiting_on": attese,
                 # Se un ordine c'e' gia', la pagina lo mostra invece di offrire un pulsante che
                 # verrebbe rifiutato.
@@ -418,6 +446,77 @@ def _mandato_di(percorsi, stato_ordini, spedizioni):
         "consumato_da": stato.get("consumato_da") or [],
         "consegnato_a": spedizioni.get(scelto, 0),
     }
+
+
+def prossimi(ws, state=None, tasks_doc=None):
+    """IL PERCORSO, DALLA PRIMA ALL'ULTIMA UNITA': una riga per unita' aperta, col suo prossimo atto.
+
+    Perche' cosi' e non dalle dichiarazioni: i report nominano decine di fasi — anche vecchie, anche
+    di unita' mai iniziate — e una coda costruita su quelli chiede cose che il percorso non permette
+    (misurato il 2026-10-16: 49 «mandabili», fra cui la `R` di un'unita' ferma alla `A`). Qui invece
+    la sorgente e' il REGISTRO: per ogni unita' non ancora accettata, la prima fase del ciclo non
+    accettata, con lo stato, i prerequisiti che la tengono ferma e la leva (quante unita' la
+    aspettano). Una riga per unita' = un atto alla volta per unita', e il parallelismo resta dove le
+    unita' non si condizionano.
+    """
+    state = state if state is not None else (_carica(ws.state_path.read_text(encoding="utf-8")) or {})
+    tasks_doc = tasks_doc if tasks_doc is not None else (_carica(ws.path(ws.tasks).read_text(encoding="utf-8")) or {})
+    registrate = state.get("tasks") or {}
+    vive = prese(state)
+    unita = {str(u.get("id")): u for u in tasks_doc.get("units") or [] if u.get("id")}
+    ordine = [str(s).upper() for s in (ws.phases or ("A", "E", "T", "R"))]
+    stato_di = lambda fase: (registrate.get(fase) or {}).get("status", "pending")
+
+    chiuse = {
+        uid
+        for uid in unita
+        if all(stato_di(uid + s) == "accepted" for s in ordine)
+    }
+    blocca = {}
+    for uid, u in unita.items():
+        for dipendenza in u.get("depends_on_units") or []:
+            blocca.setdefault(str(dipendenza), []).append(uid)
+
+    fuori = []
+    for uid, u in unita.items():
+        if uid in chiuse:
+            continue
+        fasi_aperte = [uid + s for s in ordine if stato_di(uid + s) != "accepted"]
+        if not fasi_aperte:
+            continue
+        prossima = fasi_aperte[0]
+        attesa = [f"{f} ({stato_di(f)})" for f in fasi_aperte[1:]] if False else []
+        for dipendenza in u.get("depends_on_units") or []:
+            dipendenza = str(dipendenza)
+            if dipendenza not in chiuse:
+                attesa.append(f"{dipendenza} (unita' non accettata)")
+        for dipendenza in (next((t for t in tasks_doc.get("tasks") or [] if str(t.get("id")) == prossima), {}) or {}).get("depends_on") or []:
+            dipendenza = str(dipendenza)
+            if stato_di(dipendenza) != "accepted":
+                attesa.append(f"{dipendenza} ({stato_di(dipendenza)})")
+        presa = vive.get(prossima) or {}
+        fuori.append(
+            {
+                # `code` e `phase` sono la stessa cosa: la riga in pagina usa `code` per tutte le
+                # sorgenti (dichiarazioni e percorso), e senza l'alias il disegno si fermava con
+                # «Cannot read properties of undefined».
+                "code": prossima,
+                "phase": prossima,
+                "unit": uid,
+                "block": str(u.get("domain") or "senza-dominio"),
+                "title": str(next((t.get("title") for t in tasks_doc.get("tasks") or [] if str(t.get("id")) == prossima), "") or u.get("title") or ""),
+                "status": stato_di(prossima),
+                "attempt": (registrate.get(prossima) or {}).get("attempt") or 0,
+                "attesa": sorted(set(attesa)),
+                "leva": len(blocca.get(uid, [])),
+                "live": str(presa.get("status") or ""),
+                "owner": str(presa.get("taken_by") or presa.get("owner_agent") or ""),
+                "apre": fasi_aperte[1:],
+            }
+        )
+    # Prima le unita' che tengono piu' altre (percorso critico), poi quelle piu' vicine alla fine.
+    fuori.sort(key=lambda voce: (-voce["leva"], len(voce["apre"]), voce["phase"]))
+    return fuori
 
 
 def radici(ws):
@@ -672,6 +771,13 @@ def attiva(ws, fase, dry_run=False):
             f"{', '.join(voce['bloccata_da_unita'])}. Le fasi della stessa unita' sono sequenziali — "
             "ognuna misura l'output della precedente — e misurarne una mentre l'altra scrive produce "
             "un atto gia' vecchio. Aspetta che quella consegni."
+        )
+    # Il percorso e' obbligato dall'alfa all'omega: non si parte dalla `R` di un'unita' mai iniziata.
+    if voce.get("bloccata_da_ciclo"):
+        raise apply_transitions.TransitionError(
+            f"{fase} non si attiva adesso: prima vengono {', '.join(voce['bloccata_da_ciclo'])} "
+            "nel ciclo dell'unita'. Ogni fase misura l'output della precedente: partirne una senza "
+            "l'altra produce atti su niente."
         )
     # Il prompt che l'esecutore trova NELL'ORDINE: dal quaderno se c'e', altrimenti composto dal
     # registro. Senza questo, attivare una fase senza sezione nel quaderno lasciava l'ordine con
