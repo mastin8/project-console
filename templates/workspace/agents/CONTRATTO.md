@@ -62,7 +62,7 @@ Due file, e il primo non si riscrive mai:
 Il tentativo, con i campi che la piattaforma LEGGE:
 
 ```yaml
-schema: project-console-report/1.0
+schema: <report_schema del progetto>     # predefinito: project-console-report/1.0
 task_id: ES01T                     # la fase
 attempt: 1
 status: published                  # published | needs_changes | failed
@@ -84,6 +84,12 @@ I campi che la piattaforma legge davvero, e per cosa:
 | `next` **o** `next_tasks` | «Cosa c'e' da fare dopo» in testa alla pagina |
 | `report`, `report_ref` (nel puntatore) | quale tentativo aprire quando clicchi la fase |
 | `attempt` | il numero del prossimo tentativo atteso |
+
+**Lo schema dei report lo dichiara il progetto**, in `console.yaml#report_schema` (puntatore:
+`pointer_schema`): il valore predefinito e' quello di questa piattaforma, e un progetto con un
+formato suo scrive il suo. Quello che la piattaforma legge davvero sono i campi della tabella qui
+sopra — quelli non cambiano, il resto e' del progetto. Anche l'atto di accettazione che scrive la
+pagina usa lo schema dichiarato, non il proprio.
 
 `recommendation` nel puntatore e' il VERDETTO (`accept_unit`, …), non una direzione: per la
 direzione si usano `next` / `next_tasks`.

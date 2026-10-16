@@ -14,6 +14,8 @@ surface: "verifica del percorso"
 # brand: brand
 # view: STATUS.html
 # deliverable_prefix: reports/
+# report_schema: project-console-report/1.0
+# pointer_schema: project-console-report-pointer/1.0
 # phases: [A, E, T, R]
 # I comandi che una persona esegue a mano per verificare il progetto da sola: finiscono nella
 # vista statica. Il coordinatore non li esegue, li mostra.

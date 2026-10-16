@@ -305,6 +305,13 @@ def busta(ws, fase):
             "richiesta sulla stessa occorrenza (field: released_at, text: ''): senza, la fase risulta",
             "rilasciata e la pagina continua a dire «in attesa».",
             "",
+            # Lo schema lo dichiara il progetto, e questa riga viaggia con OGNI prompt (la busta sta
+            # davanti anche al testo del quaderno): una piattaforma che scrive nei registri di un
+            # progetto non gli impone il proprio formato di report.
+            f"SCHEMA DEI REPORT DI QUESTO PROGETTO: {ws.report_schema} (puntatore: {ws.pointer_schema}).",
+            "I campi che la piattaforma legge restano quelli del contratto — `verdict`, `published_at`,",
+            "`next` — e tutto il resto e' del progetto.",
+            "",
             "e subito dopo, nella stessa voce, due richieste: taken_by: <la tua corsia> e",
             "taken_at: '<adesso>'. Poi fallo applicare al coordinamento:",
             f"    python3 registers/apply_transitions.py --workspace {ws.root} --dir {ws.transitions_dir}",

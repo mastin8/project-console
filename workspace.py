@@ -56,6 +56,10 @@ class Workspace:
     brand: str = "brand"
     view: str = "STATUS.html"
     deliverable_prefix: str = "reports/"
+    #: Gli schemi che il coordinatore SCRIVE. Un progetto con un formato suo di report lo dichiara qui
+    #: e l'atto di accettazione usa il suo, invece di imporgli quello di questa piattaforma.
+    report_schema: str = "project-console-report/1.0"
+    pointer_schema: str = "project-console-report-pointer/1.0"
     phases: tuple = ("A", "E", "T", "R")
     #: I comandi che una persona esegue a mano per verificare il progetto da sola (label, comando).
     #: Non si indovinano: un workspace che non li dichiara non ne mostra.

@@ -86,7 +86,9 @@ def per(ws, fase, nota=None, firmatario="utente", dry_run=False):
     riferimento = giudicato.get("report") or giudicato.get("report_ref") or ""
     adesso = datetime.now().astimezone()
     atto = {
-        "schema": "project-console-report/1.0",
+        # Lo schema lo dichiara il progetto (`console.yaml#report_schema`): una piattaforma che scrive
+        # nei suoi registri non gli impone il proprio formato.
+        "schema": ws.report_schema,
         "task_id": str(fase),
         "attempt": numero,
         "status": "published",
@@ -121,7 +123,7 @@ def per(ws, fase, nota=None, firmatario="utente", dry_run=False):
     # (`deliverable_prefix`). Un progetto che chiama la sua cartella `esiti/` deve funzionare.
     consegna = f"{ws.deliverable_prefix}{fase}/attempt-{numero}.yaml"
     puntatore = (
-        "schema: project-console-report-pointer/1.0\n"
+        f"schema: {ws.pointer_schema}\n"
         f"task_id: {fase}\n"
         f"attempt: {numero}\n"
         f"report: {consegna}\n"
