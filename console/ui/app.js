@@ -1303,7 +1303,14 @@ function renderActivation(data) {
     (voce.codes || []).forEach((codice) => {
       if (codice.live || codice.done || visti.has(codice.code)) return;
       visti.add(codice.code);
-      coda.push({ code: codice.code, da: voce.from_phase, perche: voce.text, quando: voce.when, fase: null });
+      coda.push({
+        code: codice.code,
+        status: codice.status,
+        da: voce.from_phase,
+        perche: voce.text,
+        quando: voce.when,
+        fase: null,
+      });
     });
   });
   aperte.forEach((voce) => {
@@ -1399,8 +1406,14 @@ function codaRow(voce) {
   const azioni = h("div", { class: "actactions" });
   if (voce.fase && (voce.fase.misura || {}).solo_firma) {
     azioni.append(acceptButton(voce.code, message));
-  } else {
+  } else if (voce.fase) {
     azioni.append(attivaEConsegna(voce.code, message));
+  } else {
+    // La fase NON è attivabile: quasi sempre perché è GIÀ ACCETTATA, e l'atto dovuto è un tentativo
+    // NUOVO su di lei (il copy da rientrare, la verifica da rifare). Attivarla non si può e non
+    // serve: si copia il prompt e lo si dà a una corsia. Era l'errore che ha prodotto «fase non
+    // attivabile o inesistente: NAV03E» su un clic perfettamente legittimo.
+    azioni.append(copiaPromptButton(voce.code, message));
   }
   if (voce.fase) azioni.append(attivaButtonPlain(voce.code, message));
   riga.append(azioni, message);
@@ -1474,6 +1487,41 @@ function reworkLine(misura) {
 }
 
 /* UN PULSANTE SOLO: attiva (ordine + riserva) e poi COPIA il prompt, aprendolo come ripiego. */
+/* Il prompt di una fase che NON si attiva — perché è già accettata e l'atto dovuto è un tentativo
+   nuovo. Copia, apre, e lascia la traccia che l'hai consegnato. */
+function copiaPromptButton(code, message) {
+  const bottone = h("button", { type: "button", class: "actbtn", text: "Copia il prompt" });
+  bottone.addEventListener("click", async () => {
+    bottone.disabled = true;
+    message.className = "msg show pending";
+    message.textContent = "compongo il prompt…";
+    try {
+      const testo = await chiediPrompt(code);
+      annotaPromptConsegnato(code);
+      let copiato = true;
+      try {
+        await navigator.clipboard.writeText(testo.text || "");
+      } catch (erroreCopia) {
+        copiato = false;
+      }
+      message.className = copiato ? "msg show ok" : "msg show pending";
+      message.textContent = copiato
+        ? `prompt copiato (${(testo.text || "").length} caratteri): dallo a una corsia — la fase è già accettata, quindi è un tentativo NUOVO, non una riattivazione.`
+        : "la copia non è riuscita (il browser vuole la finestra a fuoco): il prompt è qui, copialo a mano dal riquadro.";
+      // Il prompt si apre SEMPRE: la copia è una comodità, non la consegna.
+      apriTesto(`${code} — il prompt`, testo.text, {
+        copia: true,
+        file: `prompt-${code}.md`,
+      });
+    } catch (error) {
+      message.className = "msg show err";
+      message.textContent = `non copiato: ${error.message}`;
+      bottone.disabled = false;
+    }
+  });
+  return bottone;
+}
+
 function attivaEConsegna(phase, message) {
   const bottone = h("button", { type: "button", class: "actbtn", text: "Attiva e copia il prompt" });
   bottone.addEventListener("click", async () => {
