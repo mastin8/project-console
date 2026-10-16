@@ -51,6 +51,8 @@ class Workspace:
     reports: str = "reports"
     queue: str = "PARALLEL-PROMPTS.md"
     transitions: str = "pending-transitions"
+    #: La posta in arrivo: i messaggi depositati interi, uno per file. Vedi `registers/inbox.py`.
+    inbox: str = "inbox"
     brand: str = "brand"
     view: str = "STATUS.html"
     deliverable_prefix: str = "reports/"
@@ -78,6 +80,10 @@ class Workspace:
     @property
     def transitions_dir(self) -> Path:
         return self.path(self.transitions)
+
+    @property
+    def inbox_dir(self) -> Path:
+        return self.path(self.inbox)
 
     def describe(self) -> str:
         return f"{self.project} — {self.surface} ({self.root})"

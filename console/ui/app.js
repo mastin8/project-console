@@ -113,6 +113,7 @@ function render(data) {
   renderQuestions(data.questions, data.decisions);
   renderNextPrompts(data.next_prompts);
   renderActivation(data);
+  renderInbox(data.inbox);
   renderTestimone(data);
   mostraPagina();
   renderClaims(data.claims);
@@ -938,6 +939,143 @@ function renderActivation(data) {
 /* LA PAGINA TESTIMONE: le dichiarazioni di chi ha consegnato, e chi non le ha lasciate. E' un
    corpus (202 voci sul progetto di origine), quindi ha filtro e ricerca, il testo CHIUSO, e le
    lacune col campo per scriverle. */
+
+/* LA POSTA IN ARRIVO: i messaggi depositati interi, e il modulo per depositarne uno. E' l'unica
+   parte della pagina che non legge i registri: legge una cartella di file di testo. Per questo
+   nulla di quello che si scrive qui puo' rompere lo stato vivo del progetto, ed e' il motivo per
+   cui un messaggio che arriva da una chat ha un posto dove stare. */
+function renderInbox(data) {
+  const box = $("#inbox");
+  const count = $("#inbox-count");
+  if (!box || !count) return;
+  const posta = data || { items: [], non_lavorate: 0, cartella: "inbox" };
+  const aperte = (posta.items || []).filter((voce) => voce.open);
+  const lavorate = (posta.items || []).filter((voce) => !voce.open);
+  count.textContent = posta.items.length
+    ? `${aperte.length ? `${aperte.length} da lavorare` : "niente da lavorare"} · ${lavorate.length} lavorate`
+    : "";
+  collegaModuloPosta();
+  if (!posta.items.length) {
+    box.replaceChildren(
+      h("p", { class: "empty" }, [
+        h("b", { text: "Posta vuota. " }),
+        document.createTextNode(
+          `Il deposito non è un registro: crea un file di testo in ${posta.cartella}/, uno per messaggio. Niente da leggere, niente da formattare.`
+        ),
+      ])
+    );
+    return;
+  }
+  const parti = [];
+  if (aperte.length) parti.push(postaGroup(`Da lavorare (${aperte.length})`, "warn", aperte));
+  if (lavorate.length) {
+    parti.push(
+      h("details", { class: "actbox" }, [
+        h("summary", { class: "acthead" }, [
+          h("b", { text: `Già lavorate (${lavorate.length})` }),
+          document.createTextNode(" — il report di quella fase è arrivato dopo la ricevuta."),
+        ]),
+        ...lavorate.map(postaRow),
+      ])
+    );
+  }
+  box.replaceChildren(...parti);
+}
+
+function postaGroup(titolo, tono, voci) {
+  return h("div", { class: "actbox" }, [
+    h("p", { class: `actgroup ${tono}` }, [h("b", { text: titolo })]),
+    ...voci.map(postaRow),
+  ]);
+}
+
+function postaRow(voce) {
+  const riga = h("div", { class: `actrow${voce.open ? " waiting" : ""}` });
+  const testo = h("div", { class: "acttext" });
+  testo.append(h("code", { class: "actcode", text: voce.phase || "(senza fase)" }));
+  testo.append(
+    document.createTextNode(
+      ` ${[
+        voce.kind,
+        voce.sender,
+        String(voce.when || "").slice(0, 16).replace("T", " "),
+        voce.open ? "da lavorare" : "lavorata",
+      ]
+        .filter(Boolean)
+        .join(" · ")}`
+    )
+  );
+  testo.append(
+    h("div", {
+      class: "actmeta",
+      text: `${voce.file} · ${voce.chars} caratteri${
+        voce.worked_by ? ` · lavorata da ${voce.worked_by}` : ""
+      }`,
+    })
+  );
+  riga.append(testo);
+  const azioni = h("div", { class: "actactions" });
+  azioni.append(
+    h("button", {
+      type: "button",
+      class: "actbtn",
+      text: "Leggi",
+      title: "il messaggio, intero",
+      onclick: () =>
+        apriTesto(`${voce.phase || voce.ricevuta} — messaggio in posta`, voce.text, {
+          copia: true,
+          file: `posta-${voce.ricevuta}.md`,
+        }),
+    })
+  );
+  riga.append(azioni);
+  return riga;
+}
+
+/* Il deposito: incolla, premi, non ci pensi più. Il messaggio non passa dai registri, quindi
+   questa è l'unica azione della pagina che non può far male a niente. */
+function collegaModuloPosta() {
+  const bottone = $("#inbox-salva");
+  if (!bottone || bottone.dataset.pronto) return;
+  bottone.dataset.pronto = "1";
+  const esito = $("#inbox-esito");
+  const dire = (tono, testo) => {
+    esito.className = `msg show ${tono}`;
+    esito.textContent = testo;
+  };
+  bottone.addEventListener("click", async () => {
+    const campo = $("#inbox-text");
+    const testo = campo.value.trim();
+    if (!testo) {
+      dire("err", "incolla il messaggio: una ricevuta vuota è peggio di nessuna ricevuta.");
+      return;
+    }
+    bottone.disabled = true;
+    dire("pending", "deposito…");
+    try {
+      const response = await fetch("/api/inbox", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          text: testo,
+          phase: $("#inbox-phase").value.trim(),
+          sender: "utente",
+        }),
+      });
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.error || `errore ${response.status}`);
+      campo.value = "";
+      $("#inbox-phase").value = "";
+      dire("ok", `depositato: ${payload.file} (${payload.caratteri} caratteri, intero).`);
+      await load();
+    } catch (error) {
+      dire("err", `non depositato: ${error.message}`);
+    } finally {
+      bottone.disabled = false;
+    }
+  });
+}
+
 let filtroTestimone = "aperte";
 let cercaTestimone = "";
 

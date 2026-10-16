@@ -49,6 +49,7 @@ sys.path.insert(0, str(ROOT))
 import apply_transitions  # noqa: E402
 import activate  # noqa: E402 - attivare: riserva la fase e deposita l'ordine
 import handoff  # noqa: E402 - cosa c'e' da fare dopo: il testimone lasciato da chi ha finito
+import inbox  # noqa: E402 - la posta in arrivo: i messaggi depositati interi, uno per file
 import mandate  # noqa: E402 - il prompt di una fase: dal quaderno, o composto dal registro
 import next_prompts  # noqa: E402 - una sola implementazione della regola, condivisa con STATUS.html
 import timeline  # noqa: E402 - la linea del tempo, con le date dichiarate dagli artefatti
@@ -329,6 +330,31 @@ class ReviewState:
                     if voce["items"]
                 ],
                 "gaps": handoff.lacune(self.workspace, state),
+            },
+            # La posta in arrivo: quello che e' arrivato e non e' ancora finito in un report. E'
+            # l'unico posto della pagina che non legge i registri — legge una cartella di
+            # messaggi — perche' un messaggio non deve morire solo perche' non ha un campo dove
+            # stare. Senza la cartella l'elenco e' vuoto e la pagina non finge niente.
+            "inbox": {
+                "cartella": self.workspace.inbox,
+                "non_lavorate": inbox.non_lavorate(self.workspace),
+                "items": [
+                    {
+                        "ricevuta": voce["ricevuta"],
+                        "file": voce["file"],
+                        "phase": voce["phase"],
+                        "unit": voce["unit"],
+                        "sender": voce["sender"],
+                        "kind": voce["kind"],
+                        "when": voce["received_at"],
+                        "text": voce["testo"],
+                        "chars": voce["caratteri"],
+                        "worked_by": voce["worked_by"],
+                        "closed": bool(voce["closed_at"]),
+                        "open": voce["aperta"],
+                    }
+                    for voce in inbox.voci(self.workspace, tutte=True)
+                ],
             },
             "activated": [
                 {
@@ -853,6 +879,32 @@ def build_handler(state):
 
         def do_POST(self):
             route = urlparse(self.path).path
+            if route == "/api/inbox":
+                # Depositare un messaggio nella posta: e' l'unica scrittura della pagina che non
+                # passa dai registri, e per questo non puo' rompere niente. Il testo si salva
+                # intero — la pagina non lo riassume e non lo interpreta.
+                length = int(self.headers.get("Content-Length") or 0)
+                try:
+                    payload = json.loads(self.rfile.read(length) or b"{}")
+                except json.JSONDecodeError as error:
+                    return self._json(400, {"error": f"JSON non valido: {error}"})
+                testo = str(payload.get("text") or "")
+                if not testo.strip():
+                    return self._json(400, {"error": "serve text: il messaggio da depositare"})
+                try:
+                    esito = inbox.archivia(
+                        state.workspace,
+                        testo,
+                        phase=str(payload.get("phase") or "").strip(),
+                        unit=str(payload.get("unit") or "").strip(),
+                        sender=str(payload.get("sender") or "").strip(),
+                        kind=str(payload.get("kind") or "").strip() or None,
+                    )
+                except ValueError as error:
+                    return self._json(400, {"error": str(error)})
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
+                return self._json(200, {"ok": True, **esito})
             if route == "/api/dispatch-draft":
                 length = int(self.headers.get("Content-Length") or 0)
                 try:

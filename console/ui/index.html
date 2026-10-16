@@ -69,6 +69,32 @@
       <div id="activation"></div>
     </section>
 
+    <!-- LA POSTA IN ARRIVO: quello che un agente ha scritto e che non e' (ancora) nel suo report.
+         Si incolla qui com'e' arrivato e resta intero. Nessun registro viene toccato: si scrive un
+         file di testo in `inbox/`. Una ricevuta e' lavorata quando esiste un report di quella fase
+         scritto dopo di lei: e' una misura, non una promessa. -->
+    <section id="inbox-section" data-page="adesso" aria-labelledby="inbox-head">
+      <div class="sec-head">
+        <h2 id="inbox-head">Posta in arrivo</h2>
+        <span class="count" id="inbox-count"></span>
+      </div>
+      <p class="hint">Il messaggio di un agente che non è (ancora) nel suo report: si incolla qui <b>come è arrivato</b> e non muore più. La pagina non lo riassume e non lo interpreta. Una ricevuta risulta <b>lavorata</b> quando esiste un report di quella fase scritto dopo di lei.</p>
+      <details class="explain" id="inbox-form-box">
+        <summary>Deposita un messaggio nella posta</summary>
+        <div class="inbox-form">
+          <label class="answer-label" for="inbox-phase">Fase o unità che riguarda (vuoto: non riguarda una fase)</label>
+          <input type="text" id="inbox-phase" placeholder="es. A11Y03R">
+          <label class="answer-label" for="inbox-text">Il messaggio, intero</label>
+          <textarea id="inbox-text" rows="6" placeholder="Incolla qui il messaggio dell'agente, così com'è."></textarea>
+          <div class="row">
+            <button type="button" id="inbox-salva">Archivia nella posta</button>
+            <span class="msg" id="inbox-esito" role="status" aria-live="polite"></span>
+          </div>
+        </div>
+      </details>
+      <div id="inbox"></div>
+    </section>
+
     <section id="testimone-section" data-page="testimone" aria-labelledby="testimone-head">
       <div class="sec-head">
         <h2 id="testimone-head">Cosa c'e' da fare dopo</h2>

@@ -349,6 +349,17 @@ body[data-page="percorso"] main [data-page="percorso"]{display:block}
   color:var(--ink);font:inherit;font-size:13px}
 #testimone .actquote{max-width:var(--measure)}
 
+/* La posta in arrivo: il modulo di deposito. Due campi e un pulsante, e il campo del messaggio
+   alto abbastanza da non doverlo leggere da una fessura: quello che si incolla deve restare
+   intero, e un testo che non si vede e' un testo che si perde. */
+.inbox-form{display:flex;flex-direction:column;gap:var(--s2);margin:var(--s3) 0 var(--s4);
+  max-width:var(--measure)}
+.inbox-form input[type="text"]{padding:var(--s2) var(--s3);border:1px solid var(--line-strong);
+  border-radius:var(--r-sm);background:var(--surface);color:var(--ink);font:inherit;font-size:13px}
+.inbox-form textarea{min-height:132px;font-size:13px}
+.inbox-form .row{margin-top:0}
+#inbox .actrow{grid-template-columns:minmax(0,1fr) auto}
+
 /* L'input: un pulsante per far partire una fase, e il modo di togliere la riserva. Righe, non
    schede: quello che si legge e' una lista di cose da attivare, non una collezione di oggetti. */
 .actbox{margin-top:var(--s4)}

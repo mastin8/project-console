@@ -156,6 +156,7 @@ Il coordinatore non indovina: conosce queste parole, e le altre le mostra come s
 | `questions.yaml` | no | le domande che aspettano l'utente |
 | `user_decisions.yaml` | no | le decisioni che appartengono solo all'utente |
 | `reports/` | no (lo crea lo scaffold) | le consegne e i puntatori |
+| `inbox/` | no | la posta in arrivo: i messaggi depositati interi, uno per file |
 | `agents/` | no | i ruoli e la mappa degli agenti |
 | `brand/logo.png` | no | il marchio nell'intestazione |
 
@@ -181,6 +182,9 @@ python3 registers/activate.py --workspace <progetto> --release <fase># toglie la
 python3 registers/sync_phases.py --workspace <progetto> [--apply]   # apre le fasi non ancora registrate
 python3 registers/validate_registries.py --workspace <progetto>
 python3 registers/next_prompts.py --workspace <progetto> [--json|--explain]
+python3 registers/handoff.py --workspace <progetto>                          # cosa c'e' da fare dopo
+python3 registers/inbox.py --workspace <progetto> --list [--tutte]           # la posta in arrivo
+python3 registers/inbox.py --workspace <progetto> --add --file <messaggio> [--phase <FASE>]
 python3 registers/static_view.py --workspace <progetto>             # la stessa cosa, in una pagina statica
 python3 registers/apply_transitions.py --workspace <progetto> --dir <progetto>/pending-transitions
 ```
@@ -221,7 +225,7 @@ report) non sta mai in pagina: si apre in un dialogo, con **Copia** e **Salva co
   *da rifare* (respinte in verifica), *da attivare*, *in attesa di un esecutore*. Una riga per cosa,
   un pulsante per riga: **Attiva** (deposita l'ordine e riserva la fase), **Copia il prompt**,
   **Salva come file**, **Leggi**, **Rilascia**. Sotto: le domande che aspettano te, chi sta lavorando
-  adesso, e le risposte che hai gia' dato.
+  adesso, e le risposte che hai gia' dato. E la **Posta in arrivo**: vedi qui sotto.
 - **Tempo** (`/tempo`) — il percorso nel tempo: blocchi, unita', fasi, con le barre datate da cio' che
   gli artefatti DICHIARANO (`published_at`) o, in mancanza, dall'mtime; e la riga dei commit del
   repository, con i commit che toccano i path dichiarati da ogni blocco. Nessuna previsione: solo
@@ -267,6 +271,45 @@ La riserva si toglie con **Rilascia** (o `--release`): la fase torna disponibile
 sul disco come prova di cosa era stato chiesto. Un ordine senza riserva viene cancellato da solo se
 la scrittura nel registro fallisce: non resta mai sul disco un ordine che qualcuno potrebbe
 raccogliere mentre la fase e' libera.
+
+## La posta in arrivo: perche' un messaggio non deve morire
+
+La piattaforma **non legge le chat**. Di quello che un agente scrive, arrivano in pagina solo le tre
+cose che hanno un campo: la presa, il rilascio, e il `next` del report. Tutto il resto — cosa ha
+consegnato, cosa non ha fatto, cosa serve dopo, cosa ha scoperto per strada — resta in un messaggio
+che nessuno archivia. Misurato sul primo progetto che ha usato questo strumento: 203 direzioni
+dichiarate nei report, e **41 consegne senza direzione**, cioe' 41 messaggi che contenevano qualcosa
+e non sono arrivati a nessun file.
+
+`inbox/` e' la cassetta dove quel messaggio si deposita **intero**. Un file per messaggio, il testo
+parola per parola, quattro righe di intestazione (chi, quando, quale fase, di che natura):
+
+```bash
+python3 registers/inbox.py --workspace <progetto> --list                    # cosa e' arrivato
+python3 registers/inbox.py --workspace <progetto> --add --file messaggio.md --phase <FASE>
+python3 registers/inbox.py --workspace <progetto> --chiudi <ricevuta> --nota "cosa ne e' stato"
+```
+
+Oppure dalla pagina, in **Posta in arrivo** (pagina *Adesso*): si incolla il messaggio e si preme un
+pulsante. Una ricevuta risulta **lavorata** quando esiste un report di quella fase che *dichiara* una
+data dopo di lei (`published_at`); se la fase non ha report datati, si ripiega sull'mtime. La data
+dichiarata, e non l'mtime, e' la misura giusta: un `git pull` o un checkout riscrivono l'mtime senza
+che nessuno abbia lavorato, e tutte le ricevute risulterebbero lavorate in un colpo. Quelle non
+lavorate stanno in cima, col loro numero.
+
+Tre scelte, e il motivo di ognuna:
+
+1. **Una cartella, non un registro.** I registri sono vivi e contesi: scriverci dentro richiede il
+   lock e la validazione, e una scrittura sbagliata ferma le corsie. Il deposito di un messaggio non
+   puo' rompere niente di vivo, e non c'e' nessun lock da prendere.
+2. **Un file di testo, non un campo.** Dentro un YAML ogni riga andrebbe quotata, e il primo apice
+   storto corrompe il messaggio che si voleva salvare. Il testo di un messaggio non si tocca.
+3. **Accetta anche i messaggi che non hanno una fase.** Un prompt nuovo, un'idea, un vincolo: nei
+   registri non avrebbero dove stare, in posta si'.
+
+La posta non e' un secondo quaderno e non sostituisce il report: e' il posto di quello che nel
+report non ci sta. La regola per gli agenti e' in `agents/CONTRATTO.md`, sezione 5, e arriva con lo
+scaffolder: un progetto nuovo la eredita senza che nessuno la riscriva.
 
 ## Il contratto di un workspace
 

@@ -84,15 +84,18 @@ def _testi(valore):
 
 
 def _momento(valore):
+    # Una data senza fuso si legge come ora LOCALE, come fa la linea del tempo (`timeline.parse_moment`
+    # + `local_date`): le date di questi registri le scrive chi lavora, col proprio orologio. Leggerle
+    # come UTC le sposterebbe di due ore e cambierebbe l'ordine delle dichiarazioni in pagina.
     if isinstance(valore, datetime):
-        return valore if valore.tzinfo else valore.replace(tzinfo=timezone.utc)
+        return valore if valore.tzinfo else valore.astimezone()
     testo = str(valore or "").strip().strip("'\"")
     for candidato in (testo, testo.replace(" ", "T", 1)):
         try:
             momento = datetime.fromisoformat(candidato)
         except ValueError:
             continue
-        return momento if momento.tzinfo else momento.replace(tzinfo=timezone.utc)
+        return momento if momento.tzinfo else momento.astimezone()
     return None
 
 

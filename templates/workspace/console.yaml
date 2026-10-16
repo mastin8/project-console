@@ -10,6 +10,7 @@ surface: "verifica del percorso"
 # reports: reports
 # queue: PARALLEL-PROMPTS.md
 # transitions: pending-transitions
+# inbox: inbox
 # brand: brand
 # view: STATUS.html
 # deliverable_prefix: reports/

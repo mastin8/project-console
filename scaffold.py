@@ -33,6 +33,7 @@ MAPPATURA = (
     ("user_decisions.yaml", "user_decisions.yaml", True),
     ("PARALLEL-PROMPTS.md", "PARALLEL-PROMPTS.md", True),
     ("pending-transitions/README.md", "pending-transitions/README.md", True),
+    ("inbox/README.md", "inbox/README.md", True),
     ("brand/README.md", "brand/README.md", True),
     ("agents/README.md", "agents/README.md", True),
     ("agents/CONTRATTO.md", "agents/CONTRATTO.md", True),
