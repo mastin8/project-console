@@ -1414,7 +1414,19 @@ function riservataRow(voce) {
   testo.append(
     h("div", {
       class: "actmeta",
-      text: `ordine ${voce.order || "\u2014"} \u00b7 riservata ${String(voce.since || "").slice(0, 16).replace("T", " ")}`,
+      text: `RISERVATA: l'ordine è depositato (${voce.order || "—"}) e nessuno l'ha ancora presa, dalle ${String(
+        voce.since || ""
+      )
+        .slice(11, 16)
+        .replace("T", " ")}.`,
+    })
+  );
+  // LA SEQUENZA, scritta per esteso. «Rilascia» sembrava il passo successivo a «Copia il prompt» e non
+  // lo è: è il contrario, l'annullamento. I passi sono due, e il secondo non è tuo.
+  testo.append(
+    h("div", {
+      class: "actmeta",
+      text: "1) copia il prompt e dallo a una corsia → 2) la corsia dichiara la presa e questa riga passa in «in corso». Qui non c'è altro da fare.",
     })
   );
   riga.append(testo);
@@ -1422,7 +1434,32 @@ function riservataRow(voce) {
   riga.append(
     h("div", { class: "actactions" }, [
       promptCopiaButton(voce.phase),
-      activationButton(voce.phase, "release", "Rilascia", message, false),
+      // «Annulla la riserva», non «Rilascia»: la fase torna libera e l'ordine resta sul disco come
+      // storia. Non serve per consegnare il prompt — serve solo se decidi che nessuno la farà.
+      h("button", {
+        type: "button",
+        class: "actbtn release",
+        text: "Annulla la riserva",
+        title:
+          "la fase torna libera e la si può riattivare; l'ordine resta sul disco. Non è un passo della consegna: è l'annullamento",
+        onclick: async () => {
+          try {
+            const risposta = await fetch("/api/activate", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ target: voce.phase, action: "release" }),
+            });
+            const payload = await risposta.json();
+            if (!risposta.ok) throw new Error(payload.error || `errore ${risposta.status}`);
+            message.className = "msg show ok";
+            message.textContent = "riserva annullata: la fase è di nuovo libera.";
+            setTimeout(load, 1500);
+          } catch (error) {
+            message.className = "msg show err";
+            message.textContent = `non fatto: ${error.message}`;
+          }
+        },
+      }),
     ]),
     message
   );
