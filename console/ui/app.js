@@ -582,7 +582,11 @@ function promptCard(prompt) {
         type: "button",
         class: "ghost",
         text: "Leggi il prompt",
-        onclick: () => apriTesto(`${prompt.anchor || "§" + prompt.number} — il prompt`, prompt.prompt, { copia: true }),
+        onclick: () =>
+          apriTesto(`${prompt.anchor || "§" + prompt.number} — il prompt`, prompt.prompt, {
+            copia: true,
+            file: `prompt-${prompt.anchor || prompt.number}.md`,
+          }),
       }),
       copy,
       ...attiva,
@@ -830,6 +834,14 @@ function apriTesto(titolo, testo, opzioni = {}) {
       }
     });
     azioni.append(copia, esito);
+  }
+  if (opzioni.file) {
+    // «Salva .md»: serve a isolare dove si rompe un testo. Se il file e' giusto e il testo incollato
+    // no, il difetto e' nel box che riceve — non nel prompt.
+    const indirizzo = URL.createObjectURL(new Blob([testo || ""], { type: "text/plain;charset=utf-8" }));
+    azioni.append(
+      h("a", { class: "ghost", href: indirizzo, download: opzioni.file, text: "Salva come file" })
+    );
   }
   if (!dialog.open) dialog.showModal();
 }
@@ -1167,7 +1179,7 @@ function promptLeggiButton(phase) {
     bottone.disabled = true;
     try {
       const payload = await chiediPrompt(phase);
-      apriTesto(`${phase} — il prompt`, payload.text, { copia: true });
+      apriTesto(`${phase} — il prompt`, payload.text, { copia: true, file: `prompt-${phase}.md` });
     } catch (error) {
       apriTesto(`${phase} — il prompt`, `non disponibile: ${error.message}`);
     } finally {
