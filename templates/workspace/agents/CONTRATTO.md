@@ -193,6 +193,23 @@ python3 registers/validate_registries.py --workspace .      # i registri sono le
 
 ### Indipendenza: vale la regola SCRITTA, non una piu' stretta
 
+### L'accettazione (`R`) e' un atto corto
+
+Giudicare non e' rimisurare. Quattro passi:
+
+1. **prima il cancello**, una volta: `registers/preflight.py --workspace . --phase <FASE>`. Se dice
+   `NON ANCORA`, non si scrive un atto: si deposita il motivo e ci si ferma. Un giudizio su una base
+   vecchia nasce respinto — dieci atti di ratifica su una sola unita', tutti per apparato;
+2. leggi i **criteri** dell'unita' e i **byte** che il tester ha misurato;
+3. **giudica**: accettato, accettato con limiti, respinto;
+4. dichiara **limiti e residui**, e cosa NON hai ripercorso col motivo.
+
+**Non** rieseguire le batterie del tester: rifarla e' la stessa misura due volte. Rimisuri solo cio'
+che dichiari di rimisurare. Se una prova manca, l'atto e' respinto con quella prova nominata.
+
+E le dipendenze: **da artefatti, non da firme.** Un'unita' di lavoro puo' aspettare il report di
+un'altra (E o T), mai la sua **accettazione**. Solo le unita' di integrazione guardano le `R`.
+
 Un atto di verifica o di accettazione deve essere **indipendente da chi ha eseguito**. Cosa vuol dire
 "indipendente" non lo decide chi scrive l'atto: lo decide il contratto del progetto, e quello che il
 progetto non ha scritto non e' una regola.

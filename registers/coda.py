@@ -68,7 +68,7 @@ def _momento(valore):
     return None
 
 
-def _richieste(ws):
+def richieste(ws):
     """Le richieste depositate e non ancora applicate, in ordine di arrivo (nome del file)."""
     fuori = []
     coda = ws.transitions_dir
@@ -152,7 +152,7 @@ def _registro_indietro(ws, state, limite: int = 8):
 def leggi(ws, adesso=None, limite_sospette: int = 12):
     """Cosa c'e' in coda, cosa non va applicato, e dove il registro e' indietro."""
     adesso = adesso or datetime.now().astimezone()
-    richieste = _richieste(ws)
+    elenco = richieste(ws)
     state = _leggi(ws.state_path)
     registrate = state.get("tasks") or {}
 
@@ -166,12 +166,12 @@ def leggi(ws, adesso=None, limite_sospette: int = 12):
 
     # 1) sostituite: stessa ancora e stesso campo, piu' di una volta. Vale l'ultima depositata.
     ultima = {}
-    for voce in richieste:
+    for voce in elenco:
         ultima[(voce["anchor"], voce["field"])] = voce["file"]
 
     # 2) l'ancora compare piu' volte nel file di destinazione e la richiesta non dice quale.
     occorrenze = {}
-    for percorso in {ws.path(voce["destinazione"] or ws.state) for voce in richieste}:
+    for percorso in {ws.path(voce["destinazione"] or ws.state) for voce in elenco}:
         try:
             testo = percorso.read_text(encoding="utf-8", errors="replace")
         except OSError:
@@ -180,7 +180,7 @@ def leggi(ws, adesso=None, limite_sospette: int = 12):
         occorrenze[percorso] = righe
 
     sospette = []
-    for voce in richieste:
+    for voce in elenco:
         motivi = []
         gemella = ultima.get((voce["anchor"], voce["field"]))
         if gemella and gemella != voce["file"]:
@@ -237,22 +237,22 @@ def leggi(ws, adesso=None, limite_sospette: int = 12):
             )
     sospette.sort(key=lambda voce: (not voce["grave"], voce["file"]))
 
-    per_fase = Counter(voce["fase"] or "(senza fase)" for voce in richieste)
-    ferme = [voce for voce in richieste if voce["at"] and adesso - voce["at"] > timedelta(hours=SOGLIA_ORE)]
+    per_fase = Counter(voce["fase"] or "(senza fase)" for voce in elenco)
+    ferme = [voce for voce in elenco if voce["at"] and adesso - voce["at"] > timedelta(hours=SOGLIA_ORE)]
     radice = str(ws.root)
     # I comandi: la COPIA per prima, perche' i registri di questo progetto NON sono tracciati da git
     # e non c'e' nessun «annulla». E la prova a vuoto su UNA richiesta sola: sui 129 file stamperebbe
     # il registro INTERO (2,3 MB) una volta per ciascuno.
-    prima = richieste[0]["percorso"] if richieste else "pending-transitions/<una-richiesta>.yaml"
+    prima = elenco[0]["percorso"] if elenco else "pending-transitions/<una-richiesta>.yaml"
     return {
-        "totale": len(richieste),
+        "totale": len(elenco),
         "ferme": len(ferme),
         "soglia_ore": SOGLIA_ORE,
         "piu_vecchia": min((voce["at"] for voce in richieste if voce["at"]), default=None),
         "per_fase": [[fase, numero] for fase, numero in per_fase.most_common(8)],
         "sospette": sospette[:limite_sospette],
         "sospette_totali": len(sospette),
-        "da_applicare": len(richieste) - len(sospette),
+        "da_applicare": len(elenco) - len(sospette),
         "indietro": _registro_indietro(ws, state),
         "comandi": {
             "copia": f"cd {radice} && cp state.yaml /tmp/state-prima-della-coda.yaml",

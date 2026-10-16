@@ -87,6 +87,10 @@ def componi(ws, fase, state=None, tasks_doc=None):
     registro = (state.get("tasks") or {}).get(fase) or {}
     tipo = str(task.get("kind") or "")
     ruolo = RUOLI.get(tipo, "esecuzione")
+    # L'ultima fase del ciclo e' l'accettazione: e' l'unica che GIUDICA invece di produrre, e per
+    # questo riceve istruzioni diverse — corte, con il cancello davanti.
+    atto_corto = str(task.get("id") or fase).endswith(str((ws.phases or ("R",))[-1]))
+    percorso_preflight = Path(__file__).resolve().parent / "preflight.py"
     attempt = 1
     numeri = [
         int(v.get("attempt") or 0)
@@ -158,10 +162,34 @@ def componi(ws, fase, state=None, tasks_doc=None):
         f"a mano: deposita in {ws.transitions}/ la presa con taken_by = il tuo nome canonico PRIMA",
         f"del primo byte, e la richiesta di rilascio alla fine (formato in {ws.transitions}/README.md).",
         "Se un'altra corsia l'ha gia' presa, fermati e dillo.",
-        "",
-        "VERIFICA: prova SOLO cio' che tocchi, UNA volta, subito prima di consegnare. Dichiara",
-        "comando, esito, durata e cio' che NON hai rieseguito, col motivo.",
-        "",
+    ]
+    if atto_corto:
+        # L'ACCETTAZIONE E' UN ATTO CORTO. Perche' la regola stia in piedi serve il cancello: senza,
+        # chi giudica spende il turno a scoprire che il puntatore e' indietro o che la revisione si e'
+        # mossa — misurato: dieci atti di ratifica respinti per apparato e zero informazioni di
+        # prodotto su una sola unita'.
+        righe += [
+            "",
+            "PRIMA DI GIUDICARE — IL CANCELLO (un comando, dieci secondi):",
+            f"    python3 {percorso_preflight} --workspace {ws.root} --phase {fase}",
+            "Se risponde PRONTA, giudica. Se risponde NON ANCORA, NON scrivere un atto: deposita il",
+            "motivo nel report e fermati — un giudizio su una base vecchia nasce respinto.",
+            "",
+            "L'ATTO, CORTO: (1) leggi i criteri di accettazione qui sopra; (2) leggi i byte che il",
+            "tester ha misurato; (3) giudica: accettato, accettato con limiti, oppure respinto;",
+            "(4) dichiara i limiti e i residui che lascia, e cosa NON hai ripercorso col motivo.",
+            "NON rieseguire le batterie del tester: la misura del comportamento e' la sua, e rifarla",
+            "e' la stessa misura due volte. Rimisura solo cio' che dichiari di rimisurare.",
+            "",
+        ]
+    else:
+        righe += [
+            "",
+            "VERIFICA: prova SOLO cio' che tocchi, UNA volta, subito prima di consegnare. Dichiara",
+            "comando, esito, durata e cio' che NON hai rieseguito, col motivo.",
+            "",
+        ]
+    righe += [
         "TESTIMONE: nel report scrivi `next` con cosa c'e' da fare dopo. Chi prende il lavoro da te",
         "lo deve leggere dalla pagina del coordinatore, non da una chat.",
     ]
