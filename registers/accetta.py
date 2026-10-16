@@ -117,12 +117,15 @@ def per(ws, fase, nota=None, firmatario="utente", dry_run=False):
         or "Nessuna direzione ulteriore: l'unita' si chiude su questo atto. Se qualcosa resta, va dichiarato qui.",
     }
     corpo = yaml.safe_dump(atto, allow_unicode=True, sort_keys=False)
+    # I nomi non si cablano: il percorso delle consegne lo dichiara il workspace
+    # (`deliverable_prefix`). Un progetto che chiama la sua cartella `esiti/` deve funzionare.
+    consegna = f"{ws.deliverable_prefix}{fase}/attempt-{numero}.yaml"
     puntatore = (
         "schema: project-console-report-pointer/1.0\n"
         f"task_id: {fase}\n"
         f"attempt: {numero}\n"
-        f"report: reports/{fase}/attempt-{numero}.yaml\n"
-        f"report_ref: reports/{fase}/attempt-{numero}.yaml\n"
+        f"report: {consegna}\n"
+        f"report_ref: {consegna}\n"
         "status: published\n"
         "verdict: accepted\n"
         f"published_at: '{adesso.isoformat(timespec='seconds')}'\n"
@@ -141,7 +144,7 @@ def per(ws, fase, nota=None, firmatario="utente", dry_run=False):
             richieste = [
                 {"field": "status", "text": "accepted"},
                 {"field": "attempt", "text": str(numero)},
-                {"field": "report", "text": f"reports/{fase}/attempt-{numero}.yaml"},
+                {"field": "report", "text": consegna},
             ]
             # La RISERVA dell'ordine (se c'era) non si tocca da qui: la sua voce nel registro ha lo
             # stesso ancoraggio di quella dei task, e scioglierla alla cieca sarebbe un'ambiguita'.
@@ -167,7 +170,7 @@ def per(ws, fase, nota=None, firmatario="utente", dry_run=False):
             fcntl.flock(maniglia, fcntl.LOCK_UN)
     return {
         "atto": str(destinazione.relative_to(ws.root)),
-        "puntatore": f"reports/{fase}.yaml",
+        "puntatore": f"{ws.deliverable_prefix}{fase}.yaml",
         "numero": numero,
         "registro": [f"status=accepted", f"attempt={numero}"],
         "firmatario": firmatario,

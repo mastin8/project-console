@@ -88,7 +88,28 @@ def main(argv=None):
         return 1
     failures = 0
     checked = 0
-    for name in REGISTRIES:
+    # I nomi li dichiara il workspace: un progetto che chiama il registro `registro.yaml` e le
+    # domande `domande.yaml` deve essere validato lo stesso. `console.yaml` si legge sempre (e' il
+    # file che dichiara i nomi); gli altri nomi convenzionali restano come ripiego.
+    nomi = list(REGISTRIES)
+    try:
+        import sys as _sys
+        from pathlib import Path as _Path
+
+        _sys.path.insert(0, str(_Path(__file__).resolve().parent.parent))
+        from workspace import Workspace as _Workspace
+
+        ws = _Workspace.load(root)
+        nomi += [
+            ws.state,
+            ws.tasks,
+            ws.questions,
+            ws.decisions,
+            ws.user_decisions,
+        ]
+    except Exception:  # noqa: BLE001 - senza configurazione si validano i nomi convenzionali
+        pass
+    for name in dict.fromkeys(nomi):
         path = os.path.join(root, name)
         if not os.path.exists(path):
             # Assente non e' rotto: si dichiara e si va avanti. Solo i registri che il workspace

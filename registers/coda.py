@@ -243,7 +243,8 @@ def leggi(ws, adesso=None, limite_sospette: int = 12):
     # I comandi: la COPIA per prima, perche' i registri di questo progetto NON sono tracciati da git
     # e non c'e' nessun «annulla». E la prova a vuoto su UNA richiesta sola: sui 129 file stamperebbe
     # il registro INTERO (2,3 MB) una volta per ciascuno.
-    prima = elenco[0]["percorso"] if elenco else "pending-transitions/<una-richiesta>.yaml"
+    prima = elenco[0]["percorso"] if elenco else f"{ws.transitions}/<una-richiesta>.yaml"
+    coordinatore = str(Path(__file__).resolve().parent.parent)
     return {
         "totale": len(elenco),
         "ferme": len(ferme),
@@ -259,9 +260,11 @@ def leggi(ws, adesso=None, limite_sospette: int = 12):
         "da_applicare": len(elenco) - len(sospette),
         "indietro": _registro_indietro(ws, state),
         "comandi": {
-            "copia": f"cd {radice} && cp state.yaml /tmp/state-prima-della-coda.yaml",
-            "prova": f"cd {radice} && python3 tools/apply_transitions.py {prima} --dry-run | head -40",
-            "applica": f"cd {radice} && python3 tools/registry_runner.py --once",
+            # I comandi usano il NOME dichiarato dal workspace e lo strumento del coordinatore: un
+            # progetto che chiama la coda `coda/` e il registro `registro.yaml` non deve tradurre.
+            "copia": f"cd {radice} && cp {ws.state} /tmp/{ws.state}-prima-della-coda.bak",
+            "prova": f"cd {radice} && python3 {coordinatore}/registers/apply_transitions.py --workspace . {prima} --dry-run | head -40",
+            "applica": f"cd {radice} && python3 {coordinatore}/registers/coda.py --workspace . --applica",
         },
         # Le stesse misure servono al pulsante «Applica la coda», che fa il lavoro al posto tuo.
         "da_applicare": len(elenco) - len(sospette),
