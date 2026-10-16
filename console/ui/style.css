@@ -336,6 +336,8 @@ button.linkish{background:none;border:0;padding:0;color:var(--ink-3);font-size:1
   text-underline-offset:3px;text-decoration-color:var(--line-strong)}
 .answers summary::-webkit-details-marker{display:none}
 .answers summary::before{content:"▸ ";font-size:11px}
+.answers .saidwhy{margin:var(--s1) 0 0;color:var(--ink-3);font-size:12.5px;max-width:var(--measure);
+  text-wrap:pretty}
 .answers details[open] summary::before{content:"▾ "}
 @media (hover:hover) and (pointer:fine){.answers summary:hover{color:var(--ink)}}
 
@@ -354,6 +356,35 @@ body[data-page="percorso"] main [data-page="percorso"]{display:block}
    `display:block` rimetterebbe in pagina i pannelli che la barra delle schede ha appena chiuso
    (l'attributo `hidden` da solo non basta, perche' la regola sopra e' piu' specifica di lui). */
 body[data-page="adesso"] main .scheda-pannello[hidden]{display:none}
+
+/* LA CODA DEI REGISTRI. Un avviso, non una decorazione: quando c'e', il registro e' indietro
+   rispetto ai file e ogni numero di questa pagina puo' essere vecchio. Sta sopra le schede perche'
+   vale per tutte, e sparisce quando la coda e' vuota — un avviso che c'e' sempre non si legge piu'.
+   Il tono e' quello di avvertenza del sistema (`--warn-soft`), senza strisce colorate di lato: il
+   riquadro si riconosce dal fondo e dall'etichetta. */
+.coda{margin:0 0 var(--s6);padding:var(--s4) var(--s5);border:1px solid var(--warn);
+  border-radius:var(--r-md);background:var(--warn-soft);max-width:var(--measure)}
+.coda-head{margin:0;font-size:13.5px;color:var(--warn)}
+.coda-head b{font-weight:650}
+.coda-head span{margin-left:var(--s25)}
+.coda-hint{margin:var(--s15) 0 0;font-size:13px;color:var(--ink-2);text-wrap:pretty}
+.coda-comandi{display:flex;align-items:center;gap:var(--s3);margin-top:var(--s4);flex-wrap:wrap}
+.coda-comandi .msg{margin:0}
+.coda-comandi-testo{margin:var(--s3) 0 0;padding:var(--s15) var(--s3);background:var(--surface);
+  border:1px solid var(--line);border-radius:var(--r-sm);overflow-x:auto;
+  font-family:var(--mono);font-size:12px;color:var(--ink-2);white-space:pre-wrap;
+  overflow-wrap:anywhere}
+.coda-riga{margin:var(--s3) 0 0;font-size:12.5px;color:var(--ink-3);font-family:var(--mono)}
+.coda-dettaglio{margin-top:var(--s25);font-size:13px}
+.coda-dettaglio summary{display:inline-block;cursor:pointer;list-style:none;color:var(--ink-2);
+  text-decoration:underline;text-underline-offset:3px;text-decoration-color:var(--line-strong)}
+.coda-dettaglio summary::-webkit-details-marker{display:none}
+.coda-dettaglio summary::before{content:"▸ ";font-size:11px}
+.coda-dettaglio[open] summary::before{content:"▾ "}
+.coda-elenco{margin:var(--s2) 0 0;padding-left:var(--s4);color:var(--ink-2)}
+.coda-elenco li{margin-top:var(--s1);text-wrap:pretty}
+.coda-elenco code{font-family:var(--mono);font-size:12px;color:var(--ink)}
+@media (hover:hover) and (pointer:fine){.coda-dettaglio summary:hover{color:var(--ink)}}
 
 /* ------------------------------------------------------------- le schede */
 /* Dentro «Adesso» c'e' piu' di una cosa da guardare: cosa fare, cosa e' arrivato, cosa aspetta te,

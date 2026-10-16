@@ -53,6 +53,7 @@ import handoff  # noqa: E402 - cosa c'e' da fare dopo: il testimone lasciato da 
 import inbox  # noqa: E402 - la posta in arrivo: i messaggi depositati interi, uno per file
 import mandate  # noqa: E402 - il prompt di una fase: dal quaderno, o composto dal registro
 import next_prompts  # noqa: E402 - una sola implementazione della regola, condivisa con STATUS.html
+import coda  # noqa: E402 - la coda delle transizioni: il registro che non sa cosa e' successo
 import rework  # noqa: E402 - quante volte una fase torna indietro, per la domanda in parole povere
 import timeline  # noqa: E402 - la linea del tempo, con le date dichiarate dagli artefatti
 from workspace import Workspace, lock_file  # noqa: E402 - il contratto dei nomi: qui non c'e' nessun progetto
@@ -406,6 +407,12 @@ class ReviewState:
                     for voce in inbox.voci(self.workspace, tutte=True)
                 ],
             },
+            # LA CODA DELLE TRANSIZIONI. Gli agenti non scrivono i registri: depositano richieste, e
+            # un programma le applica. Quando nessuno le applica, il registro racconta il passato — e
+            # con lui tutto quello che ci legge sopra, compresa questa pagina. Misurato il
+            # 2026-10-16: 129 richieste in coda, 93 depositate da piu' di dodici ore, e una fase
+            # consegnata alle 10:53 che il registro leggeva ancora «respinta, attempt 3».
+            "queue": coda.leggi(self.workspace),
             "activated": [
                 {
                     "phase": fase,

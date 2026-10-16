@@ -58,6 +58,25 @@
   </header>
 
   <main id="main">
+    <!-- LA CODA DELLE TRANSIZIONI, sopra le schede perché vale per tutte: quando e' piena, il
+         registro e' indietro rispetto ai file, e tutto quello che leggi in questa pagina — stato
+         delle fasi, respinte, ratifiche — puo' essere vecchio. Il contenuto lo scrive `renderCoda`:
+         se la coda e' vuota, questa sezione non si vede affatto. -->
+    <section id="coda-section" data-page="adesso" aria-labelledby="coda-head" hidden>
+      <div class="coda">
+        <p class="coda-head">
+          <b id="coda-head">Coda dei registri</b>
+          <span id="coda-numeri"></span>
+        </p>
+        <p class="coda-hint" id="coda-hint"></p>
+        <div class="coda-comandi">
+          <button type="button" class="ghost" id="coda-copia">Copia il comando</button>
+          <span class="msg" id="coda-esito" role="status" aria-live="polite"></span>
+        </div>
+        <div id="coda-liste"></div>
+      </div>
+    </section>
+
     <!-- LE SCHEDE DELLA PAGINA «ADESSO». Non e' una seconda navigazione: e' quello che c'e' dentro
          una pagina sola — cosa fare, cosa e' arrivato, cosa aspetta te, cosa sta andando, cosa hai
          gia' risposto. Il numero tondo dice quanto c'e' dentro PRIMA di aprirla: rosso per quello

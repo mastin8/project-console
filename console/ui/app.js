@@ -121,6 +121,7 @@ function render(data) {
   renderBlocks();
   renderTally(data);
   renderTabs(data);
+  renderCoda(data.queue);
   loadTimeline();
   refreshAge();
 }
@@ -835,6 +836,27 @@ function renderClaims(claims) {
 }
 
 function renderAnswered(answered) {
+  /* Una risposta si legge come una frase. Puo' arrivare come stringa, come alternativa scelta
+     (`{label, description}`), o — caso registrato sul campo — come STRINGA che CONTIENE quel
+     dizionario, perche' chi l'ha scritta nel registro l'ha serializzata cosi'. Il registro resta
+     quello che e'; qui si mostra il contenuto, non la sintassi: `{'label': 'Si fornisce una firma
+     distinta', …}` a schermo e' illeggibile proprio dove devi riconoscere cosa hai deciso. */
+  const leggibile = (valore) => {
+    if (!valore) return { testo: "", spiegazione: "" };
+    if (typeof valore === "object") {
+      return {
+        testo: String(valore.label || valore.answer || valore.testo || "").trim(),
+        spiegazione: String(valore.description || valore.consequence || "").trim(),
+      };
+    }
+    const testo = String(valore).trim();
+    const etichetta = testo.match(/'label':\s*'([^']*)'/);
+    if (etichetta) {
+      const descrizione = testo.match(/'description':\s*'([^']*)'/);
+      return { testo: etichetta[1], spiegazione: descrizione ? descrizione[1] : "" };
+    }
+    return { testo, spiegazione: "" };
+  };
   const box = $("#answered");
   if (!answered || !answered.length) {
     box.replaceChildren(
@@ -861,7 +883,13 @@ function renderAnswered(answered) {
                 .filter(Boolean)
                 .join(" · "),
             }),
-            h("p", { class: "said" }, [h("b", { text: "Hai risposto: " }), document.createTextNode(item.answer || "")]),
+            h("p", { class: "said" }, [
+              h("b", { text: "Hai risposto: " }),
+              document.createTextNode(leggibile(item.answer).testo),
+            ]),
+            leggibile(item.answer).spiegazione
+              ? h("p", { class: "saidwhy", text: leggibile(item.answer).spiegazione })
+              : null,
             item.question || item.context
               ? h("details", {}, [
                   h("summary", { text: "la domanda e il contesto registrato" }),
@@ -991,6 +1019,108 @@ function renderTabs(data) {
 }
 
 window.addEventListener("hashchange", () => scegliScheda(schedaDaIndirizzo(), false));
+
+/* LA CODA DELLE TRANSIZIONI. Gli agenti non scrivono i registri: depositano una richiesta per ogni
+   modifica, e un programma le applica. Finche' nessuno le applica, il registro racconta il passato —
+   e con lui questa pagina: lo stato delle fasi, le respinte, le ratifiche. Misurato il 2026-10-16:
+   129 richieste in coda, 93 ferme da piu' di dodici ore, e una fase consegnata alle 10:53 che il
+   registro leggeva ancora «respinta».
+
+   Perche' sta SOPRA le schede e non dentro una: vale per tutte. Se la coda e' vuota, non si vede:
+   un avviso che c'e' sempre e' un avviso che non si legge piu'. */
+function renderCoda(coda) {
+  const sezione = $("#coda-section");
+  if (!sezione) return;
+  const numeri = $("#coda-numeri");
+  const hint = $("#coda-hint");
+  const azioni = $("#coda-copia");
+  const liste = $("#coda-liste");
+  const esito = $("#coda-esito");
+  if (!coda || !coda.totale) {
+    sezione.hidden = true;
+    return;
+  }
+  sezione.hidden = false;
+  numeri.textContent = [
+    `${coda.totale} richieste mai applicate`,
+    coda.ferme ? `${coda.ferme} ferme da più di ${coda.soglia_ore} ore` : null,
+    coda.sospette_totali ? `${coda.sospette_totali} da guardare prima di applicare` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  hint.replaceChildren(
+    h("b", { text: "Il registro è indietro rispetto ai file. " }),
+    document.createTextNode(
+      `Le ${coda.totale} richieste degli agenti non sono ancora state applicate: stato delle fasi, respinte e ratifiche possono essere vecchi. `
+    ),
+    document.createTextNode("Applicarle non è una lettura: lo fa chi coordina, una volta sola, con gli strumenti del progetto.")
+  );
+
+  const comandi = `# 1. prova a vuoto: mostra cosa farebbe, non scrive\n${coda.comandi.prova}\n\n# 2. applica davvero: applica, archivia in applied/ e rigenera la vista\n${coda.comandi.applica}`;
+  azioni.replaceChildren(
+    h("button", { type: "button", class: "ghost", id: "coda-copia-bottone", text: "Copia i due comandi" })
+  );
+  $("#coda-copia-bottone").addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(comandi);
+      esito.className = "msg show ok";
+      esito.textContent = "copiati: incollali nel terminale del progetto, la prova prima.";
+    } catch (error) {
+      esito.className = "msg show err";
+      esito.textContent = `non copiati (${error.message}): il testo è qui sotto, selezionalo.`;
+    }
+  });
+
+  const parti = [];
+  parti.push(h("pre", { class: "coda-comandi-testo", text: comandi }));
+  if (coda.per_fase && coda.per_fase.length) {
+    parti.push(
+      h("p", {
+        class: "coda-riga",
+        text: `Le più numerose: ${coda.per_fase.map(([fase, n]) => `${fase} ${n}`).join(" · ")}`,
+      })
+    );
+  }
+  if (coda.indietro && coda.indietro.length) {
+    parti.push(
+      h("details", { class: "coda-dettaglio" }, [
+        h("summary", {
+          text: `Il registro è indietro su ${coda.indietro.length} fas${coda.indietro.length === 1 ? "e" : "i"}: cosa dicono il registro e i file`,
+        }),
+        h(
+          "ul",
+          { class: "coda-elenco" },
+          coda.indietro.map((voce) =>
+            h("li", {}, [
+              h("code", { text: voce.phase }),
+              document.createTextNode(` — registro: ${voce.registro}; file: ${voce.disco}`),
+            ])
+          )
+        ),
+      ])
+    );
+  }
+  if (coda.sospette && coda.sospette.length) {
+    parti.push(
+      h("details", { class: "coda-dettaglio" }, [
+        h("summary", {
+          text: `${coda.sospette_totali} richieste da guardare prima di applicare (le più vecchie sono quasi sempre sostituite da una più recente)`,
+        }),
+        h(
+          "ul",
+          { class: "coda-elenco" },
+          coda.sospette.map((voce) =>
+            h("li", {}, [
+              h("code", { text: voce.file }),
+              document.createTextNode(` — ${voce.motivi.join("; ")}`),
+            ])
+          )
+        ),
+      ])
+    );
+  }
+  liste.replaceChildren(...parti);
+}
 
 /* ------------------------------------------------------------- attivazione */
 /* PAGINE: intestazione e tastini restano su tutte; il contenuto cambia. La coda e' la pagina che si
