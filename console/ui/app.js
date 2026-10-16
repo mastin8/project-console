@@ -1401,10 +1401,10 @@ function codaRow(voce) {
     const chi = sorelle.join(", ");
     const suffisso = (voce.code.match(/([A-Z])$/) || [])[1] || "";
     const gesto = {
-      T: `Se fai girare i casi adesso, misuri byte che si stanno muovendo: derivali dal design e aspetta che ${chi} consegni.`,
-      R: `Se giudichi adesso, giudichi byte che si stanno muovendo: aspetta la consegna di ${chi} (o accetta dichiarando il limite).`,
-      E: `Attenzione: ${chi} lavora nella stessa unità. Due mani sugli stessi file è il difetto più caro: leggi i path che dichiara prima del primo byte.`,
-      A: `${chi} lavora nella stessa unità: puoi procedere, ma dichiara il perimetro sapendo che quei byte si muovono.`,
+      T: `Se fai girare i casi adesso, misuri byte che si stanno muovendo: derivali dal design e aspetta la consegna di ${chi}.`,
+      R: `Se giudichi adesso, giudichi byte che si stanno muovendo: aspetta la consegna di ${chi}, oppure accetta dichiarando il limite.`,
+      E: `Attenzione: nella stessa unità è al lavoro ${chi}. Due mani sugli stessi file è il difetto più caro: leggi i path dichiarati prima del primo byte.`,
+      A: `Nella stessa unità è al lavoro ${chi}: puoi procedere, ma dichiara il perimetro sapendo che quei byte si muovono.`,
     }[suffisso] || `Nella stessa unità c'è ${chi} in corso.`;
     testo.append(
       h("div", { class: "actmeta" }, [
