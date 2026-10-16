@@ -1387,6 +1387,23 @@ function codaRow(voce) {
   if (titolo) testo.append(document.createTextNode(` ${titolo}`));
   const traccia = rigaConsegna(voce.code);
   if (traccia) testo.append(traccia);
+  // LA STESSA UNITA' CON UN'ALTRA FASE IN CORSO. Non si vieta (il tester puo' derivare i casi dal
+  // design mentre l'esecuzione lavora) ma si dice: misurare adesso significa misurare byte che si
+  // muovono — ed e' la classe di difetto che ha bruciato undici atti su `UPL04ZR`.
+  const unita = (voce.code.match(/^[A-Z]+[0-9]+/) || [""])[0];
+  const sorelle = ((snapshot && snapshot.claims) || [])
+    .filter((altra) => altra.task_id !== voce.code && String(altra.task_id).startsWith(unita))
+    .map((altra) => altra.task_id);
+  if (sorelle.length) {
+    testo.append(
+      h("div", { class: "actmeta" }, [
+        h("b", { class: "warnnote", text: "unità già in corso: " }),
+        document.createTextNode(
+          `${sorelle.join(", ")}. Se misuri adesso, misuri byte che si stanno muovendo: deriva i casi e aspetta la sua consegna.`
+        ),
+      ])
+    );
+  }
   const dentro = [];
   if (voce.perche) {
     dentro.push(
@@ -3067,22 +3084,36 @@ function unitRow(unit) {
 
 /* Una fase, sempre la stessa forma: la usano il percorso e la linea del tempo. */
 function phaseButton(phase) {
+  // Se il registro e' in ritardo ma il file di consegna c'e', la pagina mostra QUELLO che ha
+  // misurato: il file. Mai un indice vecchio al posto del fatto (2026-10-16: cinque fasi
+  // consegnate su disco comparivano come `pending`, cioe' «da mandare» mentre il lavoro era fatto).
+  const consegnata = phase.delivered && phase.status !== "accepted";
+  const etichetta = consegnata
+    ? `consegnata${phase.delivery_attempt ? ` (t${phase.delivery_attempt})` : ""}`
+    : phase.status;
+  const ritardo = phase.register_behind
+    ? ` Il registro dice «${phase.status}${phase.attempt ? ` t${phase.attempt}` : ""}», il file dice t${phase.delivery_attempt}: indice in ritardo, non lavoro mancante.`
+    : "";
   return h(
     "button",
     {
       type: "button",
       class: "phase",
-      "data-status": phase.status,
+      "data-status": consegnata ? "delivered" : phase.status,
       "data-report": phase.report || "",
-      "aria-label": `${phase.id}, ${phase.kind || phase.title || ""}: ${phase.status}${
+      "data-delivered": phase.delivered ? "true" : "false",
+      "aria-label": `${phase.id}, ${phase.kind || phase.title || ""}: ${etichetta}${
         phase.attempt ? `, tentativo ${phase.attempt}` : ""
-      }. ${phase.report ? "Apri il report." : "Nessun report pubblicato."}`,
+      }. ${phase.report ? "Apri il report." : "Nessun report pubblicato."}${ritardo}`,
     },
     [
       h("span", { class: "dot", "aria-hidden": "true" }),
       h("span", { class: "step", text: phase.suffix }),
-      document.createTextNode(phase.status),
-      phase.attempt ? h("span", { class: "when", text: `t${phase.attempt}` }) : null,
+      document.createTextNode(etichetta),
+      (phase.delivery_attempt || phase.attempt)
+        ? h("span", { class: "when", text: `t${phase.delivery_attempt || phase.attempt}` })
+        : null,
+      phase.register_behind ? h("span", { class: "when", text: "indice in ritardo" }) : null,
     ]
   );
 }

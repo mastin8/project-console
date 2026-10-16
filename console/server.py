@@ -42,6 +42,47 @@ def _carica(flusso):
 ROOT = Path(__file__).resolve().parent.parent
 UI_DIR = Path(__file__).resolve().parent / "ui"
 CONSOLE_BRAND = Path(__file__).resolve().parent / "brand"
+
+
+def consegna_misurata(workspace, task_id):
+    """La consegna MISURATA sui FILE, non sulla riga del registro.
+
+    Perche' esiste, misurato il 2026-10-16: cinque fasi avevano report e puntatore su disco mentre
+    la riga diceva `pending` / `attempt 0` (QA05A, ZIP02A, HIST01A, NAV03R, REG03R) — la pagina
+    leggeva solo il registro e le mostrava come non consegnate, quindi il prompt sembrava ancora da
+    mandare mentre il lavoro era fatto e consegnato. La riga e' un INDICE: quando e' in ritardo,
+    quello che conta e' il file. Chi decide non deve mai dipendere da un indice aggiornato a mano.
+
+    Ritorna `delivered`, `path`, `attempt` (il piu' alto fra i file `attempt-N.yaml`) e
+    `pointer_attempt` (quello dichiarato dal puntatore). Nessuna scrittura: sola lettura.
+    """
+    root = Path(workspace.root)
+    prefix = str(getattr(workspace, "deliverable_prefix", "reports/"))
+    cartella = root / prefix / str(task_id)
+    attempt = 0
+    path = None
+    for candidate in sorted(cartella.glob("attempt-*.yaml")) if cartella.is_dir() else []:
+        trovato = re.search(r"attempt-(\d+)\.yaml$", candidate.name)
+        if trovato and int(trovato.group(1)) > attempt:
+            attempt, path = int(trovato.group(1)), candidate
+    pointer = root / f"{prefix}{task_id}.yaml"
+    pointer_attempt = None
+    if pointer.is_file():
+        try:
+            dichiarato = _carica(pointer.read_text(encoding="utf-8")) or {}
+            pointer_attempt = dichiarato.get("attempt")
+        except yaml.YAMLError:
+            pointer_attempt = None
+        if path is None:
+            path = pointer
+    return {
+        "delivered": path is not None,
+        "path": str(path.relative_to(root)) if path else None,
+        "attempt": attempt,
+        "pointer_attempt": pointer_attempt,
+    }
+
+
 #: Il codice del coordinatore (questo repo) e quello dei registri (il workspace) sono due cose:
 #: il primo si importa da qui, il secondo non si importa affatto — si legge.
 sys.path[:0] = [str(ROOT), str(ROOT / "registers"), str(Path(__file__).resolve().parent)]
@@ -147,6 +188,10 @@ class ReviewState:
                     continue
                 task_id = task.get("id")
                 registered = tasks.get(task_id) or {}
+                # La riga del registro puo' essere in ritardo: la consegna si MISURA sui file, e
+                # `register_behind` dice che le due cose non coincidono invece di nasconderlo.
+                consegna = consegna_misurata(self.workspace, task_id)
+                registrato_attempt = registered.get("attempt") or 0
                 phases.append(
                     {
                         "id": task_id,
@@ -154,8 +199,23 @@ class ReviewState:
                         "kind": PHASE_KIND.get(task.get("kind"), task.get("kind")),
                         "title": task.get("title"),
                         "status": registered.get("status", "pending"),
-                        "attempt": registered.get("attempt", 0),
+                        "attempt": registrato_attempt,
                         "report": registered.get("report"),
+                        "delivered": consegna["delivered"],
+                        "delivery_path": consegna["path"],
+                        "delivery_attempt": consegna["attempt"] or consegna["pointer_attempt"],
+                        # Una divergenza DICHIARATA (`pointer_attempt_declared`) e' una scelta, non
+                        # un ritardo: la voce accettata resta sull'attempt accettato mentre sul disco
+                        # c'e' un tentativo successivo. Misurato il 2026-10-16 su A11Y03T (accettata
+                        # t3, file t5, dichiarata) — se la si segnalasse come «indice in ritardo» si
+                        # manderebbe qualcuno a «riparare» una voce corretta.
+                        "pointer_attempt_declared": registered.get("pointer_attempt_declared"),
+                        "register_behind": bool(
+                            consegna["delivered"]
+                            and (consegna["attempt"] or consegna["pointer_attempt"] or 0)
+                            > int(registrato_attempt or 0)
+                            and not registered.get("pointer_attempt_declared")
+                        ),
                     }
                 )
             order = {key: index for index, key in enumerate(PHASES)}

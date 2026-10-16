@@ -137,6 +137,29 @@ def componi(ws, fase, state=None, tasks_doc=None):
     if criteria:
         righe += ["", "CRITERI DI ACCETTAZIONE (dal registro):"]
         righe += [f"- {str(c).strip()}" for c in criteria]
+    # DUE FASI DELLA STESSA UNITA' INSIEME. La catena A -> E -> T -> R e' una catena perche' ogni
+    # fase MISURA l'output della precedente. Il registro non lo impone (le dipendenze dichiarate sono
+    # fra unita'), e la pagina offriva le fasi in parallelo: misurato il 2026-10-16, ZIP02E e ZIP02T
+    # prese nello stesso minuto. Non si vieta — la pratica del pack e' che il tester DERIVI i casi dal
+    # design prima di vedere l'esecuzione — ma si dice cosa non si puo' fare: misurare su byte che si
+    # stanno muovendo. E' la classe di difetto che ha bruciato `UPL04ZR` per undici atti.
+    unita_di = str(task.get("unit_id") or "")
+    altre = [
+        str(voce.get("task_id"))
+        for voce in state.get("active_claims") or []
+        if str(voce.get("task_id") or "").startswith(unita_di)
+        and str(voce.get("task_id")) != str(fase)
+        and voce.get("status") in ("active", "taken", "active_extension")
+        and not str(voce.get("released_at") or "").strip()
+    ]
+    if altre:
+        righe += [
+            "",
+            f"ATTENZIONE — QUESTA UNITA' HA UN'ALTRA FASE IN CORSO: {', '.join(sorted(set(altre)))}.",
+            "Derivare i casi dal design adesso va bene; MISURARE no. Aspetta che quella fase consegni:",
+            "il tuo verdetto nomina la revisione che hai misurato, e se i byte si muovono sotto la",
+            "corsa, l'atto nasce vecchio e va rifatto (e' costato undici atti su una sola unita').",
+        ]
     righe += [
         "",
         "COSA FARE (il registro non lo dice: va scritto qui prima di cominciare)",
