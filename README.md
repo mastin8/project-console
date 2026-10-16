@@ -194,6 +194,21 @@ Il servizio manda `index.html`, `app.js` e `style.css` con `Cache-Control: no-st
 `git pull` un ricaricamento normale basta, e non si finisce a guardare pulsanti che nel file non ci
 sono piu'.
 
+### Il lock deve essere QUELLO delle corsie del progetto
+
+La pagina scrive sui registri (una risposta, una decisione, un'attivazione) passando da un lock
+esclusivo. Perche' quel lock serva, deve essere **lo stesso file** che usano le corsie del progetto:
+
+```bash
+CONSOLE_REGISTRY_LOCK=/tmp/binche-registry.lock python3 console/server.py --workspace <progetto>
+```
+
+Se il progetto non lo dichiara, il coordinatore ne calcola uno suo (`/tmp/project-console-<hash>.lock`)
+e **due scrittori finiscono su due lucchetti diversi**: il lock c'e', ma non serializza niente.
+E' successo il 2026-10-16 su Binche — la pagina girava da ore con il lock calcolato mentre le corsie
+usavano `/tmp/binche-registry.lock`: misurato leggendo l'ambiente del processo. Il nome si dichiara
+anche con `BINCHE_REGISTRY_LOCK`, che e' quello dei progetti gia' avviati.
+
 ## Se un progetto ha gia' un punto d'ingresso suo
 
 Capita che un progetto abbia imparato un comando proprio — per esempio

@@ -191,6 +191,32 @@ python3 registers/validate_registries.py --workspace .      # i registri sono le
 | **Un ordine superato si dichiara DENTRO l'ordine** (un campo che comincia per `stale`) | la pagina lo riconsegna, e chi lo riceve brucia un turno per rifiutarlo |
 | **Non riconsegnare un ordine che un tentativo ha gia' consumato**: se ne deposita uno nuovo | chi lo riceve lavora su byte e criteri di prima, e il suo atto nasce vecchio |
 
+### Indipendenza: vale la regola SCRITTA, non una piu' stretta
+
+Un atto di verifica o di accettazione deve essere **indipendente da chi ha eseguito**. Cosa vuol dire
+"indipendente" non lo decide chi scrive l'atto: lo decide il contratto del progetto, e quello che il
+progetto non ha scritto non e' una regola.
+
+L'errore da non ripetere, misurato il 2026-10-16: un progetto scrive «Accettazione analista distinta
+dall'esecutore», le corsie traducono "distinta" in «un canonico diverso da quello della sessione di
+coordinamento» — e su una macchina in cui ogni agente discende dalla stessa radice quella firma
+**non puo' esistere**. Risultato: dieci atti di ratifica respinti uno dopo l'altro per lo stesso
+residuo, con la motivazione «non sei un altro», mentre nessuna regola scritta lo chiedeva.
+
+Quindi, quando un atto di verifica e' in dubbio:
+
+1. **cerca la regola nel contratto** del progetto (`tasks.yaml`, `definition_of_done`, i criteri di
+   accettazione dell'unita'). Se dice «distinto dall'esecutore», il metro e' quello: chi non ha
+   scritto quei byte soddisfa il criterio, anche se discende dalla stessa radice;
+2. **se nel registro trovi una richiesta piu' stretta** (per esempio «nessun discendente di X»),
+   quella e' una richiesta IN PIU': **dichiara la contraddizione** col contratto nel tuo atto e vai
+   avanti sul metro scritto. Non ti bloccare su una regola che nessuno ha scritto, e non riscriverti
+   addosso che il criterio non e' soddisfatto;
+3. **se davvero serve una distanza maggiore**, quella e' una decisione di governo: si chiede a chi
+   decide (`user_decisions.yaml`), non si applica da soli in attesa che qualcun altro la indovini.
+
+Un blocco che nessuno puo' sciogliere dall'interno non e' rigore: e' lavoro fermo.
+
 ## Le domande che fai all'utente
 
 Una domanda si scrive per farla capire a chi deve rispondere, non per dimostrare che hai capito tu.
