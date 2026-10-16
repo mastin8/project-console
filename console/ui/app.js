@@ -1837,7 +1837,9 @@ function misuraRow(misura) {
   const riga = h("div", { class: "actmeta" }, [
     h("b", { text: `${misura.tentativi} tentativi · ${misura.respinte} respinte` }),
     document.createTextNode(
-      primo
+      misura.solo_firma
+        ? ` · l'ostacolo che torna è la FIRMA, non il prodotto: ${primo ? primo.id : ""}`
+        : primo
         ? ` · lo stesso ostacolo in ${primo.volte} su ${misura.tentativi}: ${primo.id}${
             primo.bloccante ? " (bloccante)" : ""
           }`
@@ -1852,8 +1854,17 @@ function misuraRow(misura) {
   if (misura.ripetuta) {
     parti.push(
       h("div", { class: "actmeta" }, [
-        h("b", { class: "warnnote", text: "questo non si sblocca con un altro tentativo" }),
-        document.createTextNode(" — l'ostacolo torna identico in ogni prova."),
+        h("b", {
+          class: "warnnote",
+          text: misura.solo_firma
+            ? "si sblocca in un modo solo: chi firma non deve aver eseguito quei byte"
+            : "questo non si sblocca con un altro tentativo",
+        }),
+        document.createTextNode(
+          misura.solo_firma
+            ? " — non è un lavoro da rifare: è una condizione. Il prompt qui sotto va dato a una corsia che quei byte non li ha scritti."
+            : " — l'ostacolo torna identico in ogni prova."
+        ),
       ])
     );
   }

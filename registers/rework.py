@@ -50,6 +50,19 @@ SOGLIA = 3
 #: l'R1 dell'atto 7 sono due cose diverse. Misurato: senza questa distinzione NAV03R risultava con
 #: «lo stesso ostacolo in 6 su 6: R1», che e' falso.
 STABILE = re.compile(r"^[A-Z][A-Z0-9]*(-[A-Z0-9]+)+$")
+#: Un ostacolo che riguarda la FIRMA, non il prodotto: non e' lavoro da rifare, e' una condizione.
+#: Serve a dirlo in pagina, perche' e' la differenza fra «rifai» e «serve qualcuno che firmi» — e
+#: chi legge una riga che dice «non si sblocca con un altro tentativo» su una cosa che si sblocca (con
+#: una firma) non sa cosa fare.
+FIRMA = re.compile(r"signature|firmat|firma|indipendenz|independence|indipendent", re.I)
+#: Il report dichiara che la sostanza e' chiusa e resta solo la firma. E' la sua frase, non una mia
+#: lettura: «nessuno per la sostanza: chiuso da questo atto sui byte di …; la sola parte viva e'
+#: l'indipendenza della firma». Serve a non scrivere «rifai» ne' «non si sblocca» su una cosa che si
+#: sblocca in un modo preciso.
+CHIUSA_SALVO_FIRMA = re.compile(
+    r"nessuno per la sostanza|la sola parte viva|chiuso da questo atto|resta (solo|soltanto) la firma",
+    re.I,
+)
 
 
 def _carica(testo):
@@ -163,6 +176,10 @@ def per_fase(ws, fasi=None, soglia: int = SOGLIA):
                 voce["volte"] += 1
                 voce["ultima"] = percorso.name
                 voce["bloccante"] = voce["bloccante"] or residuo["bloccante"]
+                voce["firma"] = bool(
+                    FIRMA.search(voce["id"] + " " + residuo["nota"] + " " + residuo["chi"])
+                )
+                voce["chiude"] = bool(CHIUSA_SALVO_FIRMA.search(residuo["nota"] + " " + residuo["chi"]))
                 # L'ultima dichiarazione vince: chi deve un residuo puo' cambiare da un atto
                 # all'altro, e quello che conta e' cosa dice l'atto piu' recente.
                 for campo in ("chi", "prima_di", "nota"):
@@ -177,6 +194,11 @@ def per_fase(ws, fasi=None, soglia: int = SOGLIA):
             if stabile(voce["id"]) and voce["volte"] >= max(2, int(soglia))
         ]
         ricorrenti.sort(key=lambda voce: (-voce["volte"], not voce["bloccante"], voce["id"]))
+        # «Solo la firma»: tutti gli ostacoli che tornano riguardano la firma. Vuol dire che il
+        # prodotto non e' in discussione: manca una condizione. E' il caso misurato di `UPL04ZR`
+        # (11 respinte, `DISTINCT-SIGNATURE`), ed e' l'unico caso in cui la riga non deve dire
+        # «rifai» ne' «non si sblocca».
+        solo_firma = any(voce["chiude"] and voce["firma"] for voce in ricorrenti)
         ultimo = tentativi[-1]
         precedenti = set()
         for percorso in tentativi[:-1]:
@@ -203,6 +225,7 @@ def per_fase(ws, fasi=None, soglia: int = SOGLIA):
                 len(tentativi) >= max(2, int(soglia))
                 and any(voce["volte"] >= len(tentativi) - 1 for voce in ricorrenti)
             ),
+            "solo_firma": solo_firma,
         }
     return fuori
 
