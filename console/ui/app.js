@@ -146,19 +146,83 @@ function renderQuestions(questions, decisions) {
 /* Una decisione di governo: la domanda, il perché è tua, le misure che la sostengono (chiuse, in
    un `details`, perché sono lunghe) e il controllo per registrarla. Se la voce dichiara le
    alternative si scelgono; altrimenti si scrive. Nessuna opzione dedotta dalla prosa. */
+/* «IN PAROLE POVERE»: cosa la domanda tocca davvero, e in che stato sono quelle cose ADESSO.
+
+   Perché esiste. Il 2026-10-15 l'utente ha risposto a una domanda sulle ratifiche scegliendo «si
+   fornisce una firma distinta»: la domanda non diceva che, senza una seconda firma, quelle quattro
+   ratifiche sarebbero rimaste respinte per sempre — e non esisteva. I numeri c'erano tutti nel
+   registro; mancavano accanto alla domanda, dove servivano. Qui non si riscrive il testo di chi
+   chiede (quello resta suo, parola per parola): si mettono i numeri che la piattaforma misura. */
+function parolePovere(item) {
+  const tocca = item.tocca || [];
+  const firme = item.firme;
+  const scope = item.blocked_scope;
+  if (!tocca.length && !firme && !scope) return null;
+  const parti = [];
+  if (tocca.length) {
+    parti.push(
+      h("p", {}, [
+        h("b", { text: tocca.length === 1 ? "Di cosa si parla: " : `Cosa tocca (${tocca.length}): ` }),
+        document.createTextNode(tocca.map(rigaTocca).join(" · ")),
+      ])
+    );
+  }
+  if (scope) {
+    parti.push(h("p", {}, [h("b", { text: "Resta fermo finché non rispondi: " }), document.createTextNode(scope)]));
+  }
+  if (firme) {
+    const quante =
+      firme.distinte === 0
+        ? "nessuna presa con un titolare nominato"
+        : firme.distinte === 1
+          ? "una sola"
+          : `${firme.distinte}`;
+    parti.push(
+      h("p", {}, [
+        h("b", { text: `Firme nel registro: ${quante}. ` }),
+        document.createTextNode(
+          (firme.elenco.length ? `${firme.elenco.map((voce) => `${voce.chi} (${voce.prese} prese)`).join(", ")}. ` : "") +
+            (firme.distinte <= 1
+              ? "Una firma distinta non esiste ancora: una risposta che la pretende la deve anche creare, altrimenti quelle fasi restano respinte."
+              : "")
+        ),
+      ])
+    );
+  }
+  return h("div", { class: "plain" }, parti);
+}
+
+function rigaTocca(voce) {
+  const pezzi = [`${voce.code} — ${voce.status}`];
+  if (voce.respinte > 1) pezzi.push(`respinta ${voce.respinte} volte su ${voce.tentativi}`);
+  if (voce.ostacolo) pezzi.push(`ostacolo «${voce.ostacolo}»${voce.bloccante ? " bloccante" : ""}`);
+  if (voce.chi) {
+    const chi = voce.chi.length > 90 ? `${voce.chi.slice(0, 87)}…` : voce.chi;
+    pezzi.push(`lo deve: ${chi}`);
+  }
+  return pezzi.join(", ");
+}
+
 function governanceCard(item) {
   const options = item.options || [];
   const fieldset = options.length
     ? h("fieldset", { class: "opts" }, [
         h("legend", { text: "Scegli una risposta" }),
         ...options.map((option, index) => {
+          const voce = typeof option === "string" ? { label: option, description: "" } : option;
           const input = h("input", {
             type: "radio",
             name: `gov-${item.id}`,
-            value: option,
+            value: voce.label,
             id: `gov-${item.id}-${index}`,
           });
-          return h("label", { class: "opt" }, [input, h("span", { text: option })]);
+          return h("label", { class: "opt" }, [
+            input,
+            h("span", {}, [
+              h("b", { text: voce.label }),
+              voce.description ? h("i", { class: "optwhy", text: ` — ${voce.description}` }) : null,
+            ]),
+          ]);
         }),
       ])
     : null;
@@ -182,6 +246,7 @@ function governanceCard(item) {
         class: "qmeta",
         text: `${item.id} · decisione di governo · non è il compito di un task: la prendono solo gli umani`,
       }),
+      parolePovere(item),
       h("p", { class: "ask", text: item.question || "" }),
       item.why
         ? h("p", { class: "why" }, [
@@ -625,13 +690,22 @@ setInterval(refreshAge, 30000);
 function questionCard(question) {
   const fieldset = h("fieldset", { class: "opts" }, [h("legend", { text: "Scegli una risposta" })]);
   (question.options || []).forEach((option, index) => {
+    const voce = typeof option === "string" ? { label: option, description: "" } : option;
     const input = h("input", {
       type: "radio",
       name: `opt-${question.id}`,
-      value: option,
+      value: voce.label,
       id: `opt-${question.id}-${index}`,
     });
-    fieldset.append(h("label", { class: "opt" }, [input, h("span", { text: option })]));
+    fieldset.append(
+      h("label", { class: "opt" }, [
+        input,
+        h("span", {}, [
+          h("b", { text: voce.label }),
+          voce.description ? h("i", { class: "optwhy", text: ` — ${voce.description}` }) : null,
+        ]),
+      ])
+    );
   });
 
   const textarea = h("textarea", {
@@ -650,6 +724,7 @@ function questionCard(question) {
       class: "qmeta",
       text: `${question.id} · aperta il ${question.asked_on || "?"} · blocca ${(question.blocks || []).join(", ") || "—"}`,
     }),
+    parolePovere(question),
     h("p", { class: "ask", text: question.question || "" }),
     question.why
       ? h("p", { class: "why" }, [h("b", { text: "Perché è aperta: " }), document.createTextNode(question.why)])
@@ -1286,18 +1361,32 @@ function activationRow(voce, attesa, rilasciabile, apriPrompt) {
   // brucia il turno di chi lo riceve. Attivare ne deposita uno nuovo.
   const mandato = voce.mandato;
   if (mandato && mandato.scaduto) {
+    // Due casi, e la differenza conta: un ordine dichiarato scaduto e un ordine GIA' ESEGUITO. Il
+    // secondo e' quello che ha bloccato tutto il 2026-10-16: lo stesso mandato consegnato a cinque
+    // attivazioni, mentre gli atti pubblicati dopo di lui lo avevano gia' consumato.
+    const eseguito = (mandato.consumato_da || []).length;
+    const atti = (mandato.consumato_da || [])
+      .slice(-3)
+      .map((nome) => nome.replace("attempt-", "").replace(".yaml", ""))
+      .join(", ");
     testo.append(
       h("div", { class: "actmeta" }, [
-        h("b", { class: "warnnote", text: "mandato scaduto" }),
+        h("b", { class: "warnnote", text: eseguito ? "mandato già eseguito" : "mandato scaduto" }),
         document.createTextNode(
-          mandato.consegnato_a
-            ? ` — già consegnato a ${mandato.consegnato_a} attivazion${
-                mandato.consegnato_a === 1 ? "e" : "i"
-              }: chi l'ha ricevuto l'ha rifiutato. Attivare deposita un ordine NUOVO, con le impronte di adesso.`
-            : " — l'ordine si dichiara superato al proprio interno. Attivare deposita un ordine NUOVO, con le impronte di adesso."
+          eseguito
+            ? ` — ${eseguito} atti lo hanno già consumato (attempt ${atti}). Riconsegnarlo manda qualcuno a rifare un lavoro su byte di prima: attivare deposita un ordine NUOVO, col prompt e le impronte di adesso.`
+            : " — l'ordine si dichiara superato al proprio interno. Attivare deposita un ordine NUOVO, col prompt e le impronte di adesso."
         ),
       ])
     );
+    if (mandato.consegnato_a > 1) {
+      testo.append(
+        h("div", {
+          class: "actmeta",
+          text: `questo mandato è già stato consegnato a ${mandato.consegnato_a} attivazioni.`,
+        })
+      );
+    }
   }
   riga.append(testo);
   const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });

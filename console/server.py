@@ -22,6 +22,7 @@ import fcntl
 import hashlib
 import json
 import os
+import re
 import subprocess
 import sys
 from datetime import datetime, timezone
@@ -52,6 +53,7 @@ import handoff  # noqa: E402 - cosa c'e' da fare dopo: il testimone lasciato da 
 import inbox  # noqa: E402 - la posta in arrivo: i messaggi depositati interi, uno per file
 import mandate  # noqa: E402 - il prompt di una fase: dal quaderno, o composto dal registro
 import next_prompts  # noqa: E402 - una sola implementazione della regola, condivisa con STATUS.html
+import rework  # noqa: E402 - quante volte una fase torna indietro, per la domanda in parole povere
 import timeline  # noqa: E402 - la linea del tempo, con le date dichiarate dagli artefatti
 from workspace import Workspace, lock_file  # noqa: E402 - il contratto dei nomi: qui non c'e' nessun progetto
 
@@ -217,19 +219,33 @@ class ReviewState:
             if c.get("status") in LIVE_STATUSES and not c.get("released_at")
         ]
 
-        open_questions = [
-            {
-                "id": q.get("id"),
-                "topic": q.get("topic"),
-                "question": q.get("question"),
-                "why": q.get("why_unresolved"),
-                "options": q.get("suggested_answers") or [],
-                "asked_on": q.get("asked_on"),
-                "blocks": q.get("affected_tasks") or [],
-            }
-            for q in (questions.get("questions") or [])
-            if q.get("status") == "asked"
-        ]
+        open_questions = []
+        for q in questions.get("questions") or []:
+            if q.get("status") != "asked":
+                continue
+            opzioni = self._opzioni(q.get("suggested_answers"))
+            # «In parole povere»: i codici che la domanda nomina, col loro stato misurato, e le
+            # firme del registro quando la scelta riguarda l'indipendenza. Il testo resta quello di
+            # chi l'ha scritta; i numeri no, perche' i numeri li ha la piattaforma.
+            testi = [q.get("topic"), q.get("question"), q.get("why_unresolved"), q.get("blocked_scope")]
+            testi += [voce["label"] + " " + voce["description"] for voce in opzioni]
+            testi += list(q.get("affected_tasks") or [])
+            open_questions.append(
+                {
+                    "id": q.get("id"),
+                    "topic": q.get("topic"),
+                    "question": q.get("question"),
+                    "why": q.get("why_unresolved"),
+                    "options": opzioni,
+                    "asked_on": q.get("asked_on"),
+                    "blocks": q.get("affected_tasks") or [],
+                    "blocked_scope": q.get("blocked_scope"),
+                    "tocca": self._tocca(testi, state, tasks_doc),
+                    "firme": self._firme(state)
+                    if re.search(r"firm|indipend|ratific", " ".join(str(t or "") for t in testi), re.I)
+                    else None,
+                }
+            )
         answered = [
             {
                 "id": q.get("id"),
@@ -251,22 +267,32 @@ class ReviewState:
         # Le decisioni di governo: appartengono all'utente, non a un task, e stanno in un file a
         # parte proprio per questo. La sezione «Cosa aspetta te» le mostra accanto alle domande.
         decisions_doc = self._load(self.workspace.user_decisions) or {}
-        open_decisions = [
-            {
-                "id": item.get("id"),
-                "topic": item.get("topic"),
-                "question": item.get("question"),
-                "evidence": item.get("evidence"),
-                "why": item.get("why_yours"),
-                # Se la voce dichiara le alternative, la pagina le offre come scelte; se non le
-                # dichiara, si scrive la decisione con parole proprie. Nessuna opzione inventata
-                # dal testo della domanda: dedurle dalla prosa sarebbe attribuire all'utente
-                # alternative che nessuno ha scritto.
-                "options": item.get("options") or [],
-            }
-            for item in decisions_doc.get("decisions") or []
-            if item.get("status") != "closed"
-        ]
+        open_decisions = []
+        for item in decisions_doc.get("decisions") or []:
+            if item.get("status") == "closed":
+                continue
+            # Se la voce dichiara le alternative, la pagina le offre come scelte; se non le dichiara,
+            # si scrive la decisione con parole proprie. Nessuna opzione inventata dal testo della
+            # domanda: dedurle dalla prosa sarebbe attribuire all'utente alternative che nessuno ha
+            # scritto. La `description` di ogni alternativa e' quello che succede scegliendola, ed e'
+            # la parte che nell'UD-5 mancava.
+            opzioni = self._opzioni(item.get("options"))
+            testi = [item.get("topic"), item.get("question"), item.get("why_yours"), item.get("evidence")]
+            testi += [voce["label"] + " " + voce["description"] for voce in opzioni]
+            open_decisions.append(
+                {
+                    "id": item.get("id"),
+                    "topic": item.get("topic"),
+                    "question": item.get("question"),
+                    "evidence": item.get("evidence"),
+                    "why": item.get("why_yours"),
+                    "options": opzioni,
+                    "tocca": self._tocca(testi, state, tasks_doc),
+                    "firme": self._firme(state)
+                    if re.search(r"firm|indipend|ratific", " ".join(str(t or "") for t in testi), re.I)
+                    else None,
+                }
+            )
         closed_decisions = [
             {
                 "id": item.get("id"),
@@ -754,6 +780,89 @@ class ReviewState:
             if decision.get("id") == decision_ref:
                 return decision.get("statement_context")
         return None
+
+    # ------------------------------------------------------- la domanda, in parole povere
+    def _tocca(self, testi, state, tasks_doc):
+        """I codici che una domanda nomina, ciascuno col suo stato MISURATO.
+
+        Perche' esiste. Una domanda che chiede di scegliere parla di cose che hanno un nome nel
+        registro — `UPL04ZR`, `NAV03R` — e chi risponde ha il diritto di sapere in che stato sono
+        PRIMA di scegliere. Il 2026-10-15 l'utente ha risposto a una domanda sulle ratifiche senza
+        che nulla gli dicesse che quella risposta le avrebbe lasciate respinte per sempre, e la
+        misura era li': dieci atti respinti per la stessa ragione, un agente solo in tutto l'albero.
+        Il testo della domanda non si riscrive e non si riassume — quello lo scrive chi la pone —
+        ma i numeri li mette la piattaforma, perche' quelli sono suoi.
+        """
+        registrate = state.get("tasks") or {}
+        noti = {str(t.get("id")) for t in tasks_doc.get("tasks") or [] if t.get("id")}
+        testo = " ".join(str(t or "") for t in testi)
+        parole = set(re.findall(r"[A-Z][A-Z0-9]{2,}", testo))
+        nominati = sorted(noti & parole)
+        if not nominati:
+            return []
+        misure = rework.per_fase(self.workspace, nominati) if nominati else {}
+        fuori = []
+        for codice in nominati[:6]:
+            misura = misure.get(codice) or {}
+            ostacolo = (misura.get("ricorrenti") or [{}])[0]
+            fuori.append(
+                {
+                    "code": codice,
+                    "status": (registrate.get(codice) or {}).get("status", "pending"),
+                    "tentativi": misura.get("tentativi", 0),
+                    "respinte": misura.get("respinte", 0),
+                    "ostacolo": ostacolo.get("id") or "",
+                    "bloccante": bool(ostacolo.get("bloccante")),
+                    "chi": ostacolo.get("chi") or "",
+                }
+            )
+        return fuori
+
+    def _firme(self, state):
+        """Chi firma nel registro, e quante volte: la misura che decide le domande sull'indipendenza.
+
+        La domanda `UD-5` chiedeva se fornire una firma distinta da `/root` o accettare il debito; la
+        risposta e' stata «si fornisce una firma distinta», ma nel registro le firme restano una
+        sola, e le quattro ratifiche sono ancora li'. Questo conto, accanto alla domanda, l'avrebbe
+        detto subito: si legge dai campi di presa, non si deduce.
+        """
+        conta = {}
+        for voce in state.get("active_claims") or []:
+            chi = str(voce.get("taken_by") or "").strip()
+            if not chi[:1].isalnum() and not chi.startswith("/"):
+                continue
+            canonico = "/".join(chi.split("/")[:2]) if chi.startswith("/") else chi.split("(")[0].strip()
+            if not canonico:
+                continue
+            conta[canonico] = conta.get(canonico, 0) + 1
+        elenco = sorted(conta.items(), key=lambda coppia: -coppia[1])
+        return {
+            "distinte": len(elenco),
+            "elenco": [{"chi": chi, "prese": n} for chi, n in elenco[:6]],
+        }
+
+    @staticmethod
+    def _opzioni(valore):
+        """Le alternative di una domanda o di una decisione, sempre come `label` + `description`.
+
+        Sul progetto di origine convivono due forme — la stringa secca e il dizionario con la
+        spiegazione — e la pagina le trattava come stringhe: un dizionario finiva a schermo come
+        «[object Object]», e la spiegazione, che e' la parte che serve a decidere, spariva.
+        """
+        fuori = []
+        for voce in valore or []:
+            if isinstance(voce, dict):
+                fuori.append(
+                    {
+                        "label": str(voce.get("label") or voce.get("answer") or "").strip(),
+                        "description": str(
+                            voce.get("description") or voce.get("consequence") or voce.get("what") or ""
+                        ).strip(),
+                    }
+                )
+            else:
+                fuori.append({"label": str(voce).strip(), "description": ""})
+        return [voce for voce in fuori if voce["label"]]
 
 
 def build_handler(state):

@@ -290,6 +290,44 @@ attivazioni, e **sette sessioni** l'hanno ricevuto e rifiutato — ognuna spende
 per scrivere che quell'ordine era morto. Un tool che riconsegna un mandato scaduto brucia il lavoro
 di chi lo riceve.
 
+E c'e' un secondo modo, che non dipende da nessuna dichiarazione: **un ordine e' consumato quando un
+tentativo della sua fase e' stato pubblicato dopo di lui.** Il mandato ha gia' prodotto il suo atto;
+riconsegnarlo significa dare a qualcuno un ordine che parla di byte e criteri di prima. La pagina lo
+misura da sola (data dell'ordine contro data dichiarata dagli attempt) e non lo riconsegna:
+attivare deposita un ordine nuovo, che dichiara dentro di se' quale sostituisce (`replaces`).
+
+Misurato il 2026-10-16 sul progetto di origine: **dodici ordini aperti su diciotto erano consumati**,
+e i tre che l'utente vedeva «fallire sempre» erano quelli con piu' consegne: lo stesso mandato di
+`NAV03R` riconsegnato a cinque attivazioni, quello di `TODO03E` a quattro, quello di `UPL04ZR` a tre.
+Ogni nuovo esecutore riceveva un ordine scritto prima del lavoro che doveva fare.
+
+## Le domande: prima in parole povere, poi il testo
+
+Una domanda che chiede di scegliere parla di cose che nel registro hanno un nome, e chi risponde ha
+il diritto di sapere in che stato sono **prima** di scegliere. Sopra il testo della domanda — che
+resta quello di chi l'ha scritta, parola per parola, perche' riscriverlo sarebbe mettere in bocca a
+qualcun altro una cosa che non ha detto — la pagina mette tre righe misurate:
+
+```
+Di cosa si parla: UPL04ZR — needs_changes, respinta 10 volte su 10, ostacolo
+  «UPL04Z-T-ON-CURRENT-REVISION» bloccante, lo deve: UPL04ZT attempt 2
+Resta fermo finché non rispondi: la ratifica di UPL04Z e la chiusura dell'unità
+Firme nel registro: una sola, /root (187 prese). Una firma distinta non esiste
+  ancora: una risposta che la pretende la deve anche creare, altrimenti quelle
+  fasi restano respinte.
+```
+
+Perche' esiste, e non e' un'ipotesi: il 2026-10-15 l'utente ha risposto a una domanda sulle ratifiche
+scegliendo «si fornisce una firma distinta», e la domanda non diceva che — senza una seconda firma,
+che non esisteva — quelle quattro ratifiche sarebbero rimaste respinte per sempre. Gli servivano tre
+numeri: chi tocca, cosa resta fermo, quante firme ci sono. Ora li ha.
+
+Le tre righe si costruiscono cosi': i codici che la domanda nomina (confrontati con i task del
+registro, non indovinati), il loro stato con respinte e ostacolo ricorrente, lo `blocked_scope`
+dichiarato, e — quando la scelta riguarda firme o indipendenza — quante firme distinte risultano
+dalle prese nel registro. Dove una domanda non dichiara `blocked_scope` o le opzioni senza
+`description`, la pagina mostra quello che c'e': completare il resto tocca a chi la pone.
+
 ## Quando una fase non si sblocca con un altro tentativo
 
 «Respinta in verifica» non distingue una fase respinta ieri dalla prima volta da una che torna

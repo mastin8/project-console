@@ -189,6 +189,37 @@ python3 registers/validate_registries.py --workspace .      # i registri sono le
 | **Lascia il testimone** (`next` / `next_tasks`) | la pagina mostra «consegna senza direzione» |
 | **Quello che non entra in un report va in `inbox/`** | resta in una chat, cioe' in nessun posto: non lo legge nessuno |
 | **Un ordine superato si dichiara DENTRO l'ordine** (un campo che comincia per `stale`) | la pagina lo riconsegna, e chi lo riceve brucia un turno per rifiutarlo |
+| **Non riconsegnare un ordine che un tentativo ha gia' consumato**: se ne deposita uno nuovo | chi lo riceve lavora su byte e criteri di prima, e il suo atto nasce vecchio |
+
+## Le domande che fai all'utente
+
+Una domanda si scrive per farla capire a chi deve rispondere, non per dimostrare che hai capito tu.
+Il testo resta tuo e non viene riscritto: ma **prima** del testo la piattaforma mette tre righe che
+deve poter misurare, quindi la domanda deve dichiararle.
+
+| Campo | Cosa contiene | Se manca |
+| --- | --- | --- |
+| `blocked_scope` | in una riga, cosa resta fermo finché non arriva la risposta | la pagina non puo' dire cosa si sta perdendo ad aspettare |
+| `affected_tasks` | i codici delle fasi toccate | non si vedono respinte e ostacoli di quelle fasi |
+| `options[].label` | l'alternativa, in poche parole | — |
+| `options[].description` | **cosa succede scegliendola**, incluse le conseguenze scomode | la pagina mostra l'alternativa senza il suo prezzo, e chi risponde sceglie alla cieca |
+
+La `description` e' la parte che conta di piu': una domanda che offriva «si fornisce una firma
+distinta» senza dire che quella firma *non esisteva* e che le ratifiche sarebbero rimaste respinte
+per sempre ha prodotto una risposta che ha bloccato quattro fasi. Se un'alternativa ha un prezzo,
+il prezzo va scritto li':
+
+```yaml
+options:
+- label: "Si fornisce una firma distinta"
+  description: >-
+    Serve una sessione con un canonico diverso da `/root`, che oggi NON esiste: finche' non c'e',
+    le quattro ratifiche restano respinte (misurato: 10 atti, stesso ostacolo).
+- label: "Si accetta il debito dichiarato"
+  description: >-
+    Le ratifiche si chiudono subito, ma come atti NON indipendenti, col debito scritto nel registro
+    e nel gate finale.
+```
 
 ## Un ciclo completo, minimo
 

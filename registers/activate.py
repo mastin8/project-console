@@ -156,7 +156,20 @@ def _motivo_scaduto(documento):
 
 
 def mandati(ws):
-    """Ogni ordine in coda, col motivo per cui e' scaduto: {percorso: motivo o None}."""
+    """Ogni ordine in coda, col suo stato: {percorso: {"scaduto", "consumato_da", "quando"}}.
+
+    Due modi perche' un ordine non vada piu' consegnato, e sono due misure diverse:
+
+    * **si dichiara scaduto**: chi si accorge che il lavoro ordinato e' atterrato altrove lo scrive
+      dentro l'ordine, con un campo che comincia per `stale`;
+    * **e' consumato**: un tentativo della fase e' stato pubblicato DOPO la data dell'ordine. Il
+      mandato ha gia' prodotto il suo atto: riconsegnarlo significa dare a qualcuno un ordine che
+      parla di byte e criteri di prima, e chi lo riceve lo rifiuta — oppure, peggio, lo esegue.
+
+    La seconda misura e' quella che il 2026-10-16 spiegava dodici ordini aperti su diciotto: lo
+    stesso mandato di `NAV03R` riconsegnato a cinque attivazioni, quello di `TODO03E` a quattro,
+    quello di `UPL04ZR` a tre, con le fasi respinte ogni volta su un oggetto che si era mosso.
+    """
     fuori = {}
     coda = ws.path("dispatch-queue")
     if not coda.is_dir():
@@ -166,9 +179,69 @@ def mandati(ws):
             documento = _carica(percorso.read_text(encoding="utf-8")) or {}
         except (yaml.YAMLError, OSError):
             continue
-        if isinstance(documento, dict):
-            fuori[str(percorso.relative_to(ws.root))] = _motivo_scaduto(documento)
+        if not isinstance(documento, dict):
+            continue
+        quando = _quando_ordine(documento, percorso)
+        fase = str(documento.get("code") or documento.get("task_id") or "")
+        fuori[str(percorso.relative_to(ws.root))] = {
+            "scaduto": _motivo_scaduto(documento) or "",
+            "consumato_da": _tentativi_dopo(ws, fase, quando) if fase and quando else [],
+            "quando": quando.isoformat() if quando else "",
+            "fase": fase,
+        }
     return fuori
+
+
+def _momento(valore):
+    """Una data dichiarata. Senza fuso vale come ora locale, come in tutto il resto del tool."""
+    if isinstance(valore, datetime):
+        return valore if valore.tzinfo else valore.astimezone()
+    testo = str(valore or "").strip().strip("'\"")
+    for candidato in (testo, testo.replace(" ", "T", 1)):
+        if not candidato:
+            continue
+        try:
+            momento = datetime.fromisoformat(candidato.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        return momento if momento.tzinfo else momento.astimezone()
+    return None
+
+
+def _quando_ordine(documento, percorso):
+    """Quando un ordine e' stato depositato: la sua data dichiarata, o l'mtime del file."""
+    for campo in ("activated_at", "requested_at", "prompt_frozen_at", "prepared_at"):
+        momento = _momento(documento.get(campo))
+        if momento:
+            return momento
+    try:
+        return datetime.fromtimestamp(percorso.stat().st_mtime).astimezone()
+    except OSError:
+        return None
+
+
+def _tentativi_dopo(ws, fase, quando):
+    """Gli attempt di quella fase pubblicati DOPO l'ordine: il mandato e' gia' stato eseguito."""
+    if not fase or not quando:
+        return []
+    cartella = ws.reports_dir / str(fase)
+    if not cartella.is_dir():
+        return []
+    dopo = []
+    for tentativo in sorted(cartella.glob("attempt-*.yaml")):
+        try:
+            documento = _carica(tentativo.read_text(encoding="utf-8", errors="replace")) or {}
+        except (yaml.YAMLError, OSError):
+            documento = {}
+        momento = _momento(documento.get("published_at") or documento.get("prepared_at"))
+        if momento is None:
+            try:
+                momento = datetime.fromtimestamp(tentativo.stat().st_mtime).astimezone()
+            except OSError:
+                continue
+        if momento > quando:
+            dopo.append(tentativo.name)
+    return dopo
 
 
 def _spedizioni(state, fase):
@@ -200,7 +273,7 @@ def attivabili(ws, state=None, tasks_doc=None):
     registrate = state.get("tasks") or {}
     vive = prese(state)
     ordini = ordini_aperti(ws)
-    scaduti = {percorso: motivo for percorso, motivo in mandati(ws).items() if motivo}
+    stato_ordini = mandati(ws)
     unita = {str(u.get("id")): u for u in tasks_doc.get("units") or [] if u.get("id")}
     per_id = {str(t.get("id")): t for t in tasks_doc.get("tasks") or [] if t.get("id")}
 
@@ -264,7 +337,7 @@ def attivabili(ws, state=None, tasks_doc=None):
                 "orders": ordini.get(fase, []),
                 # Il mandato che questa attivazione consegnerebbe: se e' scaduto, la pagina lo dice
                 # e `attiva` ne deposita uno NUOVO invece di riconsegnare quello morto.
-                "mandato": _mandato_di(ordini.get(fase, []), scaduti, _spedizioni(state, fase)),
+                "mandato": _mandato_di(ordini.get(fase, []), stato_ordini, _spedizioni(state, fase)),
                 # Il file di consegna e' il PROSSIMO tentativo, non sempre il primo: un rifacimento
                 # che chiedesse `attempt-1` chiederebbe di riscrivere un artefatto consegnato.
                 "deliverable": f"{ws.deliverable_prefix}{fase}/attempt-{prossimo_tentativo(state, fase)}.yaml",
@@ -274,23 +347,32 @@ def attivabili(ws, state=None, tasks_doc=None):
     return fuori
 
 
-def _mandato_di(percorsi, scaduti, spedizioni):
+def _riusabile(stato):
+    """Un ordine si puo' riconsegnare solo se non e' scaduto e non e' gia' stato eseguito."""
+    return not stato.get("scaduto") and not stato.get("consumato_da")
+
+
+def _mandato_di(percorsi, stato_ordini, spedizioni):
     """L'ordine che verrebbe consegnato, riusabile o scaduto, con quante volte e' gia' andato.
 
     Fra piu' ordini aperti si sceglie l'ultimo RIUSABILE: se il piu' recente e' scaduto, quello che
     conta e' che esiste un ordine ancora vivo da consegnare.
     """
-    riusabili = [percorso for percorso in percorsi if percorso not in scaduti]
+    riusabili = [percorso for percorso in percorsi if _riusabile(stato_ordini.get(percorso) or {})]
     if riusabili:
         scelto = riusabili[-1]
     elif percorsi:
         scelto = percorsi[-1]
     else:
         return None
+    stato = stato_ordini.get(scelto) or {}
     return {
         "path": scelto,
-        "scaduto": bool(scaduti.get(scelto)),
-        "motivo": scaduti.get(scelto) or "",
+        "scaduto": not _riusabile(stato),
+        "motivo": stato.get("scaduto") or "",
+        # Gli attempt pubblicati dopo l'ordine: e' la misura del «gia' eseguito». I nomi, non un
+        # numero, perche' in pagina si legge quali atti hanno consumato il mandato.
+        "consumato_da": stato.get("consumato_da") or [],
         "consegnato_a": spedizioni.get(scelto, 0),
     }
 
@@ -541,8 +623,10 @@ def attiva(ws, fase, dry_run=False):
     # rifiuterebbe, e il turno e' perso. Misurato il 2026-10-16 su `TODO03E`: quattro attivazioni
     # sullo stesso mandato morto, sette sessioni spese a rifiutarlo.
     esistenti = voce.get("orders") or []
-    scaduti = {percorso: motivo for percorso, motivo in mandati(ws).items() if motivo}
-    riusabili = [percorso for percorso in esistenti if percorso not in scaduti]
+    stato_ordini = mandati(ws)
+    riusabili = [
+        percorso for percorso in esistenti if _riusabile(stato_ordini.get(percorso) or {})
+    ]
     percorso = (ws.root / riusabili[-1]) if riusabili else _order_path(ws, fase)
     # L'ancora si calcola PRIMA di scrivere l'ordine: se il registro non la regge (per esempio
     # `active_claims` vuoto su un progetto al primo giorno) si fallisce senza lasciare un ordine
@@ -552,6 +636,18 @@ def attiva(ws, fase, dry_run=False):
         return {"order": str(percorso), "order_body": ordine, "applied": []}
     if not riusabili:
         percorso.parent.mkdir(parents=True, exist_ok=True)
+        if esistenti:
+            # La catena resta leggibile: chi trova questo ordine sa quale sostituisce e perche'.
+            precedente = esistenti[-1]
+            stato = stato_ordini.get(precedente) or {}
+            ordine["replaces"] = precedente
+            ordine["replaces_why"] = (
+                f"l'ordine precedente si dichiara scaduto: {stato.get('scaduto')[:200]}"
+                if stato.get("scaduto")
+                else "l'ordine precedente era gia' stato eseguito: "
+                f"{len(stato.get('consumato_da') or [])} atti pubblicati dopo di lui "
+                f"({', '.join(stato.get('consumato_da') or [])[:120]})"
+            )
         percorso.write_text(
             yaml.safe_dump(ordine, allow_unicode=True, sort_keys=False), encoding="utf-8"
         )

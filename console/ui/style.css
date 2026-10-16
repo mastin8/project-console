@@ -360,6 +360,16 @@ body[data-page="percorso"] main [data-page="percorso"]{display:block}
 .inbox-form .row{margin-top:0}
 #inbox .actrow{grid-template-columns:minmax(0,1fr) auto}
 
+/* «In parole povere»: cosa tocca una domanda e in che stato sono quelle cose ADESSO. Sta prima del
+   testo di chi chiede, perche' e' quello che serve per decidere; il testo lungo viene dopo. */
+.plain{margin:var(--s3) 0;padding-left:var(--s3);border-left:2px solid var(--accent);
+  max-width:var(--measure);font-size:13px;color:var(--ink-2)}
+.plain p{margin:0 0 var(--s2)}
+.plain p:last-child{margin-bottom:0}
+.plain b{color:var(--ink)}
+.optwhy{font-style:normal;color:var(--ink-3);font-size:12.5px}
+.opt span b{font-weight:600}
+
 /* L'input: un pulsante per far partire una fase, e il modo di togliere la riserva. Righe, non
    schede: quello che si legge e' una lista di cose da attivare, non una collezione di oggetti. */
 .actbox{margin-top:var(--s4)}
