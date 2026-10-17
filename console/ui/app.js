@@ -120,6 +120,7 @@ function render(data) {
   renderAnswered(data.answered);
   renderBlocks();
   renderTally(data);
+  renderIndice(data);
   renderTabs(data);
   renderCoda(data.queue, data.applicazione);
   loadTimeline();
@@ -3193,21 +3194,7 @@ function unitRow(unit) {
     h("div", {}, [
       h("div", { class: "name" }, [
         document.createTextNode(`${unit.id} — ${unit.title || ""}`),
-        bottoneCosa(`unità ${unit.id}`, () =>
-          spiega(`Unità ${unit.id} — ${unit.title || ""}`, [
-            unit.deliverable
-              ? `Il risultato atteso: <b>${unit.deliverable}</b>.`
-              : "Il registro non dichiara un risultato atteso per questa unità: sta nei criteri.",
-            "Le sue quattro fasi vanno <b>una alla volta</b>: l'analisi dichiara perimetro e casi, l'esecuzione scrive i byte, la verifica misura, l'accettazione giudica e chiude.",
-            (unit.depends_on || []).length
-              ? `Aspetta: <b>${(unit.depends_on || []).join(", ")}</b>. Finché quelle unità non sono accettate, questa non parte.`
-              : "Nessun prerequisito esterno dichiarato: può procedere in parallelo.",
-            ...unit.phases
-              .filter((f) => f.status !== "accepted")
-              .slice(0, 1)
-              .map((f) => `Adesso il prossimo atto è <b>${f.id}</b> (${f.status}).`),
-          ])
-        ),
+        bottoneCosa(`unità ${unit.id}`, () => spiegaUnita(unit)),
       ]),
       h("div", {
         class: "id",
@@ -3311,6 +3298,23 @@ function unitRow(unit) {
         h("span", { class: "phasecell" }, [phaseButton(fase), bottoneCosa(`fase ${fase.id}`, () => spiegaFase(fase))])
       )
     ),
+  ]);
+}
+
+/* Cosa consiste il lavoro di un'unità: la usano il «Cos'è» del Percorso e l'indice a destra. */
+function spiegaUnita(unit) {
+  spiega(`Unità ${unit.id} — ${unit.title || ""}`, [
+    unit.deliverable
+      ? `Il risultato atteso: <b>${unit.deliverable}</b>.`
+      : "Il registro non dichiara un risultato atteso per questa unità: sta nei criteri.",
+    "Le sue quattro fasi vanno <b>una alla volta</b>: l'analisi dichiara perimetro e casi, l'esecuzione scrive i byte, la verifica misura, l'accettazione giudica e chiude.",
+    (unit.depends_on || []).length
+      ? `Aspetta: <b>${(unit.depends_on || []).join(", ")}</b>. Finché quelle unità non sono accettate, questa non parte.`
+      : "Nessun prerequisito esterno dichiarato: può procedere in parallelo.",
+    ...unit.phases
+      .filter((f) => f.status !== "accepted")
+      .slice(0, 1)
+      .map((f) => `Adesso il prossimo atto è <b>${f.id}</b> (${f.status}).`),
   ]);
 }
 
@@ -3574,6 +3578,60 @@ function renderGlossario() {
       if (evento.target === dialog) dialog.close();
     });
   }
+}
+
+/* L'INDICE DEL LAVORO, a destra: blocchi che si aprono sulle loro unità. Ogni unità dice in una riga
+   di cosa consiste (il risultato atteso o il titolo) e a che punto è; aprendola si legge il mestiere
+   delle sue fasi, i prerequisiti e il prossimo atto. È la mappa, simmetrica al vocabolario. */
+function renderIndice(data) {
+  const box = $("#indice-lista");
+  if (!box) return;
+  const blocchi = data.blocks || [];
+  if (!blocchi.length) {
+    box.replaceChildren(h("p", { class: "vuoto", text: "Nessun blocco nel registro." }));
+    return;
+  }
+  box.replaceChildren(
+    ...blocchi.map((blocco) => {
+      const unita = blocco.units || [];
+      const accettate = unita.filter((u) => u.accepted).length;
+      return h("details", {}, [
+        h("summary", {}, [
+          h("span", { text: blocco.domain }),
+          h("span", { class: "conteggio", text: `${accettate}/${unita.length} accettate` }),
+        ]),
+        h(
+          "ul",
+          {},
+          unita.map((unita) => {
+            const prossima = (unita.phases || []).find((f) => f.status !== "accepted");
+            const stato = unita.accepted
+              ? "accettata"
+              : prossima
+                ? `prossimo: ${prossima.id} · ${prossima.status}`
+                : "senza fasi";
+            return h("li", {}, [
+              h(
+                "button",
+                {
+                  type: "button",
+                  class: "unita",
+                  "data-fatto": unita.accepted ? "si" : "no",
+                  title: "che cosa consiste questo lavoro",
+                  onclick: () => spiegaUnita(unita),
+                },
+                [
+                  h("b", { text: unita.id }),
+                  document.createTextNode(` — ${unita.title || ""}`),
+                  h("span", { class: "stato", text: stato }),
+                ]
+              ),
+            ]);
+          })
+        ),
+      ]);
+    })
+  );
 }
 
 /* Il «Cos'è» di una fase: la spiegazione del suo mestiere, più lo stato di QUESTA fase. */

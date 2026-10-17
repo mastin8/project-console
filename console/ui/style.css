@@ -360,9 +360,34 @@ body[data-page="adesso"] main .scheda-pannello[hidden]{display:none}
 /* IL GLOSSARIO A SINISTRA. Non è una seconda navigazione: è il vocabolario, e sta accanto perché le
    parole («presa», «ordine», «non rieseguito») servono MENTRE si legge la pagina. Su schermo stretto
    va sotto, chiuso: la pagina resta la cosa che si guarda. */
-.shell{display:grid;grid-template-columns:236px minmax(0,1fr);gap:var(--s6);
-  max-width:calc(var(--page) + 236px + var(--s6));margin:0 auto;padding:0 var(--s5)}
+.shell{display:grid;grid-template-columns:236px minmax(0,1fr) 264px;gap:var(--s6);
+  max-width:calc(var(--page) + 236px + 264px + 2 * var(--s6));margin:0 auto;padding:0 var(--s5)}
+.shell>*{min-width:0}
 .shell>main{padding-left:0;padding-right:0;margin:0;max-width:none}
+.indice{position:sticky;top:calc(var(--top-h, 118px) + var(--s4));align-self:start;
+  max-height:calc(100vh - var(--top-h, 118px) - var(--s6));overflow-y:auto;padding:var(--s4) 0;
+  scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}
+.indice details{border-bottom:1px solid var(--line);padding:var(--s2) 0}
+.indice details:last-child{border-bottom:0}
+.indice summary{list-style:none;cursor:pointer;display:flex;flex-direction:column;gap:2px;
+  font-size:13px;font-weight:550;color:var(--ink-2)}
+.indice summary::-webkit-details-marker{display:none}
+.indice details[open] summary{color:var(--ink)}
+.indice .conteggio{font-size:11.5px;font-weight:400;color:var(--ink-3);font-family:var(--mono)}
+.indice ul{list-style:none;margin:var(--s2) 0 0;padding:0}
+.indice li+li{margin-top:var(--s1)}
+.indice button.unita{display:block;width:100%;text-align:left;padding:var(--s1) var(--s2);
+  border:0;border-radius:var(--r-sm);background:none;color:var(--ink-2);font:inherit;
+  font-size:12.5px;line-height:1.45;cursor:pointer}
+.indice button.unita b{color:var(--ink);font-weight:600}
+.indice button.unita .stato{display:block;font-size:11px;color:var(--ink-3);font-family:var(--mono)}
+.indice button.unita[data-fatto="si"]{opacity:.62}
+.indice .vuoto{margin:var(--s2) 0;font-size:12.5px;color:var(--ink-3)}
+@media (hover:hover) and (pointer:fine){.indice button.unita:hover{background:var(--surface-2)}}
+@media (max-width:1360px){
+  .shell{grid-template-columns:236px minmax(0,1fr);max-width:calc(var(--page) + 236px + var(--s6))}
+  .indice{position:static;max-height:none;grid-column:1 / -1;order:3;padding-top:0}
+}
 .glossario{position:sticky;top:calc(var(--top-h, 118px) + var(--s4));align-self:start;
   max-height:calc(100vh - var(--top-h, 118px) - var(--s6));overflow-y:auto;padding:var(--s4) 0;
   scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}
@@ -380,8 +405,9 @@ body[data-page="adesso"] main .scheda-pannello[hidden]{display:none}
   text-wrap:pretty}
 @media (hover:hover) and (pointer:fine){.glossario summary:hover{color:var(--ink)}}
 @media (max-width:1100px){
-  .shell{grid-template-columns:1fr;gap:var(--s4);padding:0 var(--s4)}
-  .glossario{position:static;max-height:none;padding:var(--s3) 0 0;order:2}
+  .shell{grid-template-columns:minmax(0,1fr);gap:var(--s4);padding:0 var(--s4)}
+  .glossario{position:static;max-height:none;padding:var(--s3) 0 0;order:3}
+  .indice{order:4}
 }
 /* «Cos'è»: un tastino piccolo, accanto alla cosa che spiega. Non è un'azione sul lavoro — è una
    domanda — quindi è discreto, non un pulsante pieno. */
