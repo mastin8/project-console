@@ -1072,6 +1072,13 @@ def build_handler(state):
                     # testo consegnato a un esecutore e non deve cambiare sotto. Se il ricomposto
                     # adesso e' diverso, lo si dichiara invece di sostituirlo in silenzio.
                     congelato = mandate.da_ordine(state.workspace, target)
+                    # Ma un ordine che punta a un attempt gia' su disco non e' il prompt di un
+                    # NUOVO atto: mostrarlo manderebbe a scrivere sopra una consegna (HIST02A,
+                    # 2026-10-17: ordine dell'attempt 1, attempt-1 esistente).
+                    if congelato and mandate.consegna_gia_scritta(
+                        state.workspace, target, congelato["text"]
+                    ):
+                        congelato = None
                     if congelato:
                         esito = {
                             **esito,

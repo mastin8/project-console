@@ -1457,6 +1457,7 @@ function renderActivation(data) {
           riga.append(
             h("div", { class: "actactions" }, [
               bottoneEsiti(voce.phase),
+              owedPromptButton(voce.phase, "Rifai (prompt)"),
               acceptButton(voce.phase, message),
             ]),
             message
@@ -1924,12 +1925,12 @@ function owedRow(voce) {
 
 /* Il prompt di una fase nominata: si apre nel dialogo (che ha Copia e Salva come file), perché la
    fase può essere già accettata e non avere nessuna riga nella coda. */
-function owedPromptButton(code) {
+function owedPromptButton(code, etichetta) {
   return h("button", {
     type: "button",
     class: "actbtn",
-    text: `Prompt ${code}`,
-    title: `il prompt da incollare per far partire/rifare ${code}`,
+    text: etichetta || `Prompt ${code}`,
+    title: `il prompt da incollare per far partire o rifare ${code} sui byte vivi`,
     onclick: async () => {
       try {
         const payload = await chiediPrompt(code);
@@ -2627,6 +2628,9 @@ function acceptButton(phase, message) {
     } catch (error) {
       message.className = "msg show err";
       message.textContent = `non accettata: ${error.message}`;
+      if (/revisione giudicata|puntatore nomina/i.test(error.message)) {
+        message.textContent += " — il lavoro va rifatto sui byte vivi: usa «Rifai (prompt)».";
+      }
       bottone.disabled = false;
     }
   });

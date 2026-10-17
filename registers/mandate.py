@@ -267,6 +267,13 @@ def per(ws, fase, state=None):
     if chiave in _CACHE:
         return _CACHE[chiave]
     dal_quaderno = activate.prompt_per(ws, fase)
+    # Un corpo CONGELATO serve a chi ha gia' ricevuto QUEL prompt. Se l'attempt che nomina esiste
+    # gia' su disco, non e' il prompt di un nuovo atto: riproporlo manderebbe a scrivere sopra una
+    # consegna (misurato il 2026-10-17 su HIST02A: ordine dell'attempt 1, e attempt-1 gia' c'era).
+    if dal_quaderno and dal_quaderno.get("text") and consegna_gia_scritta(
+        ws, fase, dal_quaderno["text"]
+    ):
+        dal_quaderno = None
     if dal_quaderno and dal_quaderno.get("text"):
         esito = {
             "source": f"{dal_quaderno['source']} (corpo)",
@@ -292,6 +299,17 @@ def _versione_registri(ws):
         return (ws.state_path.stat().st_mtime_ns, ws.path(ws.tasks).stat().st_mtime_ns)
     except OSError:
         return (0, 0)
+
+
+def consegna_gia_scritta(ws, fase, testo):
+    """Il testo nomina un `attempt-N` di questa fase che esiste gia' su disco?"""
+    schema = re.compile(
+        rf"{re.escape(str(ws.deliverable_prefix))}{re.escape(str(fase))}/attempt-(\d+)\.ya?ml"
+    )
+    for trovato in schema.finditer(str(testo or "")):
+        if (ws.root / trovato.group(0)).is_file():
+            return True
+    return False
 
 
 def _perche(ws, fase, state=None):
