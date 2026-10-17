@@ -234,6 +234,15 @@ def componi(ws, fase, state=None, tasks_doc=None):
             "comando, esito, durata e cio' che NON hai rieseguito, col motivo.",
             "",
         ]
+        if tipo == "independent_verification":
+            righe += [
+                "VERIFICA CONTENUTA: se per questa fase esiste gia' un atto, non rieseguire l'intera",
+                "batteria. Parti dal tentativo precedente, riesegui i casi che hanno respinto e quelli",
+                "che esercitano le funzioni toccate dall'ultimo E; nel report elenca i casi eseguiti,",
+                "quelli NON rieseguiti e il motivo. Suite completa, MySQL e browser restano fuori",
+                "salvo che il contratto della fase li richieda.",
+                "",
+            ]
     righe += [
         "TESTIMONE: nel report scrivi `next` con cosa c'e' da fare dopo. Chi prende il lavoro da te",
         "lo deve leggere dalla pagina del coordinatore, non da una chat.",
