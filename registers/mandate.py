@@ -20,6 +20,7 @@ Sola lettura. Uso::
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 from pathlib import Path
 
@@ -91,14 +92,16 @@ def componi(ws, fase, state=None, tasks_doc=None):
     # questo riceve istruzioni diverse — corte, con il cancello davanti.
     atto_corto = str(task.get("id") or fase).endswith(str((ws.phases or ("R",))[-1]))
     percorso_preflight = Path(__file__).resolve().parent / "preflight.py"
-    attempt = 1
-    numeri = [
-        int(v.get("attempt") or 0)
-        for v in state.get("active_claims") or []
-        if str(v.get("task_id")) == fase and str(v.get("attempt") or "").isdigit()
-    ]
-    if numeri:
-        attempt = max(numeri) + 1 if registro.get("status") in ("needs_changes", "failed") else max(numeri)
+    # Il prossimo tentativo e' il primo numero LIBERO su disco: i file sono la storia pubblicata.
+    # Il registro puo' essere indietro e una presa puo' non portare `attempt`: misurato il
+    # 2026-10-17 su ZIP02E, dove il prompt diceva `attempt-1` mentre su disco c'erano 1 e 2.
+    cartella_consegne = ws.reports_dir / str(fase)
+    numeri = []
+    for percorso in cartella_consegne.glob("attempt-*.yaml") if cartella_consegne.is_dir() else []:
+        trovato = re.match(r"attempt-(\d+)\.yaml$", percorso.name)
+        if trovato:
+            numeri.append(int(trovato.group(1)))
+    attempt = max(numeri, default=0) + 1
     consegna = f"{ws.deliverable_prefix}{fase}/attempt-{attempt}.yaml"
     revisione, fonte_revisione = activate.impronte(ws, state, fase)
     criteria = task.get("acceptance_criteria") or []
@@ -275,7 +278,9 @@ def per(ws, fase, state=None):
         esito = componi(ws, fase, state=state)
     perche = _perche(ws, fase, state)
     if perche:
-        esito = {**esito, "text": esito["text"] + perche}
+        # In testa al corpo, subito dopo la busta: in un rifacimento la prima cosa da leggere è
+        # perché la fase è tornata in mano, non il contratto generale che l'agente conosce già.
+        esito = {**esito, "text": perche.strip() + "\n\n" + esito["text"]}
     esito = {**esito, "text": con_busta(ws, fase, esito["text"]), "envelope": True}
     _CACHE[chiave] = esito
     return esito
