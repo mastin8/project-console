@@ -2652,6 +2652,7 @@ function activationButton(phase, action, label, message, disabled) {
    altrimenti l'mtime del puntatore, altrimenti niente. La barra non e' una previsione e non
    viene disegnata quando la data non c'e'. */
 let timeline = null;
+let mappaScelta = false;
 const TIMELINE_STATE = {
   accettata: "accettata",
   in_corso: "in corso",
@@ -2676,6 +2677,7 @@ async function loadTimeline() {
     return;
   }
   renderTimelineNotes(timeline);
+  renderMappa();
   renderGantt();
   renderBlocks(); // il pannello del blocco mostra anche i commit: si completa quando arrivano
   applyHash();
@@ -2985,6 +2987,214 @@ function renderGantt() {
   box.replaceChildren(...nodes);
   if (count) {
     count.textContent = `${blocks} blocchi · ${shown} unità mostrate con questo filtro`;
+  }
+}
+
+/* LA MAPPA DEL PERCORSO. Non è una barra: è il grafo delle dipendenze. Ogni colonna è un livello
+   (una unità sta nella colonna dopo la più profonda di quelle che aspetta), ogni scheda è una unità,
+   ogni freccia va da ciò che serve a ciò che lo usa. Mostra TUTTE le unità: le accettate servono a
+   capire da dove arriva quella aperta, e il filtro «Aperte / Tutte / Con problemi» non la tocca. */
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function svgNode(tag, attrs = {}) {
+  const node = document.createElementNS(SVG_NS, tag);
+  for (const [key, value] of Object.entries(attrs)) {
+    if (value === null || value === undefined || value === false) continue;
+    node.setAttribute(key, value);
+  }
+  return node;
+}
+
+function renderMappa() {
+  const scena = $("#mappa-scena");
+  const meta = $("#mappa-meta");
+  if (!scena || !timeline) return;
+  // Su schermo stretto la mappa parte chiusa: aperta occuperebbe mezza pagina per mostrare due
+  // colonne. La scelta dell'utente, una volta fatta, resta.
+  const dettaglio = $("#mappa");
+  if (dettaglio && !dettaglio.dataset.ascoltato) {
+    dettaglio.dataset.ascoltato = "1";
+    dettaglio.addEventListener("toggle", () => {
+      mappaScelta = true;
+    });
+  }
+  if (dettaglio && !mappaScelta) {
+    dettaglio.open = !window.matchMedia("(max-width: 720px)").matches;
+  }
+  const unita = [];
+  for (const blocco of timeline.blocks || []) {
+    for (const unit of blocco.units || []) {
+      unita.push(Object.assign({}, unit, { blocco: blocco.domain }));
+    }
+  }
+  if (!unita.length) {
+    scena.replaceChildren(h("p", { class: "empty", text: "Nessuna unità da disegnare." }));
+    return;
+  }
+  const perId = new Map(unita.map((unit) => [unit.id, unit]));
+  const profondita = new Map();
+  const inCorso = new Set();
+  const livelloDi = (id) => {
+    if (profondita.has(id)) return profondita.get(id);
+    if (inCorso.has(id)) return 0; // un ciclo non deve far esplodere il disegno
+    inCorso.add(id);
+    const deps = (perId.get(id).depends_on || []).filter((dep) => perId.has(dep));
+    const valore = deps.length ? 1 + Math.max(...deps.map(livelloDi)) : 0;
+    inCorso.delete(id);
+    profondita.set(id, valore);
+    return valore;
+  };
+  unita.forEach((unit) => livelloDi(unit.id));
+  const livelli = [];
+  for (const unit of unita) {
+    const livello = profondita.get(unit.id);
+    (livelli[livello] = livelli[livello] || []).push(unit);
+  }
+  livelli.forEach((colonna) =>
+    colonna.sort(
+      (a, b) => String(a.blocco).localeCompare(String(b.blocco)) || a.id.localeCompare(b.id)
+    )
+  );
+  // Due passate di baricentro: dentro un livello, chi serve a un nodo in alto resta in alto.
+  for (let giro = 0; giro < 2; giro += 1) {
+    for (let indice = 1; indice < livelli.length; indice += 1) {
+      const prima = new Map((livelli[indice - 1] || []).map((unit, riga) => [unit.id, riga]));
+      const media = (unit) => {
+        const righe = (unit.depends_on || [])
+          .map((dep) => prima.get(dep))
+          .filter((riga) => riga !== undefined);
+        return righe.length ? righe.reduce((a, b) => a + b, 0) / righe.length : 999;
+      };
+      livelli[indice].sort((a, b) => media(a) - media(b) || a.id.localeCompare(b.id));
+    }
+  }
+
+  const W = 170;
+  const H = 54;
+  const GX = 58;
+  const GY = 12;
+  const PAD = 22;
+  const righe = Math.max(...livelli.map((colonna) => colonna.length));
+  const larghezza = PAD * 2 + livelli.length * (W + GX) - GX;
+  const altezza = PAD * 2 + righe * (H + GY) - GY;
+  const pos = new Map();
+  livelli.forEach((colonna, livello) => {
+    colonna.forEach((unit, riga) =>
+      // Allineati in alto, non centrati: il primo livello (la radice) deve stare nella prima
+      // schermata, non a metà di una colonna vuota.
+      pos.set(unit.id, { x: PAD + livello * (W + GX), y: PAD + riga * (H + GY) })
+    );
+  });
+
+  const svg = svgNode("svg", {
+    id: "mappa-svg",
+    viewBox: `0 0 ${larghezza} ${altezza}`,
+    width: larghezza,
+    height: altezza,
+    role: "group",
+    "aria-label": "Mappa delle dipendenze: ogni scheda è una unità, ogni freccia va da ciò che serve a ciò che lo usa",
+  });
+  const defs = svgNode("defs", {});
+  const punta = svgNode("marker", {
+    id: "punta-freccia",
+    viewBox: "0 0 8 8",
+    refX: "7",
+    refY: "4",
+    markerWidth: "6",
+    markerHeight: "6",
+    orient: "auto-start-reverse",
+  });
+  punta.append(svgNode("path", { d: "M0 0 L8 4 L0 8 z", class: "punta" }));
+  defs.append(punta);
+  const stratoArchi = svgNode("g", {});
+  const stratoNodi = svgNode("g", {});
+  const archi = [];
+  const nodi = [];
+
+  for (const unit of unita) {
+    for (const dep of unit.depends_on || []) {
+      if (!perId.has(dep)) continue;
+      const da = pos.get(dep);
+      const a = pos.get(unit.id);
+      const x1 = da.x + W;
+      const y1 = da.y + H / 2;
+      const x2 = a.x;
+      const y2 = a.y + H / 2;
+      const mezzo = (x1 + x2) / 2;
+      const arco = svgNode("path", {
+        d: `M${x1} ${y1} C ${mezzo} ${y1}, ${mezzo} ${y2}, ${x2} ${y2}`,
+        class: `arco ${unit.accepted ? "chiuso" : "aperto"}`,
+        "data-from": dep,
+        "data-to": unit.id,
+      });
+      archi.push(arco);
+      stratoArchi.append(arco);
+    }
+  }
+
+  for (const unit of unita) {
+    const punto = pos.get(unit.id);
+    const gruppo = svgNode("g", {
+      class: `nodo ${unit.state || "da_fare"}`,
+      transform: `translate(${punto.x} ${punto.y})`,
+      tabindex: "0",
+      role: "button",
+      "aria-label": `${unit.id} — ${unit.title || ""}: ${TIMELINE_STATE[unit.state] || unit.state}`,
+      "data-id": unit.id,
+    });
+    const titolo = svgNode("title", {});
+    titolo.textContent =
+      `${unit.id} — ${unit.title || ""} (${TIMELINE_STATE[unit.state] || unit.state})` +
+      ((unit.waiting_on || []).length ? `\nAspetta: ${unit.waiting_on.join(", ")}` : "");
+    gruppo.append(titolo);
+    gruppo.append(svgNode("rect", { width: W, height: H, rx: 10 }));
+    const id = svgNode("text", { class: "nid", x: 12, y: 22 });
+    id.textContent = unit.id;
+    gruppo.append(id);
+    const blocco = svgNode("text", { class: "nblocco", x: 12, y: 38 });
+    blocco.textContent = String(unit.blocco || "").slice(0, 22);
+    gruppo.append(blocco);
+    (unit.phases || []).forEach((fase, indice) => {
+      const cx = W - 56 + indice * 14;
+      const cy = H - 14;
+      const stato = String(fase.status || "pending");
+      const segno =
+        stato === "needs_changes" || stato === "failed"
+          ? svgNode("rect", { x: cx - 3, y: cy - 3, width: 6, height: 6, class: `fase ${stato}` })
+          : svgNode("circle", { cx, cy, r: 3.5, class: `fase ${stato}` });
+      const nome = svgNode("title", {});
+      nome.textContent = `${fase.id}: ${stato}`;
+      segno.append(nome);
+      gruppo.append(segno);
+    });
+    const evidenzia = (attivo) => {
+      svg.classList.toggle("evidenzia", attivo);
+      for (const arco of archi) {
+        arco.classList.toggle(
+          "toccato",
+          attivo && (arco.dataset.from === unit.id || arco.dataset.to === unit.id)
+        );
+      }
+    };
+    gruppo.addEventListener("mouseenter", () => evidenzia(true));
+    gruppo.addEventListener("mouseleave", () => evidenzia(false));
+    gruppo.addEventListener("focus", () => evidenzia(true));
+    gruppo.addEventListener("blur", () => evidenzia(false));
+    gruppo.addEventListener("click", () => spiegaUnita(unit));
+    gruppo.addEventListener("keydown", (evento) => {
+      if (evento.key === "Enter" || evento.key === " ") {
+        evento.preventDefault();
+        spiegaUnita(unit);
+      }
+    });
+    nodi.push(gruppo);
+    stratoNodi.append(gruppo);
+  }
+
+  svg.append(defs, stratoArchi, stratoNodi);
+  scena.replaceChildren(svg);
+  if (meta) {
+    meta.textContent = `${unita.length} unità · ${archi.length} dipendenze · tutte, senza filtro. La freccia va da ciò che serve a ciò che lo usa; scorri in orizzontale, e clicca una scheda per il dettaglio.`;
   }
 }
 

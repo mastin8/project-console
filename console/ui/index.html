@@ -170,6 +170,26 @@
         <span class="st-pending"><i aria-hidden="true"></i>da fare: non iniziata, o in attesa a monte</span>
       </p>
       <div id="timeline-notes"></div>
+      <!-- LA MAPPA. Non è la linea del tempo: è il percorso materiale, cioè chi aspetta chi. Non
+           passa dal filtro delle barre: le unità accettate servono a capire da dove arriva quella
+           aperta, e nasconderle lascerebbe le frecce appese nel vuoto. -->
+      <details class="mappa" id="mappa" aria-labelledby="mappa-head" open>
+        <summary class="mappa-head">
+          <span class="mappa-titoli">
+            <span class="mappa-titolo" id="mappa-head">Mappa del percorso</span>
+            <span class="mappa-meta" id="mappa-meta"></span>
+          </span>
+        </summary>
+        <p class="legend mappa-legend">
+          <span class="st-accepted"><i aria-hidden="true"></i>accettata</span>
+          <span class="st-running"><i aria-hidden="true"></i>in corso</span>
+          <span class="st-issues"><i aria-hidden="true"></i>respinta</span>
+          <span class="st-pending"><i aria-hidden="true"></i>da fare</span>
+        </p>
+        <div class="mappa-scena" id="mappa-scena" tabindex="0" aria-label="Mappa delle dipendenze fra le unità">
+          <p class="empty">Caricamento della mappa…</p>
+        </div>
+      </details>
       <div id="gantt" class="gantt"><p class="empty">Caricamento della linea del tempo…</p></div>
     </section>
 
