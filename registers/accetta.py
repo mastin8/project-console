@@ -158,14 +158,25 @@ def per(ws, fase, nota=None, firmatario="utente", dry_run=False):
         "judged_evidence": [
             f"report giudicato: {riferimento or 'non dichiarato dal puntatore'}",
             f"coda della fase al momento della firma: {quadro['misure'].get('coda_sulla_fase', 0)} richieste non applicate",
-            f"revisione: {quadro['misure'].get('impronte_controllate', 0)} impronte dichiarate, tutte vive",
+            "revisione: {} impronte dichiarate, {} cambiate, {} del registro (non bloccanti)".format(
+                quadro["misure"].get("impronte_controllate", 0),
+                quadro["misure"].get("impronte_cambiate", 0),
+                quadro["misure"].get("impronte_del_registro", 0),
+            ),
         ],
         "not_rerun": [
             "batterie del tester: non rieseguite (la misura del comportamento e' sua)",
             "corsa end-to-end del progetto: non eseguita da questo atto",
         ],
+        # L'accettazione di una fase NON chiude l'unita' se dopo ce ne sono altre: dirlo nell'atto
+        # mandava a leggere «unita' chiusa» su un `A` appena accettato con `E`, `T` e `R` ancora
+        # aperte (misurato il 2026-10-17 su QA05A).
         "next": nota
-        or "Nessuna direzione ulteriore: l'unita' si chiude su questo atto. Se qualcosa resta, va dichiarato qui.",
+        or (
+            "Nessuna direzione ulteriore: l'unita' si chiude su questo atto. Se qualcosa resta, va dichiarato qui."
+            if str(fase).upper().endswith(str(ws.phases[-1]).upper())
+            else "L'accettazione riguarda questa fase: le fasi successive dell'unita' restano da accettare."
+        ),
     }
     corpo = yaml.safe_dump(atto, allow_unicode=True, sort_keys=False)
     # I nomi non si cablano: il percorso delle consegne lo dichiara il workspace

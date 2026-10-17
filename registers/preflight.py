@@ -113,6 +113,62 @@ def _impronte_dichiarate(documento):
     return fuori
 
 
+def _impronte_consegnate(documento):
+    """Le impronte dei file che l'atto HA SCRITTO (l'impronta di DOPO, se la dichiara).
+
+    Un atto che consegna un file lo dichiara fra gli `inputs` con l'impronta di PRIMA e fra i
+    `delivered`/`files` con quella di DOPO. Confrontare solo la prima fa sembrare mosso un file che
+    l'atto ha cambiato di proposito: misurato il 2026-10-17 su `QA05E`, che aggiorna
+    `docs/qa-associations.md` (prima `764d72…`, dopo `a808e8…`) e risultava «revisione cambiata».
+    """
+    fuori = {}
+    for chiave in ("delivered", "files"):
+        for voce in documento.get(chiave) or []:
+            if not isinstance(voce, dict):
+                continue
+            percorso = voce.get("path") or voce.get("file")
+            impronta = (
+                voce.get("sha256_after")
+                or voce.get("sha256")
+                or voce.get("hash")
+                or voce.get("impronta")
+            )
+            if percorso and isinstance(impronta, str) and impronta.strip():
+                fuori[str(percorso)] = impronta.strip().split("…")[0].lower()
+    return fuori
+
+
+def _e_registro(ws, radice, percorso):
+    """Il file dichiarato e' un REGISTRO del workspace, non un byte di prodotto?
+
+    Un report puo' dichiarare l'impronta di `state.yaml` per dire cosa ha letto. Quell'impronta
+    cambia per costruzione: ogni presa, rilascio o atto di un'altra corsia riscrive il registro.
+    Trattarla come «la revisione giudicata e' cambiata» rende l'accettazione impossibile per sempre:
+    misurato il 2026-10-17 su `QA05A`, il cui report dichiara `state.yaml` con la nota esplicita
+    «e' un registro condiviso e si muove anche per le altre corsie». Il cancello deve fermare i byte
+    di prodotto che si muovono, non il quaderno che li annota.
+    """
+    try:
+        target = (radice / percorso).resolve()
+        target.relative_to(ws.root.resolve())
+    except (OSError, ValueError):
+        return False
+    nomi = (ws.state, ws.tasks, ws.questions, ws.decisions, ws.user_decisions, ws.queue, ws.view)
+    for nome in nomi:
+        try:
+            if target == ws.path(str(nome)).resolve():
+                return True
+        except OSError:
+            continue
+    for nome in (ws.reports, ws.transitions, ws.inbox):
+        try:
+            target.relative_to(ws.path(str(nome)).resolve())
+            return True
+        except (OSError, ValueError):
+            continue
+    return False
+
+
 def leggi(ws, fase, state=None, tasks_doc=None):
     """(esito, motivi, avvisi, misure) per l'atto di accettazione di quella fase."""
     state = state if state is not None else _leggi(ws.state_path)
@@ -221,15 +277,26 @@ def leggi(ws, fase, state=None, tasks_doc=None):
         cartella / f"attempt-{tentativi[-1]}.yaml" if tentativi else None
     )
     dichiarate = _impronte_dichiarate(_leggi(da_giudicare)) if da_giudicare else []
+    consegnate = _impronte_consegnate(_leggi(da_giudicare)) if da_giudicare else {}
     cambiate = []
+    saltate = 0
     for percorso, dichiarata in dichiarate:
+        # Se l'atto ha CONSEGNATO quel file, l'impronta da pretendere e' quella di dopo.
+        attesa = consegnate.get(percorso, dichiarata)
         for radice in _radici(ws):
             vivo = _sha256(radice / percorso)
             if vivo:
-                if not vivo.startswith(dichiarata[:16]):
-                    cambiate.append(f"{percorso} (dichiarato {dichiarata[:12]}…, adesso {vivo[:12]}…)")
+                if _e_registro(ws, radice, percorso):
+                    # Il registro e' cambiato per costruzione: si dichiara, non si blocca.
+                    saltate += 1
+                    break
+                if not vivo.startswith(attesa[:16]):
+                    cambiate.append(f"{percorso} (dichiarato {attesa[:12]}…, adesso {vivo[:12]}…)")
                 break
     misure["impronte_controllate"] = len(dichiarate)
+    misure["impronte_del_registro"] = saltate
+    misure["impronte_consegnate"] = len(consegnate)
+    misure["impronte_cambiate"] = len(cambiate)
     if cambiate:
         motivi.append("la revisione giudicata e' cambiata: " + "; ".join(cambiate[:4]))
 
