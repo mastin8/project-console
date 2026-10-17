@@ -1452,6 +1452,22 @@ function renderActivation(data) {
               text: `${voce.verdetto} · ${voce.report}. Il lavoro è fatto: il registro dice ancora «${voce.status}» perché manca l'atto di accettazione del coordinamento.`,
             })
           );
+          const bloccanti = Number(voce.bloccanti || 0);
+          if (bloccanti) {
+            const chi = (voce.bloccanti_chi || []).filter(Boolean).join(", ");
+            const chiBreve = chi.length > 70 ? `${chi.slice(0, 70)}…` : chi;
+            testo.append(
+              h("div", { class: "actmeta" }, [
+                h("b", {
+                  class: "warnnote",
+                  text: `${bloccanti} finding bloccanti aperti`,
+                }),
+                document.createTextNode(
+                  `${chiBreve ? ` (owner: ${chiBreve})` : ""} — leggili in «Esiti»: non spariscono con l'accettazione, restano a chi deve chiuderli.`
+                ),
+              ])
+            );
+          }
           riga.append(testo);
           const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });
           riga.append(
@@ -1609,7 +1625,9 @@ function codaRow(voce) {
       h("div", { class: "actmeta" }, [
         h("b", { class: "warnnote", text: "da rifare a monte: " }),
         document.createTextNode(
-          `${voce.code} ha respinto (${voce.verdetto}) e il report dice di riprendere ${voce.rifai}. ` +
+          `${voce.code} ha respinto (${voce.verdetto})${
+            Number(voce.bloccanti || 0) ? ` con ${voce.bloccanti} finding bloccanti` : ""
+          } e il report dice di riprendere ${voce.rifai}. ` +
             `Rilanciare ${voce.code} sugli stessi byte rifarebbe la stessa misura.`
         ),
       ])

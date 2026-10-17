@@ -504,6 +504,15 @@ def prossimi(ws, state=None, tasks_doc=None):
         verdetto = ""
         if percorso_report is not None:
             verdetto = str((documento or {}).get("verdict") or "")
+        # Quanti finding BLOCCANTI dichiara l'atto, e chi li deve: senza il numero la riga
+        # «Rifai (prompt)» sembra un capriccio. Si contano solo le gravita' che dicono «blocking»;
+        # `high` e `declared_*` restano fuori dal conteggio.
+        bloccanti = []
+        for finding in (documento or {}).get("findings") or []:
+            if not isinstance(finding, dict):
+                continue
+            if "block" in str(finding.get("severity") or "").lower():
+                bloccanti.append(str(finding.get("owner") or "").strip())
         consegnata = bool(verdetto) and any(
             verdetto.startswith(prefisso)
             # `ready_for_*` copre i verdetti con cui i progetti dichiarano «l'atto c'e' e passa la
@@ -585,6 +594,8 @@ def prossimi(ws, state=None, tasks_doc=None):
                 "apre": fasi_aperte[1:],
                 "esiti_di": esiti_di,
                 "rifai": rifai,
+                "bloccanti": len(bloccanti),
+                "bloccanti_chi": sorted({chi for chi in bloccanti if chi})[:3],
             }
         )
     # Prima le unita' che tengono piu' altre (percorso critico), poi quelle piu' vicine alla fine.
