@@ -1350,7 +1350,11 @@ function renderActivation(data) {
   // di unità mai iniziate (49 «mandabili» su un progetto, fra cui la R di un'unità ferma alla A).
   // Una riga per unità aperta, nell'ordine del percorso critico.
   const percorso = data.percorso || [];
-  const pronti = percorso.filter((voce) => !(voce.attesa || []).length && !voce.live);
+  // Una fase RISERVATA non è «pronta» (l'ordine è già depositato: l'attivazione la rifiuterebbe) e non
+  // è «in corso» (nessuno l'ha presa): vive nel gruppo delle riservate, con «Copia il prompt».
+  const pronti = percorso.filter(
+    (voce) => !(voce.attesa || []).length && !voce.live && !voce.riservata
+  );
   const attese = percorso.filter((voce) => (voce.attesa || []).length && !voce.live);
   const inCorso = percorso.filter((voce) => voce.live);
   const riservate = (data.activated || []).filter((voce) =>

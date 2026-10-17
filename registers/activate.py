@@ -495,6 +495,7 @@ def prossimi(ws, state=None, tasks_doc=None):
             if stato_di(dipendenza) != "accepted":
                 attesa.append(f"{dipendenza} ({stato_di(dipendenza)})")
         presa = vive.get(prossima) or {}
+        stato_presa = str(presa.get("status") or "")
         fuori.append(
             {
                 # `code` e `phase` sono la stessa cosa: la riga in pagina usa `code` per tutte le
@@ -509,7 +510,11 @@ def prossimi(ws, state=None, tasks_doc=None):
                 "attempt": (registrate.get(prossima) or {}).get("attempt") or 0,
                 "attesa": sorted(set(attesa)),
                 "leva": len(blocca.get(uid, [])),
-                "live": str(presa.get("status") or ""),
+                # «In corso» e «riservata» non sono la stessa cosa: una presa `pre_registered` e' un
+                # ordine depositato che nessuno ha raccolto, e la riga non deve dire che qualcuno ci
+                # sta lavorando — ne' offrire di attivarla (l'attivazione la rifiuta).
+                "live": stato_presa if stato_presa in ("taken", "active", "active_extension") else "",
+                "riservata": stato_presa in ("pre_registered", "ready"),
                 "owner": str(presa.get("taken_by") or presa.get("owner_agent") or ""),
                 "apre": fasi_aperte[1:],
             }
