@@ -496,6 +496,18 @@ def prossimi(ws, state=None, tasks_doc=None):
                 attesa.append(f"{dipendenza} ({stato_di(dipendenza)})")
         presa = vive.get(prossima) or {}
         stato_presa = str(presa.get("status") or "")
+        # CONSEGNATA MA NON ACCETTATA. Un agente puo' aver gia' pubblicato il suo atto — la `A` di
+        # un'unita', per esempio, con verdetto `ready_for_execution` — mentre il registro dice ancora
+        # `pending`, perche' l'accettazione dell'handoff e' un atto del coordinamento. Senza questo
+        # stato la pagina rimanda la stessa fase e l'analisi si rifa' da capo: il ciclo peggiore.
+        percorso_report, _, _, documento = handoff.ultimo_report(ws, state, prossima)
+        verdetto = ""
+        if percorso_report is not None:
+            verdetto = str((documento or {}).get("verdict") or "")
+        consegnata = bool(verdetto) and any(
+            verdetto.startswith(prefisso)
+            for prefisso in ("ready_for_execution", "pass", "delivered", "accepted")
+        )
         fuori.append(
             {
                 # `code` e `phase` sono la stessa cosa: la riga in pagina usa `code` per tutte le
@@ -515,6 +527,9 @@ def prossimi(ws, state=None, tasks_doc=None):
                 # sta lavorando — ne' offrire di attivarla (l'attivazione la rifiuta).
                 "live": stato_presa if stato_presa in ("taken", "active", "active_extension") else "",
                 "riservata": stato_presa in ("pre_registered", "ready"),
+                "consegnata": consegnata,
+                "verdetto": verdetto,
+                "report": str(percorso_report.relative_to(ws.root)) if percorso_report else "",
                 "owner": str(presa.get("taken_by") or presa.get("owner_agent") or ""),
                 "apre": fasi_aperte[1:],
             }

@@ -314,7 +314,10 @@ def busta(ws, fase):
             "",
             "e subito dopo, nella stessa voce, due richieste: taken_by: <la tua corsia> e",
             "taken_at: '<adesso>'. Poi fallo applicare al coordinamento:",
-            f"    python3 registers/apply_transitions.py --workspace {ws.root} --dir {ws.transitions_dir}",
+            # Il percorso del coordinatore, ASSOLUTO: dentro il progetto di solito non esiste una
+            # cartella `registers/` — un agente l'ha segnalato («il comando non esiste in questo
+            # repository») dopo aver perso tempo a cercarla.
+            f"    python3 {Path(__file__).resolve().parent / 'apply_transitions.py'} --workspace {ws.root} --dir {ws.transitions_dir}",
             "",
             "Se il registro dice che la fase e' GIA' presa da un altro, FERMATI e dillo: due esecutori",
             "sugli stessi byte sono il difetto piu' caro. Alla fine del lavoro deposita il rilascio",

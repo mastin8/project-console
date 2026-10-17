@@ -1368,8 +1368,13 @@ function renderActivation(data) {
   // Una fase RISERVATA non è «pronta» (l'ordine è già depositato: l'attivazione la rifiuterebbe) e non
   // è «in corso» (nessuno l'ha presa): vive nel gruppo delle riservate, con «Copia il prompt».
   const pronti = percorso.filter(
-    (voce) => !(voce.attesa || []).length && !voce.live && !voce.riservata
+    (voce) =>
+      !(voce.attesa || []).length && !voce.live && !voce.riservata && !voce.consegnata
   );
+  // CONSEGNATE, DA ACCETTARE: l'atto esiste (verdetto positivo) e il registro dice ancora `pending`,
+  // perché l'accettazione dell'handoff è un atto a sé. Senza questo gruppo la pagina rimandava la
+  // stessa fase — «Attiva e copia il prompt» su un lavoro già consegnato — che è il ciclo peggiore.
+  const daAccettare = percorso.filter((voce) => voce.consegnata && !voce.live && !voce.riservata);
   const attese = percorso.filter((voce) => (voce.attesa || []).length && !voce.live);
   const inCorso = percorso.filter((voce) => voce.live);
   const riservate = (data.activated || []).filter((voce) =>
@@ -1377,6 +1382,7 @@ function renderActivation(data) {
   );
   count.textContent = [
     pronti.length ? `${pronti.length} da mandare` : "niente da mandare",
+    daAccettare.length ? `${daAccettare.length} da accettare` : null,
     inCorso.length ? `${inCorso.length} in corso` : null,
     riservate.length ? `${riservate.length} riservate` : null,
     attese.length ? `${attese.length} in attesa` : null,
@@ -1395,6 +1401,34 @@ function renderActivation(data) {
   }
   const parti = [];
   if (pronti.length) parti.push(h("div", { class: "actbox" }, pronti.map(codaRow)));
+  if (daAccettare.length) {
+    parti.push(
+      h("div", { class: "actbox" }, [
+        h("p", { class: "actgroup accent" }, [
+          h("b", { text: "Consegnate: manca l'accettazione dell'handoff" }),
+          h("span", { class: "actcount", text: String(daAccettare.length) }),
+        ]),
+        ...daAccettare.map((voce) => {
+          const riga = h("div", { class: "actrow" });
+          const testo = h("div", { class: "acttext" });
+          testo.append(h("code", { class: "actcode", text: voce.phase }));
+          testo.append(
+            h("div", {
+              class: "actmeta",
+              text: `${voce.verdetto} · ${voce.report}. Il lavoro è fatto: il registro dice ancora «${voce.status}» perché manca l'atto di accettazione del coordinamento.`,
+            })
+          );
+          riga.append(testo);
+          const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });
+          riga.append(
+            h("div", { class: "actactions" }, [acceptButton(voce.phase, message)]),
+            message
+          );
+          return riga;
+        }),
+      ])
+    );
+  }
   if (inCorso.length) {
     parti.push(
       h("div", { class: "actbox" }, [
