@@ -295,16 +295,14 @@ def _versione_registri(ws):
 
 
 def _perche(ws, fase, state=None):
-    """Per una fase GIA' ACCETTATA che torna in mano: il report che la nomina e cosa chiede.
+    """Il testimone di chi nomina questa fase nel suo `next`: cosa ha lasciato e cosa chiede.
 
-    Senza questo blocco il prompt di un rifacimento e' identico a quello del primo giro: l'agente
-    rilegge il contratto e non sa quali due casi sono rossi. La pagina sapeva gia' dirlo (campo
-    `next` dei report); ora lo dice anche il testo che si copia.
+    Vale per un rifacimento E per un handoff normale: `HIST02A` consegna un design con tre finding
+    bloccanti per `HIST02E`, e senza questo blocco il prompt di E sarebbe identico a quello di una
+    fase mai cominciata. La pagina lo sapeva gia' (campo `next` dei report); ora lo dice anche il
+    testo che si copia. Se nessun report nomina la fase, il blocco non c'e'.
     """
     if not isinstance(state, dict):
-        return ""
-    registrata = (state.get("tasks") or {}).get(str(fase)) or {}
-    if str(registrata.get("status") or "") != "accepted":
         return ""
     try:
         import handoff  # import locale: `handoff` legge i report, `mandate` compone il prompt
@@ -319,11 +317,32 @@ def _perche(ws, fase, state=None):
         if not testo:
             continue
         quando = str(voce.get("when") or "")[:16].replace("T", " ")
+        # I finding BLOCCANTI che riguardano questa fase, per identificativo: «leggi il report» da
+        # solo non dice quanti sono né quali. Si citano, non si riscrivono: il testo resta nel report.
+        bloccanti = []
+        try:
+            sorgente = ws.root / str(voce.get("source") or "")
+            documento = _carica(sorgente.read_text(encoding="utf-8", errors="replace")) or {}
+            for finding in documento.get("findings") or []:
+                if not isinstance(finding, dict):
+                    continue
+                gravita = str(finding.get("severity") or "").lower()
+                proprietario = str(finding.get("owner") or "")
+                if "block" in gravita and (not proprietario or str(fase) in proprietario):
+                    bloccanti.append(f"{finding.get('id') or '—'} ({finding.get('severity')})")
+        except (OSError, yaml.YAMLError):
+            bloccanti = []
+        coda = (
+            "\nBloccanti per te in quell'atto: " + ", ".join(bloccanti) + "."
+            if bloccanti
+            else ""
+        )
         return (
-            "\n\n═══ PERCHÉ QUESTA FASE È QUI ═══\n"
+            "\n\n═══ COSA HA LASCIATO CHI È VENUTO PRIMA ═══\n"
             f"Il report {voce.get('source') or '—'} ({quando}) nomina {fase} e dice:\n"
-            f"{testo}\n"
-            "Leggi quell'atto prima di toccare i byte: il rifacimento è quello che chiede."
+            f"{testo}{coda}\n"
+            "Leggi quell'atto prima di toccare i byte: quello che chiede è il lavoro da fare; "
+            "i finding bloccanti e i limiti sono nel suo report."
         )
     return ""
 
