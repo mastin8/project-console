@@ -1282,7 +1282,8 @@ function apriTesto(titolo, testo, opzioni = {}) {
     const copia = h("button", { type: "button", class: "ghost", text: "Copia" });
     copia.addEventListener("click", async () => {
       try {
-        await navigator.clipboard.writeText(testo || "");
+        const esitoCopia = await copiaTesto(testo || "");
+        if (!esitoCopia.ok) throw new Error("il browser non ha concesso gli appunti: seleziona il testo e premi Ctrl+C");
         esito.className = "msg show ok";
         esito.textContent = "copiato: incollalo come primo messaggio di una chat nuova.";
       } catch (error) {
@@ -1296,6 +1297,20 @@ function apriTesto(titolo, testo, opzioni = {}) {
     azioni.append(linkSalvaFile(testo, opzioni.file));
   }
   if (!dialog.open) dialog.showModal();
+  // Se la copia non è riuscita, il ripiego utile è il testo SELEZIONATO: un Ctrl+C e basta. Il
+  // selettore non prende i pulsanti, solo il corpo del testo.
+  // Sempre, quando il dialogo è aperto per copiare: il testo è già selezionato, e un Ctrl+C basta
+  // anche se la Clipboard API ha rifiutato (fuoco, contesto non sicuro, attivazione scaduta).
+  if (opzioni.seleziona || opzioni.copia) {
+    const corpo = $("#report-body");
+    const selezione = window.getSelection();
+    if (corpo && selezione) {
+      const intervallo = document.createRange();
+      intervallo.selectNodeContents(corpo);
+      selezione.removeAllRanges();
+      selezione.addRange(intervallo);
+    }
+  }
 }
 
 /* «Salva come file»: il prompt come .md. Sta OVUNQUE si apra un prompt — nel dialogo e nel box che
@@ -1610,12 +1625,8 @@ function copiaPromptButton(code, message) {
     try {
       const testo = await chiediPrompt(code);
       annotaPromptConsegnato(code);
-      let copiato = true;
-      try {
-        await navigator.clipboard.writeText(testo.text || "");
-      } catch (erroreCopia) {
-        copiato = false;
-      }
+      const copia = await copiaTesto(testo.text || "");
+      const copiato = copia.ok;
       message.className = copiato ? "msg show ok" : "msg show pending";
       message.textContent = copiato
         ? `prompt copiato (${(testo.text || "").length} caratteri): dallo a una corsia — la fase è già accettata, quindi è un tentativo NUOVO, non una riattivazione.`
@@ -1649,10 +1660,12 @@ function attivaEConsegna(phase, message) {
       const payload = await risposta.json();
       if (!risposta.ok) throw new Error(payload.error || `errore ${risposta.status}`);
       const testo = await chiediPrompt(phase);
-      await navigator.clipboard.writeText(testo.text || "");
+      const copia = await copiaTesto(testo.text || "");
       annotaPromptConsegnato(phase);
       message.className = "msg show ok";
-      message.textContent = `fatto: ordine in ${payload.order}, fase riservata, prompt COPIATO (${(testo.text || "").length} caratteri). Incollalo in una chat.`;
+      message.textContent = copia.ok
+        ? `fatto: ordine in ${payload.order}, fase riservata, prompt COPIATO (${(testo.text || "").length} caratteri). Incollalo in una chat.`
+        : `ordine in ${payload.order} e fase riservata, ma il prompt NON è stato copiato: è qui sotto, selezionalo e premi Ctrl+C.`;
       apriTesto(`${phase} \u2014 il prompt (già copiato)`, testo.text, {
         copia: true,
         file: `prompt-${phase}.md`,
@@ -2305,6 +2318,40 @@ function misuraRow(misura) {
   return parti.length === 1 ? riga : h("div", {}, parti);
 }
 
+/* COPIARE UN TESTO, DAVVERO. `navigator.clipboard` e' comodo ma ha due condizioni che non si vedono:
+   la pagina deve essere un contesto sicuro e la finestra deve avere il FUOCO — e dopo un `await` (la
+   `fetch` del prompt) l'attivazione dell'utente puo' essere scaduta. Il risultato e' che il clic non
+   copia e chi legge pensa che la pagina sia rotta. Qui: prima la Clipboard API, poi il ripiego
+   classico (`textarea` + `execCommand`), e se anche quello fallisce si dice all'utente di selezionare
+   il testo — il prompt nel dialogo gli resta davanti, selezionato. */
+async function copiaTesto(testo) {
+  const valore = String(testo || "");
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(valore);
+      return { ok: true, come: "clipboard" };
+    }
+  } catch (errore) {
+    // si prova l'altra strada
+  }
+  try {
+    const area = document.createElement("textarea");
+    area.value = valore;
+    area.setAttribute("readonly", "readonly");
+    area.style.position = "fixed";
+    area.style.top = "-1000px";
+    document.body.append(area);
+    area.select();
+    area.setSelectionRange(0, valore.length);
+    const fatto = document.execCommand("copy");
+    area.remove();
+    if (fatto) return { ok: true, come: "execCommand" };
+  } catch (errore) {
+    // niente: si finisce sulla selezione
+  }
+  return { ok: false, come: "selezione" };
+}
+
 /* Il prompt di una fase: copiato in un clic, o letto nel dialogo. Le due funzioni chiedono il testo
    all'API solo quando servono, e non lo mettono mai in pagina. */
 async function chiediPrompt(phase) {
@@ -2323,9 +2370,12 @@ function promptCopiaButton(phase) {
     esito.textContent = "preparo…";
     try {
       const payload = await chiediPrompt(phase);
-      await navigator.clipboard.writeText(payload.text || "");
-      esito.className = "msg show ok";
-      esito.textContent = `copiato (${(payload.text || "").length} caratteri, fonte: ${payload.source}). Incollalo come primo messaggio di una chat nuova.`;
+      const copia = await copiaTesto(payload.text || "");
+      esito.className = copia.ok ? "msg show ok" : "msg show err";
+      esito.textContent = copia.ok
+        ? `copiato (${(payload.text || "").length} caratteri, fonte: ${payload.source}). Incollalo come primo messaggio di una chat nuova.`
+        : "NON copiato da solo: il prompt è qui sotto, selezionalo e premi Ctrl+C (Cmd+C).";
+      if (!copia.ok) apriTesto(`${phase} — il prompt`, payload.text, { copia: true, seleziona: true, file: `prompt-${phase}.md` });
     } catch (error) {
       esito.className = "msg show err";
       esito.textContent = `non copiato: ${error.message}`;
