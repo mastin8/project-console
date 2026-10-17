@@ -36,6 +36,7 @@
           <a href="/prompt" data-nav="prompt">Prompt</a>
           <a href="/percorso" data-nav="percorso">Percorso</a>
         </nav>
+        <button type="button" class="ghost" id="tutorial">Tutorial</button>
         <button type="button" class="ghost update" id="nuovo-registro" hidden>Registro cambiato · Aggiorna</button>
       </div>
     </div>
@@ -257,6 +258,112 @@
     <form method="dialog"><button type="submit" class="ghost close">Chiudi</button></form>
     <h3 id="report-title">Report</h3>
     <pre id="report-body" tabindex="0"></pre>
+  </dialog>
+
+  <!-- IL TUTORIAL. Non è un manuale del progetto: è il funzionamento del TOOL. I nomi di blocchi,
+       unità e fasi restano quelli del workspace; qui si spiega la macchina che li legge e li muove. -->
+  <dialog id="tutorial-dialog" aria-labelledby="tutorial-title">
+    <div class="tut-head">
+      <h3 id="tutorial-title">Come funziona il coordinatore</h3>
+      <button type="button" class="ghost close" id="tutorial-chiudi">Chiudi</button>
+    </div>
+    <div class="tut-body">
+      <p>Questa pagina non esegue il lavoro: legge i registri del progetto, dice cosa è dovuto,
+        prepara i prompt e registra le tue decisioni. Gli agenti lavorano fuori, nelle loro chat e
+        nel repository. Il <b>glossario a sinistra</b> spiega le parole; i pulsanti <b>«Cos'è»</b>
+        spiegano il singolo blocco, unità o fase.</p>
+
+      <nav class="tut-toc" aria-label="Sezioni del tutorial">
+        <a href="#tut-struttura">Struttura</a>
+        <a href="#tut-registro">Registro e coda</a>
+        <a href="#tut-pagine">Le pagine</a>
+        <a href="#tut-ciclo">Il ciclo di una fase</a>
+        <a href="#tut-accettare">Accettare</a>
+        <a href="#tut-problemi">Se qualcosa non torna</a>
+        <a href="#tut-progetti">Progetti nuovi</a>
+      </nav>
+
+      <h4 id="tut-struttura">Struttura: blocco → unità → fasi</h4>
+      <p>Un <b>blocco</b> è un gruppo di unità (accessibility, bundle, history…). Un'<b>unità</b> è
+        un risultato con un deliverable e criteri di accettazione. Ogni unità attraversa quattro
+        fasi: <b>A</b> analisi, <b>E</b> esecuzione, <b>T</b> verifica indipendente, <b>R</b>
+        accettazione.</p>
+      <div class="tut-flow" aria-label="Le fasi di una unità, in sequenza">
+        <span class="tut-step">A · analisi</span><span class="tut-freccia" aria-hidden="true">→</span>
+        <span class="tut-step">E · esecuzione</span><span class="tut-freccia" aria-hidden="true">→</span>
+        <span class="tut-step">T · verifica</span><span class="tut-freccia" aria-hidden="true">→</span>
+        <span class="tut-step">R · accettazione</span>
+      </div>
+      <p>Dentro un'unità le fasi sono <b>in sequenza</b>: ognuna misura l'output della precedente.
+        Tra unità diverse si può andare in parallelo solo se non si condizionano; le dipendenze sono
+        scritte nell'unità e la mappa in <b>Tempo</b> le disegna.</p>
+
+      <h4 id="tut-registro">Il registro e la coda</h4>
+      <p>Il <b>registro</b> (<code>state.yaml</code>, <code>tasks.yaml</code>) è il quaderno
+        condiviso: stato delle fasi, prese, tentativi, accettazioni. Gli agenti non lo scrivono a
+        mano: depositano richieste in <code>pending-transitions/</code>. Un applicatore le esegue
+        sotto lock, con una copia di sicurezza e la validazione; le applicate finiscono in
+        <code>applied/</code>, le rifiutate in <code>refused/</code> con il motivo.</p>
+      <p><b>Depositare non è applicare.</b> Finché una richiesta è solo un file, la pagina non la
+        vede: una presa non applicata lascia la fase «in attesa», un rilascio non applicato la
+        lascia «in corso». Quando la coda è piena compare il riquadro <b>«Coda dei registri»</b> e il
+        pulsante che applica. Non usare <code>--dir</code> mentre altre corsie lavorano: applica
+        anche le loro richieste.</p>
+
+      <h4 id="tut-pagine">Le cinque pagine</h4>
+      <ul>
+        <li><b>Adesso</b> — la coda operativa: cosa fare, posta in arrivo, cosa aspetta te, cosa è
+          in corso, risposte che hai già dato. I numeri rossi sono cose da verificare; quelli verdi
+          sono risposte già date.</li>
+        <li><b>Tempo</b> — il gantt con le date <i>misurate</i> e la mappa delle dipendenze, che
+          mostra tutte le unità anche quando il filtro sopra dice «Aperte».</li>
+        <li><b>Testimone</b> — il campo <code>next</code> dei report, parola per parola: cosa ha
+          lasciato scritto chi ha finito.</li>
+        <li><b>Prompt</b> — i prompt da copiare, divisi fra da fare, già fatti e con consegna
+          respinta.</li>
+        <li><b>Percorso</b> — blocco per blocco: unità, fasi, esiti, commit che toccano i path
+          dichiarati.</li>
+      </ul>
+
+      <h4 id="tut-ciclo">Il ciclo di una fase</h4>
+      <ol>
+        <li><b>Attivi</b> una fase: il tool deposita l'ordine, la riserva nel registro e ti dà il
+          prompt. Non avvia nessuno.</li>
+        <li><b>Copi</b> il prompt in una corsia. La prima istruzione chiede all'agente di dichiarare
+          la presa prima del primo byte.</li>
+        <li>L'agente <b>lavora</b>, pubblica un report con verdetto e <code>next</code>, e rilascia
+          la presa.</li>
+        <li>La pagina mostra consegna e verdetti: tu <b>accetti</b>, oppure rimandi il lavoro.</li>
+        <li>Un verdetto rosso <b>non si rilancia sugli stessi byte</b>: il report dice quale fase
+          riprendere, e la riga propone «Rifai (prompt)» quando c'è un motivo.</li>
+      </ol>
+
+      <h4 id="tut-accettare">Accettare</h4>
+      <p>Accettare è un atto tuo: dichiari di aver letto l'evidenza — il report della verifica, gli
+        esiti, i limiti — e che <b>non hai rieseguito le prove</b>. L'atto lo scrive: non è «ho
+        guardato il front-end», è «cosa ho rieseguito». I finding bloccanti non spariscono con la
+        firma: restano a chi li deve chiudere.</p>
+      <p>Se il cancello rifiuta, il motivo è scritto: revisione mossa, coda non applicata sulla
+        fase, presa viva, puntatore indietro. «Rifai (prompt)» compare solo quando c'è un bloccante
+        o quando il cancello chiede di riprendere la fase sui byte vivi.</p>
+
+      <h4 id="tut-problemi">Se qualcosa non torna</h4>
+      <ul>
+        <li><b>La pagina è vecchia</b> — aspetta l'avviso «Registro cambiato · Aggiorna», oppure F5.</li>
+        <li><b>La presa non si vede</b> — la richiesta è depositata ma non applicata: guarda la coda.</li>
+        <li><b>Non riesci ad accettare</b> — leggi il motivo nel messaggio; se la revisione è mossa,
+          la fase va ripresa, non forzata.</li>
+        <li><b>Una fase resta lì</b> — controlla il <code>next</code> del suo report: se è una
+          verifica rossa, il lavoro torna a monte.</li>
+        <li><b>I test sembrano troppi</b> — la regola è provare solo ciò che si tocca, una volta, e
+          dichiarare cosa non si è rieseguito.</li>
+      </ul>
+
+      <h4 id="tut-progetti">Progetti nuovi</h4>
+      <p>Il tool non conosce questo progetto: nomi, fasi, registri e comandi vengono da
+        <code>console.yaml</code> e dal workspace. La stessa pagina serve qualsiasi progetto;
+        cambiano i blocchi, le unità e le fasi, non il funzionamento.</p>
+    </div>
   </dialog>
 
   <script src="/app.js"></script>

@@ -490,7 +490,10 @@ body[data-page="adesso"] main .scheda-pannello[hidden]{display:none}
    allarme che suona per dire che non e' successo niente. */
 .schede{display:flex;gap:var(--s15);overflow-x:auto;overscroll-behavior-x:contain;
   border-bottom:1px solid var(--line);margin:var(--s5) 0 var(--s5);padding:0;
-  scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}
+  scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent;
+  /* Su schermo stretto le schede scorrono DENTRO la striscia: senza `contain`, la loro larghezza
+     allargava anche la pagina (misurato il 2026-10-17 a 390 px: 781 px di documento). */
+  contain:paint}
 /* `overflow-y:hidden`: senza, il padding della scheda attiva (che sborda di 4px per coprire la riga
    di riferimento) accende la barra verticale DENTRO la striscia — misurato: un trattino grigio
    appeso a destra delle schede. */
@@ -896,6 +899,38 @@ a.actfile:active{transform:scale(.97)}
 dialog{border:0;border-radius:var(--r-lg);padding:var(--s5);
   width:min(92vw,920px);min-width:min(92vw,320px);max-height:88vh;overflow:auto;
   background:var(--surface);color:var(--ink);box-shadow:var(--shadow)}
+
+/* IL TUTORIAL. Un pannello unico e leggibile: testa ferma, corpo che scorre. Non è una pagina
+   separata (il tutorial si legge mentre si guarda la pagina) e non è un muro: ha un indice. */
+#tutorial-dialog{padding:0;width:min(94vw,920px);overflow:hidden}
+#tutorial-dialog[open]{display:flex;flex-direction:column}
+.tut-head{display:flex;align-items:center;justify-content:space-between;gap:var(--s4);
+  padding:var(--s4) var(--s5);border-bottom:1px solid var(--line);background:var(--surface)}
+.tut-head h3{margin:0;font-size:16px;letter-spacing:-.01em;word-break:normal}
+.tut-head .close{float:none}
+.tut-body{overflow:auto;padding:var(--s4) var(--s5) var(--s6);font-size:13.5px;line-height:1.6;
+  color:var(--ink-2);scrollbar-width:thin}
+.tut-body p{margin:0 0 var(--s3);text-wrap:pretty;max-width:72ch}
+.tut-body h4{margin:var(--s5) 0 var(--s2);font-size:11.5px;font-weight:650;letter-spacing:.04em;
+  text-transform:uppercase;color:var(--ink-3)}
+.tut-body ul,.tut-body ol{margin:0 0 var(--s3);padding-left:var(--s5)}
+.tut-body li{margin-top:var(--s15);text-wrap:pretty;max-width:72ch}
+.tut-body b{color:var(--ink)}
+.tut-body code{font-family:var(--mono);font-size:12px;color:var(--ink)}
+.tut-toc{display:flex;flex-wrap:wrap;gap:var(--s15);margin:var(--s4) 0 var(--s2)}
+.tut-toc a{display:inline-block;padding:2px var(--s3);border:1px solid var(--line-strong);
+  border-radius:99px;color:var(--ink-2);font-size:12px;text-decoration:none}
+.tut-toc a:hover{background:var(--surface-2);color:var(--ink)}
+.tut-toc a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tut-flow{display:flex;align-items:center;flex-wrap:wrap;gap:var(--s2);margin:var(--s3) 0}
+.tut-step{padding:1px var(--s3);border:1px solid var(--line-strong);border-radius:99px;
+  font-family:var(--mono);font-size:12px;color:var(--ink)}
+.tut-freccia{color:var(--ink-3);font-size:13px}
+@media (max-width:640px){
+  .tut-head{padding:var(--s3) var(--s4)}
+  .tut-body{padding:var(--s3) var(--s4) var(--s5)}
+}
+
 dialog::backdrop{background:rgba(12,14,18,.5)}
 dialog h3{margin:0 0 var(--s3);font-size:15px;word-break:break-all}
 dialog .close{float:right}

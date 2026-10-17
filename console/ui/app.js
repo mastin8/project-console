@@ -4021,6 +4021,29 @@ function renderGlossario() {
   }
 }
 
+/* Il tutorial: un solo pannello, con l'indice che porta alle sezioni. Si apre sopra la pagina e non
+   la sostituisce, perche' le parole del tutorial servono mentre si guarda la pagina. */
+function initTutorial() {
+  const dialog = $("#tutorial-dialog");
+  const apri = $("#tutorial");
+  if (!dialog || !apri) return;
+  apri.addEventListener("click", () => dialog.showModal());
+  const chiudi = $("#tutorial-chiudi");
+  if (chiudi) chiudi.addEventListener("click", () => dialog.close());
+  dialog.addEventListener("click", (evento) => {
+    if (evento.target === dialog) dialog.close();
+  });
+  dialog.querySelectorAll('a[href^="#tut-"]').forEach((link) => {
+    link.addEventListener("click", (evento) => {
+      evento.preventDefault();
+      const target = document.querySelector(link.getAttribute("href"));
+      if (!target) return;
+      const ridotto = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      target.scrollIntoView({ block: "start", behavior: ridotto ? "auto" : "smooth" });
+    });
+  });
+}
+
 /* L'INDICE DEL LAVORO, a destra: blocchi che si aprono sulle loro unità. Ogni unità dice in una riga
    di cosa consiste (il risultato atteso o il titolo) e a che punto è; aprendola si legge il mestiere
    delle sue fasi, i prerequisiti e il prossimo atto. È la mappa, simmetrica al vocabolario. */
@@ -4093,6 +4116,7 @@ function spiegaFase(phase) {
 
 initLogo();
 renderGlossario();
+initTutorial();
 initHeaderHeight();
 preparaScheda();
 loadConfig();
@@ -4106,7 +4130,7 @@ const INTERVALLO = 30000;
 setInterval(() => {
   const campo = document.activeElement;
   const staScrivendo = campo && ["INPUT", "TEXTAREA"].includes(campo.tagName);
-  const dialogo = document.getElementById("report-dialog");
-  if (staScrivendo || (dialogo && dialogo.open)) return;
+  // Nessun ricarico mentre un dialogo è aperto: né il report, né il tutorial, né una spiegazione.
+  if (staScrivendo || document.querySelector("dialog[open]")) return;
   load();
 }, INTERVALLO);
