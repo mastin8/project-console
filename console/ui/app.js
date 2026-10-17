@@ -1470,11 +1470,18 @@ function renderActivation(data) {
           }
           riga.append(testo);
           const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });
+          // «Rifai» non è un'azione normale: compare solo se c'è un motivo per rifare (finding
+          // bloccanti). Se il cancello rifiuta l'accettazione per una revisione mossa, il pulsante
+          // viene scoperto in quel momento: prima non aveva senso offrirlo.
+          const rifai = owedPromptButton(voce.phase, "Rifai (prompt)");
+          rifai.hidden = !(Number(voce.bloccanti || 0) > 0);
           riga.append(
             h("div", { class: "actactions" }, [
               bottoneEsiti(voce.phase),
-              owedPromptButton(voce.phase, "Rifai (prompt)"),
-              acceptButton(voce.phase, message),
+              rifai,
+              acceptButton(voce.phase, message, () => {
+                rifai.hidden = false;
+              }),
             ]),
             message
           );
@@ -2620,7 +2627,7 @@ function activationPromptButton(phase, apri) {
    l'ATTO firmato `utente` (una mano che quei byte non li ha scritti): report, puntatore e stato nel
    registro, sotto il lock. Il cancello decide se si puo': se la base non e' pronta, non firma e dice
    perche' — e l'atto dichiara cosa ha letto e cosa NON ha rieseguito. */
-function acceptButton(phase, message) {
+function acceptButton(phase, message, seServeRifai) {
   const bottone = h("button", {
     type: "button",
     class: "actbtn",
@@ -2648,6 +2655,7 @@ function acceptButton(phase, message) {
       message.textContent = `non accettata: ${error.message}`;
       if (/revisione giudicata|puntatore nomina/i.test(error.message)) {
         message.textContent += " — il lavoro va rifatto sui byte vivi: usa «Rifai (prompt)».";
+        if (seServeRifai) seServeRifai();
       }
       bottone.disabled = false;
     }
