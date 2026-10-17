@@ -506,9 +506,14 @@ def prossimi(ws, state=None, tasks_doc=None):
             verdetto = str((documento or {}).get("verdict") or "")
         consegnata = bool(verdetto) and any(
             verdetto.startswith(prefisso)
+            # `ready_for_*` copre i verdetti con cui i progetti dichiarano «l'atto c'e' e passa la
+            # mano»: `ready_for_execution` (la console), `ready_for_handoff` e
+            # `ready_for_independent_verification` (il pack di Binche). Senza il prefisso GENERICO
+            # tre fasi consegnate su disco restavano «non consegnate» nella coda: misurato il
+            # 2026-10-17 su HIST01A, ZIP02A e QA05A, tutte con `verdict: ready_for_handoff`.
             # `accept*` copre `accepted` e i verdetti dei progetti (`accept_unit_with_declared_limits`):
             # un atto che accetta l'unita' E' una consegna, e senza questo la pagina non la vedeva.
-            for prefisso in ("ready_for_execution", "pass", "delivered", "accept")
+            for prefisso in ("ready_for_", "pass", "delivered", "accept")
         )
         # UNA PRENOTAZIONE PIU' VECCHIA DELLA CONSEGNA E' SPAZZATURA. Se la fase e' stata consegnata
         # e la prenotazione (`pre_registered`) e' anteriore al report, quell'ordine e' stato consumato:
