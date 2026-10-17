@@ -162,6 +162,20 @@ class ReviewState:
         self._loaded[name] = (istante, dato)
         return dato
 
+    def versione(self):
+        """Quando sono stati scritti i registri che contano: solo `stat`, non una rilettura."""
+
+        def mtime(percorso):
+            try:
+                return percorso.stat().st_mtime_ns
+            except OSError:
+                return 0
+
+        return {
+            "state_mtime_ns": mtime(self.workspace.state_path),
+            "tasks_mtime_ns": mtime(self.workspace.path(self.workspace.tasks)),
+        }
+
     def _queue(self):
         """Le due convenzioni del quaderno si dichiarano prima di leggerlo."""
         next_prompts.configure(
@@ -377,6 +391,10 @@ class ReviewState:
         dovuto = handoff.dovuto(self.workspace, state, tasks_doc, prese=set(activate.prese(state)))
         return {
             "generated": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            # L'impronta di TEMPO dei registri: due `stat`, nessun parse. La pagina la usa per
+            # accorgersi che la sua istantanea e' vecchia (una presa applicata dopo il caricamento
+            # restava invisibile finche' non si premeva «Ricarica»).
+            "versione": self.versione(),
             # Chi firma nel registro: una firma sola vuol dire che la condizione «chi accetta non
             # deve aver eseguito quei byte» puo' non essere soddisfatta da nessuno che esista. E' il
             # fatto che serve accanto a un ostacolo di firma, e senza il quale l'utente resta con un
@@ -1022,6 +1040,12 @@ def build_handler(state):
             if route == "/api/state":
                 try:
                     return self._json(200, state.snapshot())
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
+            if route == "/api/versione":
+                # Due `stat`: la pagina lo chiede spesso e non deve costare una rilettura.
+                try:
+                    return self._json(200, state.versione())
                 except Exception as error:  # noqa: BLE001
                     return self._json(500, {"error": str(error)})
             if route == "/api/timeline":

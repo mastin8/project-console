@@ -202,6 +202,8 @@ button{font:inherit;font-weight:550;padding:9px 18px;border-radius:var(--r-sm);
   transition:transform 160ms var(--ease-out), background-color 140ms var(--ease-out),
              border-color 140ms var(--ease-out)}
 button.ghost{background:var(--surface);color:var(--ink);border-color:var(--line-strong)}
+/* «Il registro è cambiato»: un avviso, non un errore. Sta accanto a Ricarica e sparisce al clic. */
+button.ghost.update{background:var(--accent-soft);border-color:var(--accent);color:var(--accent)}
 button:disabled{opacity:.55;cursor:progress}
 @media (hover:hover) and (pointer:fine){
   /* Il colore del testo si dichiara anche qui: lo stato hover non eredita per caso, e senza questa
@@ -210,6 +212,7 @@ button:disabled{opacity:.55;cursor:progress}
     color:var(--accent-ink)}
   button.ghost:hover:not(:disabled){color:var(--ink)}
   button.ghost:hover:not(:disabled){background:var(--surface-2)}
+  button.ghost.update:hover:not(:disabled){background:var(--accent-soft);color:var(--accent)}
 }
 button:active:not(:disabled){transform:scale(.97)}
 

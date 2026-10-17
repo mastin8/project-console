@@ -10,6 +10,7 @@ const CLOSED_STATES = ["accepted"];
 let snapshot = null;
 let filter = "open";
 let loadedAt = 0;
+let versioneVista = null;
 let selectedBlock = null;
 let consoleConfig = null;
 
@@ -79,6 +80,9 @@ async function load() {
   }
   snapshot = await response.json();
   loadedAt = Date.now();
+  versioneVista = snapshot.versione || null;
+  const avviso = $("#nuovo-registro");
+  if (avviso) avviso.hidden = true;
   render(snapshot);
 }
 
@@ -699,6 +703,32 @@ function refreshAge() {
   node.textContent = `istantanea di ${snapshot.generated} (${age}) · i registri del progetto cambiano sotto`;
 }
 setInterval(refreshAge, 30000);
+
+/* UNA PRESA APPLICATA DOPO IL CARICAMENTO RESTAVA INVISIBILE. La pagina e' un'istantanea, e finora
+   l'unico modo di accorgersene era leggere l'eta' in testa o premere «Ricarica». Qui si guarda solo
+   il tempo di scrittura dei registri (due `stat`), non si ricarica da soli: un avviso compare, e il
+   clic resta dell'utente. Si tace mentre si scrive o si legge un dialogo. */
+async function controllaVersione() {
+  if (document.visibilityState !== "visible" || !versioneVista) return;
+  if (document.querySelector("dialog[open]")) return;
+  const attivo = document.activeElement;
+  if (attivo && /^(INPUT|TEXTAREA|SELECT)$/.test(attivo.tagName)) return;
+  try {
+    const risposta = await fetch("/api/versione", { cache: "no-store" });
+    if (!risposta.ok) return;
+    const nuova = await risposta.json();
+    if (
+      nuova.state_mtime_ns !== versioneVista.state_mtime_ns ||
+      nuova.tasks_mtime_ns !== versioneVista.tasks_mtime_ns
+    ) {
+      const avviso = $("#nuovo-registro");
+      if (avviso) avviso.hidden = false;
+    }
+  } catch {
+    // Il prossimo giro riprova: un avviso mancato non deve rompere la pagina.
+  }
+}
+setInterval(controllaVersione, 20000);
 
 function questionCard(question) {
   const fieldset = h("fieldset", { class: "opts" }, [h("legend", { text: "Scegli una risposta" })]);
@@ -3705,6 +3735,8 @@ if (campoCerca) {
 }
 
 $("#refresh").addEventListener("click", load);
+const nuovoRegistro = $("#nuovo-registro");
+if (nuovoRegistro) nuovoRegistro.addEventListener("click", load);
 
 /* La casella del logo: il file in review/brand/ vince, poi il simbolo ufficiale, poi il
    monogramma. Il fallback non e' un errore da nascondere: e' uno stato della casella. */
