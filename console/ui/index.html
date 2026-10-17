@@ -312,16 +312,16 @@
 
       <h4 id="tut-pagine">Le cinque pagine</h4>
       <ul>
-        <li><b>Adesso</b> — la coda operativa: cosa fare, posta in arrivo, cosa aspetta te, cosa è
+        <li><b>Adesso</b>: la coda operativa. Cosa fare, posta in arrivo, cosa aspetta te, cosa è
           in corso, risposte che hai già dato. I numeri rossi sono cose da verificare; quelli verdi
           sono risposte già date.</li>
-        <li><b>Tempo</b> — il gantt con le date <i>misurate</i> e la mappa delle dipendenze, che
+        <li><b>Tempo</b>: il gantt con le date <i>misurate</i> e la mappa delle dipendenze, che
           mostra tutte le unità anche quando il filtro sopra dice «Aperte».</li>
-        <li><b>Testimone</b> — il campo <code>next</code> dei report, parola per parola: cosa ha
+        <li><b>Testimone</b>: il campo <code>next</code> dei report, parola per parola: cosa ha
           lasciato scritto chi ha finito.</li>
-        <li><b>Prompt</b> — i prompt da copiare, divisi fra da fare, già fatti e con consegna
+        <li><b>Prompt</b>: i prompt da copiare, divisi fra da fare, già fatti e con consegna
           respinta.</li>
-        <li><b>Percorso</b> — blocco per blocco: unità, fasi, esiti, commit che toccano i path
+        <li><b>Percorso</b>: blocco per blocco, unità, fasi, esiti, commit che toccano i path
           dichiarati.</li>
       </ul>
 
@@ -330,7 +330,7 @@
         <li><b>Attivi</b> una fase: il tool deposita l'ordine, la riserva nel registro e ti dà il
           prompt. Non avvia nessuno.</li>
         <li><b>Copi</b> il prompt in una corsia. La prima istruzione chiede all'agente di dichiarare
-          la presa prima del primo byte; il prompt porta anche cosa ha lasciato chi è venuto prima —
+          la presa prima del primo byte; il prompt porta anche cosa ha lasciato chi è venuto prima:
           il suo <code>next</code> e i finding bloccanti che riguardano questa fase.</li>
         <li>L'agente <b>lavora</b>, pubblica un report con verdetto e <code>next</code>, e rilascia
           la presa.</li>
@@ -341,13 +341,13 @@
           sono finding bloccanti o se il cancello rifiuta l'accettazione.</li>
       </ol>
       <p><b>Verifica contenuta.</b> La prima T copre tutti i casi derivati dal design. Dalla seconda
-        in poi — dopo un E rifatto — si rieseguono solo i casi che avevano respinto e quelli che
+        in poi, dopo un E rifatto, si rieseguono solo i casi che avevano respinto e quelli che
         esercitano le funzioni cambiate; il resto si dichiara non rieseguito, col motivo, e R lo
         accetta come limite.</p>
 
       <h4 id="tut-accettare">Accettare</h4>
-      <p>Accettare è un atto tuo: dichiari di aver letto l'evidenza — il report della verifica, gli
-        esiti, i limiti — e che <b>non hai rieseguito le prove</b>. L'atto lo scrive: non è «ho
+      <p>Accettare è un atto tuo: dichiari di aver letto l'evidenza (il report della verifica, gli
+        esiti, i limiti) e che <b>non hai rieseguito le prove</b>. L'atto lo scrive: non è «ho
         guardato il front-end», è «cosa ho rieseguito». I finding bloccanti non spariscono con la
         firma: restano a chi li deve chiudere.</p>
       <p>La riga dice <b>quanti finding bloccanti</b> ha l'atto e chi li deve: senza quel numero
@@ -358,14 +358,14 @@
 
       <h4 id="tut-problemi">Se qualcosa non torna</h4>
       <ul>
-        <li><b>La pagina è vecchia</b> — aspetta l'avviso «Registro cambiato · Aggiorna», oppure F5.</li>
-        <li><b>La presa non si vede</b> — la richiesta è depositata ma non applicata: guarda la coda.</li>
-        <li><b>Non riesci ad accettare</b> — leggi il motivo nel messaggio; se la revisione è mossa,
+        <li><b>La pagina è vecchia</b>: aspetta l'avviso «Registro cambiato · Aggiorna», oppure F5.</li>
+        <li><b>La presa non si vede</b>: la richiesta è depositata ma non applicata, guarda la coda.</li>
+        <li><b>Non riesci ad accettare</b>: leggi il motivo nel messaggio; se la revisione è mossa,
           la fase va ripresa, non forzata.</li>
-        <li><b>Una fase resta lì</b> — controlla il <code>next</code> del suo report: se è una
+        <li><b>Una fase resta lì</b>: controlla il <code>next</code> del suo report; se è una
           verifica rossa, il lavoro torna a E anche se il <code>next</code> non lo nomina; il
           prompt di E porta con sé i difetti da correggere.</li>
-        <li><b>I test sembrano troppi</b> — la regola è provare solo ciò che si tocca, una volta, e
+        <li><b>I test sembrano troppi</b>: la regola è provare solo ciò che si tocca, una volta, e
           dichiarare cosa non si è rieseguito.</li>
       </ul>
 
