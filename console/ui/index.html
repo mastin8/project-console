@@ -330,22 +330,31 @@
         <li><b>Attivi</b> una fase: il tool deposita l'ordine, la riserva nel registro e ti dà il
           prompt. Non avvia nessuno.</li>
         <li><b>Copi</b> il prompt in una corsia. La prima istruzione chiede all'agente di dichiarare
-          la presa prima del primo byte.</li>
+          la presa prima del primo byte; il prompt porta anche cosa ha lasciato chi è venuto prima —
+          il suo <code>next</code> e i finding bloccanti che riguardano questa fase.</li>
         <li>L'agente <b>lavora</b>, pubblica un report con verdetto e <code>next</code>, e rilascia
           la presa.</li>
         <li>La pagina mostra consegna e verdetti: tu <b>accetti</b>, oppure rimandi il lavoro.</li>
         <li>Un verdetto rosso <b>non si rilancia sugli stessi byte</b>: il report dice quale fase
-          riprendere, e la riga propone «Rifai (prompt)» quando c'è un motivo.</li>
+          riprendere; una verifica T respinta torna all'esecuzione E dell'unità anche quando il
+          <code>next</code> non scrive il codice di E. La riga propone «Rifai (prompt)» solo se ci
+          sono finding bloccanti o se il cancello rifiuta l'accettazione.</li>
       </ol>
+      <p><b>Verifica contenuta.</b> La prima T copre tutti i casi derivati dal design. Dalla seconda
+        in poi — dopo un E rifatto — si rieseguono solo i casi che avevano respinto e quelli che
+        esercitano le funzioni cambiate; il resto si dichiara non rieseguito, col motivo, e R lo
+        accetta come limite.</p>
 
       <h4 id="tut-accettare">Accettare</h4>
       <p>Accettare è un atto tuo: dichiari di aver letto l'evidenza — il report della verifica, gli
         esiti, i limiti — e che <b>non hai rieseguito le prove</b>. L'atto lo scrive: non è «ho
         guardato il front-end», è «cosa ho rieseguito». I finding bloccanti non spariscono con la
         firma: restano a chi li deve chiudere.</p>
-      <p>Se il cancello rifiuta, il motivo è scritto: revisione mossa, coda non applicata sulla
-        fase, presa viva, puntatore indietro. «Rifai (prompt)» compare solo quando c'è un bloccante
-        o quando il cancello chiede di riprendere la fase sui byte vivi.</p>
+      <p>La riga dice <b>quanti finding bloccanti</b> ha l'atto e chi li deve: senza quel numero
+        «Rifai» sembrerebbe un capriccio. Se il cancello rifiuta, il motivo è scritto: revisione
+        mossa, coda non applicata sulla fase, presa viva, puntatore indietro. «Rifai (prompt)»
+        compare solo quando c'è un bloccante o quando il cancello chiede di riprendere la fase sui
+        byte vivi.</p>
 
       <h4 id="tut-problemi">Se qualcosa non torna</h4>
       <ul>
@@ -354,7 +363,8 @@
         <li><b>Non riesci ad accettare</b> — leggi il motivo nel messaggio; se la revisione è mossa,
           la fase va ripresa, non forzata.</li>
         <li><b>Una fase resta lì</b> — controlla il <code>next</code> del suo report: se è una
-          verifica rossa, il lavoro torna a monte.</li>
+          verifica rossa, il lavoro torna a E anche se il <code>next</code> non lo nomina; il
+          prompt di E porta con sé i difetti da correggere.</li>
         <li><b>I test sembrano troppi</b> — la regola è provare solo ciò che si tocca, una volta, e
           dichiarare cosa non si è rieseguito.</li>
       </ul>
