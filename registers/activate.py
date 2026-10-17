@@ -506,7 +506,9 @@ def prossimi(ws, state=None, tasks_doc=None):
             verdetto = str((documento or {}).get("verdict") or "")
         consegnata = bool(verdetto) and any(
             verdetto.startswith(prefisso)
-            for prefisso in ("ready_for_execution", "pass", "delivered", "accepted")
+            # `accept*` copre `accepted` e i verdetti dei progetti (`accept_unit_with_declared_limits`):
+            # un atto che accetta l'unita' E' una consegna, e senza questo la pagina non la vedeva.
+            for prefisso in ("ready_for_execution", "pass", "delivered", "accept")
         )
         # UNA PRENOTAZIONE PIU' VECCHIA DELLA CONSEGNA E' SPAZZATURA. Se la fase e' stata consegnata
         # e la prenotazione (`pre_registered`) e' anteriore al report, quell'ordine e' stato consumato:

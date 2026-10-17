@@ -183,14 +183,22 @@ def leggi(ws, fase, state=None, tasks_doc=None):
         (int(trovato.group(1)) for p in cartella.glob("attempt-*.yaml") if (trovato := __import__("re").match(r"attempt-(\d+)\.yaml$", p.name)))
     ) if cartella.is_dir() else []
     misure["tentativi"] = tentativi[-1] if tentativi else 0
-    misure["puntatore"] = str(documento_puntatore.get("attempt") or "")
+    # L'attempt che il puntatore NOMINA: i progetti lo scrivono in modi diversi — `attempt`,
+    # `current_attempt`, o solo nel percorso del report (`attempt-2.yaml`). Leggere un campo solo
+    # produceva un falso allarme («il puntatore dice attempt ? mentre su disco c'è l'attempt 2») su un
+    # puntatore che era giusto. Misurato il 2026-10-17 su `REG03R`.
+    dichiarato = documento_puntatore.get("attempt") or documento_puntatore.get("current_attempt")
+    if not dichiarato and riferimento:
+        trovato = __import__("re").search(r"attempt-(\d+)\.ya?ml$", str(riferimento))
+        dichiarato = trovato.group(1) if trovato else None
+    misure["puntatore"] = str(dichiarato or "")
     if not riferimento:
         avvisi.append("il puntatore del report non dichiara quale tentativo e' quello corrente")
     elif not (ws.root / str(riferimento)).is_file():
         motivi.append(f"il puntatore nomina un report che non esiste: {riferimento}")
-    if tentativi and str(documento_puntatore.get("attempt") or "") != str(tentativi[-1]):
+    if tentativi and str(dichiarato or "") != str(tentativi[-1]):
         motivi.append(
-            f"il puntatore dice attempt {documento_puntatore.get('attempt') or '?'} mentre su disco "
+            f"il puntatore nomina l'attempt {dichiarato or '?'} mentre su disco "
             f"c'e' l'attempt {tentativi[-1]}: si giudicherebbe l'atto superato"
         )
 

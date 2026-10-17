@@ -82,9 +82,58 @@ def per(ws, fase, nota=None, firmatario="utente", dry_run=False):
         (int(trovato.group(1)) for p in cartella.glob("attempt-*.yaml") if (trovato := re.match(r"attempt-(\d+)\.yaml$", p.name)))
     ) if cartella.is_dir() else []
     numero = (tentativi[-1] + 1) if tentativi else 1
+    adesso = datetime.now().astimezone()
     giudicato = _leggi(ws.reports_dir / f"{fase}.yaml")
     riferimento = giudicato.get("report") or giudicato.get("report_ref") or ""
-    adesso = datetime.now().astimezone()
+    # Se l'atto di accettazione ESISTE GIA' (il report corrente ha un verdetto che accetta), premere
+    # Accetta non deve scriverne un secondo: il lavoro c'e', manca solo la registrazione nel registro.
+    # Misurato il 2026-10-17 su `REG03R`: attempt-2 con `accept_unit_with_declared_limits` e registro
+    # fermo a `blocked_verification · attempt 1`.
+    esistente = _leggi(ws.root / str(riferimento)) if riferimento else {}
+    verdetto_esistente = str(esistente.get("verdict") or giudicato.get("verdict") or "")
+    if verdetto_esistente.lower().startswith("accept") and riferimento:
+        numero = int(
+            (giudicato.get("current_attempt") or giudicato.get("attempt") or numero)
+        )
+        if dry_run:
+            return {
+                "atto": riferimento,
+                "numero": numero,
+                "registra_soltanto": True,
+                "registro": [f"status=accepted", f"attempt={numero}", f"report={riferimento}"],
+            }
+        with open(Path(lock_file(ws.root)), "a+") as maniglia:
+            fcntl.flock(maniglia, fcntl.LOCK_EX)
+            try:
+                for richiesta in (
+                    {"field": "status", "text": "accepted"},
+                    {"field": "attempt", "text": str(numero)},
+                    {"field": "report", "text": riferimento},
+                    {
+                        "field": f"accepted_from_act_{adesso.strftime('%Y%m%d')}",
+                        "text": (
+                            f"Accettazione GIA' scritta nell'atto {riferimento} "
+                            f"(verdetto {verdetto_esistente}): registrata nel registro da `utente` "
+                            f"il {adesso.strftime('%Y-%m-%dT%H:%M:%S%z')}, senza riscrivere l'atto."
+                        ),
+                    },
+                ):
+                    completa = {
+                        "schema": apply_transitions.SCHEMA,
+                        "file": ws.state,
+                        "anchor": f"  {fase}:",
+                        **richiesta,
+                    }
+                    apply_transitions.apply_request(completa, pack=ws.root, validate_after=False)
+            finally:
+                fcntl.flock(maniglia, fcntl.LOCK_UN)
+        return {
+            "atto": riferimento,
+            "numero": numero,
+            "registra_soltanto": True,
+            "firmatario": firmatario,
+            "registro": [f"status=accepted", f"attempt={numero}", f"report={riferimento}"],
+        }
     atto = {
         # Lo schema lo dichiara il progetto (`console.yaml#report_schema`): una piattaforma che scrive
         # nei suoi registri non gli impone il proprio formato.
@@ -193,8 +242,20 @@ def main(argv=None):
         print(f"NON ACCETTATA: {errore}")
         return 1
     if argomenti.dry_run:
+        if esito.get("registra_soltanto"):
+            print(
+                f"l'atto esiste gia': registrerebbe l'accettazione di {esito['atto']} "
+                f"(attempt {esito['numero']}) senza scriverne un altro"
+            )
+            return 0
         print(f"scriverebbe {esito['atto']} (attempt {esito['numero']}):\n")
         print(esito["corpo"])
+        return 0
+    if esito.get("registra_soltanto"):
+        print(
+            f"accettata {argomenti.phase}: registrata l'accettazione dell'atto {esito['atto']} "
+            f"(attempt {esito['numero']}), senza riscriverlo"
+        )
         return 0
     print(f"accettata {argomenti.phase}: {esito['atto']} (attempt {esito['numero']}), "
           f"firmato da {esito['firmatario']}, registro aggiornato")
