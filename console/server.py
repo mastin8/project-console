@@ -90,6 +90,7 @@ sys.path.insert(0, str(ROOT))
 
 import apply_transitions  # noqa: E402
 import activate  # noqa: E402 - attivare: riserva la fase e deposita l'ordine
+import esiti  # noqa: E402 - gli esiti di un atto in punti: criteri, casi, finding, limiti
 import handoff  # noqa: E402 - cosa c'e' da fare dopo: il testimone lasciato da chi ha finito
 import inbox  # noqa: E402 - la posta in arrivo: i messaggi depositati interi, uno per file
 import mandate  # noqa: E402 - il prompt di una fase: dal quaderno, o composto dal registro
@@ -1064,6 +1065,28 @@ def build_handler(state):
                     return self._json(200, {"phase": target, **esito})
                 except Exception as error:  # noqa: BLE001
                     return self._json(400, {"error": str(error)})
+            if route == "/api/esiti":
+                # Gli esiti di UNA fase, a richiesta: leggere tutti i report a ogni giro
+                # costerebbe centinaia di file per un elenco che si apre solo quando serve.
+                target = (parse_qs(parsed.query).get("phase") or [""])[0].strip()
+                if not target:
+                    return self._json(400, {"error": "serve phase: la fase di cui leggere gli esiti"})
+                try:
+                    tasks_doc = state._load(state.workspace.tasks) or {}
+                    nota = any(
+                        str(task.get("id")) == target for task in tasks_doc.get("tasks") or []
+                    )
+                    if not nota:
+                        return self._json(404, {"error": f"fase sconosciuta: {target}"})
+                    percorso, _, _, documento = handoff.ultimo_report(
+                        state.workspace, state._load(state.workspace.state) or {}, target
+                    )
+                    if not documento:
+                        return self._json(404, {"error": f"nessun report pubblicato per {target}"})
+                    relativo = str(percorso.relative_to(state.workspace.root)) if percorso else ""
+                    return self._json(200, esiti.estrai(documento, relativo))
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
             if route == "/file":
                 wanted = (parse_qs(parsed.query).get("path") or [""])[0]
                 target = (state.pack / wanted).resolve()

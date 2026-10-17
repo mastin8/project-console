@@ -1422,7 +1422,10 @@ function renderActivation(data) {
           riga.append(testo);
           const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });
           riga.append(
-            h("div", { class: "actactions" }, [acceptButton(voce.phase, message)]),
+            h("div", { class: "actactions" }, [
+              bottoneEsiti(voce.phase),
+              acceptButton(voce.phase, message),
+            ]),
             message
           );
           return riga;
@@ -1575,6 +1578,11 @@ function codaRow(voce) {
     // serve: si copia il prompt e lo si dà a una corsia. Era l'errore che ha prodotto «fase non
     // attivabile o inesistente: NAV03E» su un clic perfettamente legittimo.
     azioni.append(copiaPromptButton(voce.code, message));
+  }
+  // La R non ha ancora un report suo: l'evidenza e' quella della fase che la precede.
+  if (accettazione && voce.esiti_di) {
+    const suffisso = voce.unit ? String(voce.esiti_di).slice(String(voce.unit).length) : "";
+    azioni.append(bottoneEsiti(voce.esiti_di, `Esiti di ${suffisso || voce.esiti_di}`));
   }
   if (accettazione && !(voce.busy || []).length) azioni.append(acceptButton(voce.code, message));
   if (voce.fase) azioni.append(attivaButtonPlain(voce.code, message));
@@ -2303,6 +2311,10 @@ function activationRow(voce, attesa, rilasciabile, apriPrompt) {
   // i cambiamenti», e prima non esisteva. Compare anche sulla fase RISERVATA (in attesa di un
   // esecutore): chi accetta e' il padrone, e la prenotazione non lo blocca.
   if (/R$/.test(voce.phase) || /acceptance|accettazione/i.test(String(voce.kind || ""))) {
+    const precedente = fasePrecedente(voce.phase);
+    if (precedente && precedente.delivered) {
+      azioni.append(bottoneEsiti(precedente.id, `Esiti di ${precedente.suffix}`));
+    }
     azioni.append(acceptButton(voce.phase, message));
   }
   riga.append(azioni, message);
@@ -2882,7 +2894,7 @@ function unitDetail(unit, id) {
       "div",
       { class: "dphases" },
       unit.phases.map((fase) =>
-        h("span", { class: "phasecell" }, [phaseButton(fase), bottoneCosa(`fase ${fase.id}`, () => spiegaFase(fase))])
+        cellaFase(fase)
       )
     )
   );
@@ -3295,7 +3307,7 @@ function unitRow(unit) {
       "div",
       { class: "phases" },
       unit.phases.map((fase) =>
-        h("span", { class: "phasecell" }, [phaseButton(fase), bottoneCosa(`fase ${fase.id}`, () => spiegaFase(fase))])
+        cellaFase(fase)
       )
     ),
   ]);
@@ -3352,6 +3364,28 @@ function phaseButton(phase) {
       phase.register_behind ? h("span", { class: "when", text: "indice in ritardo" }) : null,
     ]
   );
+}
+
+/* La cella di una fase: il suo stato, il «Cos'è» e — se un atto esiste — i suoi «Esiti».
+   Una sola forma ovunque compaia una fase, cosi' il pulsante non va cercato in posti diversi. */
+function cellaFase(fase) {
+  return h("span", { class: "phasecell" }, [
+    phaseButton(fase),
+    bottoneCosa(`fase ${fase.id}`, () => spiegaFase(fase)),
+    fase.delivered ? bottoneEsiti(fase.id) : null,
+  ]);
+}
+
+/* La fase prima di questa nella stessa unita': per una `R` e' la verifica, cioe' l'evidenza. */
+function fasePrecedente(phaseId) {
+  for (const blocco of (snapshot && snapshot.blocks) || []) {
+    for (const unita of blocco.units || []) {
+      const fasi = unita.phases || [];
+      const indice = fasi.findIndex((fase) => fase.id === phaseId);
+      if (indice > 0) return fasi[indice - 1];
+    }
+  }
+  return null;
 }
 
 /* Lo stato di attivazione di una fase, dal carico dello stato: serve a non offrire un pulsante che
@@ -3557,6 +3591,123 @@ function bottoneCosa(etichetta, apri) {
     title: etichetta,
     onclick: apri,
   });
+}
+
+/* «Esiti»: i punti di un atto — criteri, casi, finding, limiti — letti dal report e messi in fila.
+   Serve prima di firmare: il verdetto da solo dice «pass», non dice cosa e' rimasto scoperto. */
+const ETICHETTE_ESITO = {
+  pass: "ok",
+  covered: "coperto",
+  covered_with_declared_residual: "coperto con residuo",
+  pass_with_declared_residual: "ok con residuo",
+  pass_with_declared_residuals: "ok con residuo",
+  not_covered: "non coperto",
+  not_measured: "non misurato",
+  declared_divergence: "divergenza dichiarata",
+  needs_changes: "da rifare",
+  blocked_verification: "bloccato",
+  missing: "manca",
+  satisfied_on_current_bytes: "soddisfatto",
+  ready_for_handoff: "pronto per l'atto successivo",
+  ready_for_execution: "pronto per l'esecuzione",
+  ready_for_independent_verification: "pronto per la verifica",
+  pass_with_declared_limits: "ok con limiti",
+  accept_unit: "accettato",
+  accepted: "accettato",
+};
+
+function tonoEsito(esito) {
+  const valore = String(esito || "").toLowerCase();
+  if (!valore) return "";
+  if (/fail|needs_changes|blocked|blocking|refused/.test(valore)) return "bad";
+  if (/not_covered|not_measured|divergen|partial|missing/.test(valore)) return "warn";
+  if (/residu|limit|declared/.test(valore)) return "warn";
+  if (/pass|covered|accept|done|ok|ready_for|satisfied/.test(valore)) return "ok";
+  return "";
+}
+
+function etichettaEsito(esito) {
+  const valore = String(esito || "");
+  const noto = ETICHETTE_ESITO[valore.toLowerCase()];
+  if (noto) return noto;
+  const pulito = valore.replace(/_/g, " ");
+  return pulito.length > 34 ? `${pulito.slice(0, 34).replace(/\s+\S*$/, "")}…` : pulito || "—";
+}
+
+function apriEsiti(dati) {
+  const punti = (dati.sezioni || []).flatMap((sezione) => sezione.punti || []);
+  const daGuardare = punti.filter((punto) => tonoEsito(punto.esito) !== "ok" && punto.esito).length;
+  const nodi = [
+    h("p", { class: "esiti-sommario" }, [
+      h("span", {
+        class: `esiti-esito ${tonoEsito(dati.verdict)}`,
+        text: etichettaEsito(dati.verdict) || "senza verdetto",
+      }),
+      document.createTextNode(
+        punti.length
+          ? ` ${punti.length} punti${daGuardare ? ` · ${daGuardare} da guardare` : " · tutti ok"}${
+              dati.attempt ? ` · tentativo ${dati.attempt}` : ""
+            }`
+          : " nessun punto leggibile nel report"
+      ),
+    ]),
+  ];
+  for (const sezione of dati.sezioni || []) {
+    nodi.push(h("h4", { class: "esiti-titolo", text: sezione.titolo }));
+    nodi.push(
+      h(
+        "ul",
+        { class: "esiti-lista" },
+        (sezione.punti || []).map((punto) =>
+          h("li", {}, [
+            punto.id ? h("code", { class: "esiti-id", text: punto.id }) : null,
+            h("span", { class: "esiti-testo", text: punto.testo || "" }),
+            punto.esito
+              ? h("span", {
+                  class: `esiti-esito ${tonoEsito(punto.esito)}`,
+                  text: etichettaEsito(punto.esito),
+                })
+              : null,
+          ])
+        )
+      )
+    );
+  }
+  if (!punti.length) {
+    nodi.push(
+      h("p", {
+        text: "Il report non ha liste di punti leggibili (criteri, casi, finding, limiti): aprilo intero prima di firmare.",
+      })
+    );
+  }
+  nodi.push(h("p", { class: "esiti-fonte", text: `Report: ${dati.report || "—"}` }));
+  spiega(
+    `Esiti di ${dati.phase || "questa fase"} — ${etichettaEsito(dati.verdict) || "senza verdetto"}`,
+    nodi
+  );
+}
+
+function bottoneEsiti(fase, etichetta) {
+  const bottone = h("button", {
+    type: "button",
+    class: "cosa",
+    text: etichetta || "Esiti",
+    title: `gli esiti in punti di ${fase}: criteri, casi, finding e limiti`,
+  });
+  bottone.addEventListener("click", async () => {
+    bottone.disabled = true;
+    try {
+      const risposta = await fetch(`/api/esiti?phase=${encodeURIComponent(fase)}`);
+      const dati = await risposta.json();
+      if (!risposta.ok) throw new Error(dati.error || `errore ${risposta.status}`);
+      apriEsiti(dati);
+    } catch (errore) {
+      spiega(`Esiti di ${fase}`, [`Non riesco a leggere il report: ${errore.message}.`]);
+    } finally {
+      bottone.disabled = false;
+    }
+  });
+  return bottone;
 }
 
 function renderGlossario() {

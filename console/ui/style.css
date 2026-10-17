@@ -423,6 +423,29 @@ body[data-page="adesso"] main .scheda-pannello[hidden]{display:none}
 #spiega-body li{margin-top:var(--s1)}
 #spiega-body b{color:var(--ink)}
 #spiega-body .passi{font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+/* Gli esiti in punti: una riga per punto, l'identificativo a sinistra, l'esito a destra. */
+#spiega-body .esiti-sommario{display:flex;align-items:center;gap:var(--s2);flex-wrap:wrap;
+  margin:0 0 var(--s4);color:var(--ink-2);font-size:12px;font-family:var(--mono)}
+#spiega-body .esiti-titolo{margin:var(--s4) 0 var(--s2);font-size:11.5px;font-weight:650;
+  letter-spacing:.02em;text-transform:uppercase;color:var(--ink-3)}
+#spiega-body .esiti-lista{list-style:none;margin:0 0 var(--s3);padding:0;
+  max-height:42vh;overflow:auto;scrollbar-width:thin}
+#spiega-body .esiti-lista li{display:flex;align-items:baseline;gap:var(--s2);
+  margin:0;padding:var(--s2) 0;border-top:1px solid var(--line)}
+#spiega-body .esiti-lista li:first-child{border-top:0;padding-top:0}
+#spiega-body .esiti-id{flex:none;font-family:var(--mono);font-size:11.5px;color:var(--ink)}
+#spiega-body .esiti-testo{flex:1 1 auto;min-width:0;color:var(--ink-2);text-wrap:pretty}
+#spiega-body .esiti-esito{flex:none;padding:1px var(--s2);border-radius:99px;
+  border:1px solid var(--line-strong);font-size:11px;font-weight:600;white-space:nowrap}
+#spiega-body .esiti-esito.ok{color:var(--ok);background:var(--ok-soft);border-color:transparent}
+#spiega-body .esiti-esito.warn{color:var(--warn);background:var(--warn-soft);border-color:transparent}
+#spiega-body .esiti-esito.bad{color:var(--bad);background:var(--bad-soft);border-color:transparent}
+#spiega-body .esiti-fonte{margin:var(--s3) 0 0;font-family:var(--mono);font-size:11.5px;color:var(--ink-3)}
+@media (max-width:640px){
+  #spiega-body .esiti-lista li{flex-wrap:wrap}
+  #spiega-body .esiti-testo{flex-basis:100%}
+  #spiega-body .esiti-esito{white-space:normal}
+}
 
 /* LA CODA DEI REGISTRI. Un avviso, non una decorazione: quando c'e', il registro e' indietro
    rispetto ai file e ogni numero di questa pagina puo' essere vecchio. Sta sopra le schede perche'

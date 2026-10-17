@@ -531,6 +531,13 @@ def prossimi(ws, state=None, tasks_doc=None):
             if quando_presa and quando_report and quando_presa < quando_report:
                 riserva_vecchia = True
                 stato_presa = ""
+        # La fase che PRECEDE questa nel ciclo: per una `R` e' la verifica, e i suoi esiti sono
+        # l'evidenza su cui si firma. Si ricava dall'ordine dichiarato dal progetto, non dal nome:
+        # un progetto puo' chiamare le fasi come vuole.
+        suffisso = prossima[len(uid) :] if prossima.startswith(uid) else ""
+        esiti_di = ""
+        if suffisso in ordine and ordine.index(suffisso) > 0:
+            esiti_di = uid + ordine[ordine.index(suffisso) - 1]
         fuori.append(
             {
                 # `code` e `phase` sono la stessa cosa: la riga in pagina usa `code` per tutte le
@@ -556,6 +563,7 @@ def prossimi(ws, state=None, tasks_doc=None):
                 "report": str(percorso_report.relative_to(ws.root)) if percorso_report else "",
                 "owner": str(presa.get("taken_by") or presa.get("owner_agent") or ""),
                 "apre": fasi_aperte[1:],
+                "esiti_di": esiti_di,
             }
         )
     # Prima le unita' che tengono piu' altre (percorso critico), poi quelle piu' vicine alla fine.
