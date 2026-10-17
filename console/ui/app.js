@@ -1364,10 +1364,13 @@ function consegnaDiFase(code) {
 
 /* «L'ho mandato e nessuno l'ha dichiarato»: e' diverso da «non l'ho ancora mandato», e il registro
    da solo non li distingue. Questa riga li distingue. */
-function rigaConsegna(code) {
+function rigaConsegna(code, haAtto = false) {
   const traccia = consegnaDiFase(code);
   if (!traccia) return null;
   const inCorso = ((snapshot && snapshot.claims) || []).some((voce) => voce.task_id === code);
+  // Se un atto è già su disco, «nessuna presa dichiarata» non è più una notizia: il lavoro è stato
+  // fatto (magari è stato respinto, ma è un'altra riga a dirlo).
+  if (!inCorso && haAtto) return null;
   const quando = String(traccia.when || "").slice(11, 16);
   return h("div", { class: "actmeta" }, [
     h("b", { class: "warnnote", text: inCorso ? "prompt consegnato, presa dichiarata" : "prompt consegnato, NESSUNA presa dichiarata" }),
@@ -1532,7 +1535,7 @@ function codaRow(voce) {
   testo.append(h("code", { class: "actcode", text: voce.code }));
   const titolo = ((voce.fase || {}).title || "").trim().replace(/^(Accettare|Implementare|Verificare|Analizzare):\s*/, "");
   if (titolo) testo.append(document.createTextNode(` ${titolo}`));
-  const traccia = rigaConsegna(voce.code);
+  const traccia = rigaConsegna(voce.code, Boolean(voce.report));
   if (traccia) testo.append(traccia);
   // LA STESSA UNITA' CON UN'ALTRA FASE IN CORSO. Non si vieta (il tester puo' derivare i casi dal
   // design mentre l'esecuzione lavora) ma si dice: misurare adesso significa misurare byte che si
@@ -1596,6 +1599,22 @@ function codaRow(voce) {
       ])
     );
     riga.append(azioni);
+    return riga;
+  }
+  if (voce.rifai) {
+    // La verifica è rossa e il report dice dove tornare: rilanciare la stessa fase sugli stessi
+    // byte rifarebbe la stessa misura. Il pulsante è il prompt della fase da riprendere.
+    testo.append(
+      h("div", { class: "actmeta" }, [
+        h("b", { class: "warnnote", text: "da rifare a monte: " }),
+        document.createTextNode(
+          `${voce.code} ha respinto (${voce.verdetto}) e il report dice di riprendere ${voce.rifai}. ` +
+            `Rilanciare ${voce.code} sugli stessi byte rifarebbe la stessa misura.`
+        ),
+      ])
+    );
+    azioni.append(owedPromptButton(voce.rifai));
+    riga.append(azioni, message);
     return riga;
   }
   if (voce.fase && (voce.fase.misura || {}).solo_firma) {
@@ -1872,7 +1891,7 @@ function owedRow(voce) {
     })
   );
   riga.append(testo);
-  const tracce = codici.map((codice) => rigaConsegna(codice.code)).filter(Boolean);
+  const tracce = codici.map((codice) => rigaConsegna(codice.code, codice.done)).filter(Boolean);
   tracce.forEach((t) => testo.append(t));
   const azioni = h("div", { class: "actactions" });
   codici.forEach((codice) => {

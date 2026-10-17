@@ -515,6 +515,27 @@ def prossimi(ws, state=None, tasks_doc=None):
             # un atto che accetta l'unita' E' una consegna, e senza questo la pagina non la vedeva.
             for prefisso in ("ready_for_", "pass", "delivered", "accept")
         )
+        # UN VERDETTO NEGATIVO NON SI RILANCIA SUGLI STESSI BYTE. Se la verifica e' rossa, il
+        # report dice quale fase riprendere; rilanciare la stessa fase rifarebbe la stessa misura.
+        # Eccezione misurata: se quella fase ha gia' un atto PIU' NUOVO della verifica, il
+        # rifacimento e' stato consegnato e tocca di nuovo alla verifica. Senza questa seconda
+        # parte, un T respinto continuerebbe a mandare a E anche dopo che E ha rifatto il lavoro.
+        suffisso = prossima[len(uid) :] if prossima.startswith(uid) else ""
+        rifai = ""
+        if not consegnata and str(verdetto).startswith(("fail", "needs_changes")):
+            testi = str((documento or {}).get("next") or "")
+            for precedente in (ordine[: ordine.index(suffisso)] if suffisso in ordine else []):
+                codice = uid + precedente
+                if codice not in testi:
+                    continue
+                percorso_rifai, _, _, _ = handoff.ultimo_report(ws, state, codice)
+                if (
+                    percorso_rifai is None
+                    or percorso_report is None
+                    or percorso_rifai.stat().st_mtime <= percorso_report.stat().st_mtime
+                ):
+                    rifai = codice
+                break
         # UNA PRENOTAZIONE PIU' VECCHIA DELLA CONSEGNA E' SPAZZATURA. Se la fase e' stata consegnata
         # e la prenotazione (`pre_registered`) e' anteriore al report, quell'ordine e' stato consumato:
         # nessuno la "sta facendo", e mostrarla come riservata rimanda una fase gia' fatta. Misurato il
@@ -534,7 +555,6 @@ def prossimi(ws, state=None, tasks_doc=None):
         # La fase che PRECEDE questa nel ciclo: per una `R` e' la verifica, e i suoi esiti sono
         # l'evidenza su cui si firma. Si ricava dall'ordine dichiarato dal progetto, non dal nome:
         # un progetto puo' chiamare le fasi come vuole.
-        suffisso = prossima[len(uid) :] if prossima.startswith(uid) else ""
         esiti_di = ""
         if suffisso in ordine and ordine.index(suffisso) > 0:
             esiti_di = uid + ordine[ordine.index(suffisso) - 1]
@@ -564,6 +584,7 @@ def prossimi(ws, state=None, tasks_doc=None):
                 "owner": str(presa.get("taken_by") or presa.get("owner_agent") or ""),
                 "apre": fasi_aperte[1:],
                 "esiti_di": esiti_di,
+                "rifai": rifai,
             }
         )
     # Prima le unita' che tengono piu' altre (percorso critico), poi quelle piu' vicine alla fine.

@@ -258,7 +258,9 @@ def per(ws, fase, state=None):
     """
     # Cache per fase: la pagina chiede il prompt di ogni riga attivata insieme, e senza questa
     # ogni riga ricostruiva il quaderno (o componeva da capo) — misurato 4-5 s per prompt.
-    chiave = (str(ws.root), fase)
+    # La cache vale finche' i registri non cambiano: il prompt porta dentro l'occorrenza della presa
+    # e ora anche il perche' del rifacimento, e una copia di ieri non e' il prompt di oggi.
+    chiave = (str(ws.root), fase, _versione_registri(ws))
     if chiave in _CACHE:
         return _CACHE[chiave]
     dal_quaderno = activate.prompt_per(ws, fase)
@@ -271,9 +273,54 @@ def per(ws, fase, state=None):
         }
     else:
         esito = componi(ws, fase, state=state)
+    perche = _perche(ws, fase, state)
+    if perche:
+        esito = {**esito, "text": esito["text"] + perche}
     esito = {**esito, "text": con_busta(ws, fase, esito["text"]), "envelope": True}
     _CACHE[chiave] = esito
     return esito
+
+
+def _versione_registri(ws):
+    """Il tempo di scrittura di registro e task: due `stat`, per non servire un prompt vecchio."""
+    try:
+        return (ws.state_path.stat().st_mtime_ns, ws.path(ws.tasks).stat().st_mtime_ns)
+    except OSError:
+        return (0, 0)
+
+
+def _perche(ws, fase, state=None):
+    """Per una fase GIA' ACCETTATA che torna in mano: il report che la nomina e cosa chiede.
+
+    Senza questo blocco il prompt di un rifacimento e' identico a quello del primo giro: l'agente
+    rilegge il contratto e non sa quali due casi sono rossi. La pagina sapeva gia' dirlo (campo
+    `next` dei report); ora lo dice anche il testo che si copia.
+    """
+    if not isinstance(state, dict):
+        return ""
+    registrata = (state.get("tasks") or {}).get(str(fase)) or {}
+    if str(registrata.get("status") or "") != "accepted":
+        return ""
+    try:
+        import handoff  # import locale: `handoff` legge i report, `mandate` compone il prompt
+
+        voci = handoff.dovuto(ws, state=state, limite=200)
+    except Exception:  # noqa: BLE001 - un prompt senza il perche' resta un prompt valido
+        return ""
+    for voce in voci:
+        if str(fase) not in {str(codice.get("code")) for codice in voce.get("codes") or []}:
+            continue
+        testo = str(voce.get("text") or "").strip()
+        if not testo:
+            continue
+        quando = str(voce.get("when") or "")[:16].replace("T", " ")
+        return (
+            "\n\n═══ PERCHÉ QUESTA FASE È QUI ═══\n"
+            f"Il report {voce.get('source') or '—'} ({quando}) nomina {fase} e dice:\n"
+            f"{testo}\n"
+            "Leggi quell'atto prima di toccare i byte: il rifacimento è quello che chiede."
+        )
+    return ""
 
 
 def busta(ws, fase):
