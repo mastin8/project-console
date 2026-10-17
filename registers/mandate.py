@@ -312,13 +312,89 @@ def consegna_gia_scritta(ws, fase, testo):
     return False
 
 
+def _blocco_testimone(ws, fase, voce, titolo="COSA HA LASCIATO CHI È VENUTO PRIMA", nomina=True):
+    """Il testo del testimone, coi finding bloccanti che riguardano questa fase."""
+    testo = str(voce.get("text") or "").strip()
+    if not testo:
+        return ""
+    quando = str(voce.get("when") or "")[:16].replace("T", " ")
+    # I finding BLOCCANTI che riguardano questa fase, per identificativo: «leggi il report» da
+    # solo non dice quanti sono né quali. Si citano, non si riscrivono: il testo resta nel report.
+    bloccanti = []
+    try:
+        sorgente = ws.root / str(voce.get("source") or "")
+        documento = _carica(sorgente.read_text(encoding="utf-8", errors="replace")) or {}
+        for finding in documento.get("findings") or []:
+            if not isinstance(finding, dict):
+                continue
+            gravita = str(finding.get("severity") or "").lower()
+            proprietario = str(finding.get("owner") or "")
+            if "block" in gravita and (not proprietario or str(fase) in proprietario):
+                bloccanti.append(f"{finding.get('id') or '—'} ({finding.get('severity')})")
+    except (OSError, yaml.YAMLError):
+        bloccanti = []
+    coda = (
+        "\nBloccanti per te in quell'atto: " + ", ".join(bloccanti) + "."
+        if bloccanti
+        else ""
+    )
+    introduzione = f"nomina {fase} e dice" if nomina else "ha respinto l'unità e dice"
+    return (
+        f"\n\n═══ {titolo} ═══\n"
+        f"Il report {voce.get('source') or '—'} ({quando}) {introduzione}:\n"
+        f"{testo}{coda}\n"
+        "Leggi quell'atto prima di toccare i byte: quello che chiede è il lavoro da fare; "
+        "i finding bloccanti e i limiti sono nel suo report."
+    )
+
+
+def _verifica_respinta(ws, fase, state):
+    """L'ultima verifica dell'unità, se è rossa e più recente dell'ultimo atto di questa fase.
+
+    Serve ai report che descrivono i difetti senza ripetere il codice della fase da riprendere:
+    A11Y01T dice «prima di una nuova ratifica correggi F1/F2/F3» e nomina solo R. La coda sa che il
+    rifacimento è E; il prompt di E deve sapere lo stesso, non solo il percorso.
+    """
+    try:
+        import handoff
+
+        tasks_doc = _carica(ws.path(ws.tasks).read_text(encoding="utf-8", errors="replace")) or {}
+    except (OSError, yaml.YAMLError):
+        return None
+    task = next((t for t in tasks_doc.get("tasks") or [] if str(t.get("id")) == str(fase)), None)
+    unita = str((task or {}).get("unit_id") or "")
+    if not unita:
+        return None
+    ultimo, _, _, _ = handoff.ultimo_report(ws, state, fase)
+    for altra in tasks_doc.get("tasks") or []:
+        if str(altra.get("unit_id")) != unita:
+            continue
+        if str(altra.get("kind")) != "independent_verification":
+            continue
+        percorso, _, _, documento = handoff.ultimo_report(ws, state, str(altra.get("id")))
+        if not documento:
+            continue
+        if not str(documento.get("verdict") or "").startswith(("fail", "needs_changes")):
+            continue
+        if ultimo and percorso and percorso.stat().st_mtime <= ultimo.stat().st_mtime:
+            continue
+        if not str(documento.get("next") or "").strip():
+            continue
+        return {
+            "source": str(percorso.relative_to(ws.root)) if percorso else "",
+            "when": str(documento.get("published_at") or documento.get("prepared_at") or ""),
+            "text": str(documento.get("next") or ""),
+        }
+    return None
+
+
 def _perche(ws, fase, state=None):
     """Il testimone di chi nomina questa fase nel suo `next`: cosa ha lasciato e cosa chiede.
 
     Vale per un rifacimento E per un handoff normale: `HIST02A` consegna un design con tre finding
     bloccanti per `HIST02E`, e senza questo blocco il prompt di E sarebbe identico a quello di una
-    fase mai cominciata. La pagina lo sapeva gia' (campo `next` dei report); ora lo dice anche il
-    testo che si copia. Se nessun report nomina la fase, il blocco non c'e'.
+    fase mai cominciata. Se nessun report nomina la fase ma la verifica dell'unità è rossa e più
+    recente, si cita quella: è il caso di A11Y01T che descrive i difetti senza scrivere «E».
     """
     if not isinstance(state, dict):
         return ""
@@ -327,41 +403,16 @@ def _perche(ws, fase, state=None):
 
         voci = handoff.dovuto(ws, state=state, limite=200)
     except Exception:  # noqa: BLE001 - un prompt senza il perche' resta un prompt valido
-        return ""
+        voci = []
     for voce in voci:
         if str(fase) not in {str(codice.get("code")) for codice in voce.get("codes") or []}:
             continue
-        testo = str(voce.get("text") or "").strip()
-        if not testo:
-            continue
-        quando = str(voce.get("when") or "")[:16].replace("T", " ")
-        # I finding BLOCCANTI che riguardano questa fase, per identificativo: «leggi il report» da
-        # solo non dice quanti sono né quali. Si citano, non si riscrivono: il testo resta nel report.
-        bloccanti = []
-        try:
-            sorgente = ws.root / str(voce.get("source") or "")
-            documento = _carica(sorgente.read_text(encoding="utf-8", errors="replace")) or {}
-            for finding in documento.get("findings") or []:
-                if not isinstance(finding, dict):
-                    continue
-                gravita = str(finding.get("severity") or "").lower()
-                proprietario = str(finding.get("owner") or "")
-                if "block" in gravita and (not proprietario or str(fase) in proprietario):
-                    bloccanti.append(f"{finding.get('id') or '—'} ({finding.get('severity')})")
-        except (OSError, yaml.YAMLError):
-            bloccanti = []
-        coda = (
-            "\nBloccanti per te in quell'atto: " + ", ".join(bloccanti) + "."
-            if bloccanti
-            else ""
-        )
-        return (
-            "\n\n═══ COSA HA LASCIATO CHI È VENUTO PRIMA ═══\n"
-            f"Il report {voce.get('source') or '—'} ({quando}) nomina {fase} e dice:\n"
-            f"{testo}{coda}\n"
-            "Leggi quell'atto prima di toccare i byte: quello che chiede è il lavoro da fare; "
-            "i finding bloccanti e i limiti sono nel suo report."
-        )
+        blocco = _blocco_testimone(ws, fase, voce)
+        if blocco:
+            return blocco
+    voce = _verifica_respinta(ws, fase, state)
+    if voce:
+        return _blocco_testimone(ws, fase, voce, "COSA HA LASCIATO LA VERIFICA", nomina=False)
     return ""
 
 

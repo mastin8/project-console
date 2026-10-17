@@ -464,6 +464,11 @@ def prossimi(ws, state=None, tasks_doc=None):
     registrate = state.get("tasks") or {}
     vive = prese(state)
     unita = {str(u.get("id")): u for u in tasks_doc.get("units") or [] if u.get("id")}
+    tipi = {
+        str(t.get("id")): str(t.get("kind") or "")
+        for t in tasks_doc.get("tasks") or []
+        if t.get("id")
+    }
     ordine = [str(s).upper() for s in (ws.phases or ("A", "E", "T", "R"))]
     stato_di = lambda fase: (registrate.get(fase) or {}).get("status", "pending")
 
@@ -533,10 +538,14 @@ def prossimi(ws, state=None, tasks_doc=None):
         rifai = ""
         if not consegnata and str(verdetto).startswith(("fail", "needs_changes")):
             testi = str((documento or {}).get("next") or "")
-            for precedente in (ordine[: ordine.index(suffisso)] if suffisso in ordine else []):
-                codice = uid + precedente
-                if codice not in testi:
-                    continue
+            precedenti = ordine[: ordine.index(suffisso)] if suffisso in ordine else []
+            candidati = [uid + p for p in precedenti if uid + p in testi]
+            # Una VERIFICA respinta torna all'esecuzione anche quando il `next` descrive i difetti
+            # senza ripetere il codice: misurato il 2026-10-17 su A11Y01T, che diceva «prima di una
+            # nuova ratifica: correggi F1/F2/F3» e lasciava la coda ferma sulla T.
+            if not candidati and tipi.get(prossima) == "independent_verification":
+                candidati = [uid + p for p in precedenti if tipi.get(uid + p) == "implementation"]
+            for codice in candidati:
                 percorso_rifai, _, _, _ = handoff.ultimo_report(ws, state, codice)
                 if (
                     percorso_rifai is None
@@ -544,7 +553,7 @@ def prossimi(ws, state=None, tasks_doc=None):
                     or percorso_rifai.stat().st_mtime <= percorso_report.stat().st_mtime
                 ):
                     rifai = codice
-                break
+                    break
         # UNA PRENOTAZIONE PIU' VECCHIA DELLA CONSEGNA E' SPAZZATURA. Se la fase e' stata consegnata
         # e la prenotazione (`pre_registered`) e' anteriore al report, quell'ordine e' stato consumato:
         # nessuno la "sta facendo", e mostrarla come riservata rimanda una fase gia' fatta. Misurato il
