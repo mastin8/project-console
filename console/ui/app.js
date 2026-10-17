@@ -2568,7 +2568,18 @@ function acceptButton(phase, message) {
       bottone.disabled = false;
     }
   });
-  return bottone;
+  // «Cos'è» accanto alla firma: cosa vuol dire accettare, e cosa dichiara «non rieseguito».
+  return h("span", { class: "phasecell" }, [
+    bottone,
+    bottoneCosa("accettazione", () =>
+      spiega(`Accettare ${phase}`, [
+        "L'atto dichiara: <b>ho letto queste prove</b> (il report della verifica col suo verdetto, i log, le impronte) e <b>non ho rifatto le corse</b>. La misura del comportamento è della verifica: rifarla sarebbe la stessa misura due volte.",
+        "Sul front-end: non ti è richiesto di andarci per firmare, e l'atto non dichiara che non ci sei andato — parla di cosa hai <b>rieseguito</b>, non di cosa hai guardato. Se ci vai e vuoi che conti, va scritto nell'atto come evidenza.",
+        "Accettando ti prendi <b>l'evidenza di un altro</b>: se era parziale, il limite è tuo. Per questo l'atto nomina i residui e chi li deve.",
+        "L'unica cosa che «non rieseguito» non deve mai voler dire è «nessuno ha misurato»: senza un report con casi e log non c'è niente da accettare.",
+      ])
+    ),
+  ]);
 }
 
 function activationButton(phase, action, label, message, disabled) {
@@ -2865,7 +2876,15 @@ function unitDetail(unit, id) {
     panel.append(detailLine("Obbligo aperto: ", `${item.label} — ${item.detail}`));
   });
   (unit.yours || []).forEach((item) => panel.append(yoursLine(item, false)));
-  panel.append(h("div", { class: "dphases" }, unit.phases.map(phaseButton)));
+  panel.append(
+    h(
+      "div",
+      { class: "dphases" },
+      unit.phases.map((fase) =>
+        h("span", { class: "phasecell" }, [phaseButton(fase), bottoneCosa(`fase ${fase.id}`, () => spiegaFase(fase))])
+      )
+    )
+  );
   return panel;
 }
 
@@ -3080,6 +3099,16 @@ function moveTab(event, domain, group) {
 
 function panelContent(tab) {
   const nodes = [];
+  // Il «Cos'è» del BLOCCO: cosa materialmente raccoglie e quando si chiude.
+  const cosaBlocco = bottoneCosa(`blocco ${tab.domain}`, () =>
+    spiega(`Blocco ${tab.domain}`, [
+      `Raccoglie le unità di <b>${tab.domain}</b>. Un blocco non si «esegue»: si chiude quando <b>tutte</b> le sue unità sono accettate.`,
+      `Qui: <b>${tab.accepted} di ${tab.total}</b> unità accettate. Ogni unità ha un deliverable e criteri propri, e le sue quattro fasi (analisi, esecuzione, verifica, accettazione) vanno una alla volta.`,
+      (tab.units || []).some((u) => (u.depends_on || []).length)
+        ? "Alcune unità aspettano un'altra unità: l'attesa è dichiarata nei suoi prerequisiti, e finché non è accettata non si parte."
+        : "Nessuna unità di questo blocco dichiara prerequisiti esterni: può procedere in parallelo con gli altri blocchi.",
+    ])
+  );
   nodes.push(
     h("div", { class: "phead" }, [
       h("span", { class: `chip stato ${tab.state}`, text: BLOCK_STATE[tab.state] }),
@@ -3087,6 +3116,7 @@ function panelContent(tab) {
         class: "pmeta",
         text: `${tab.accepted} di ${tab.total} unità accettate · ${tab.units.length} mostrate con il filtro corrente`,
       }),
+      cosaBlocco,
     ])
   );
   if (tab.next) {
@@ -3161,7 +3191,24 @@ function unitRow(unit) {
   const stalled = unit.phases.filter((p) => ["needs_changes", "failed"].includes(p.status));
   return h("div", { class: `unit${unit.accepted ? " accepted" : ""}` }, [
     h("div", {}, [
-      h("div", { class: "name", text: `${unit.id} — ${unit.title || ""}` }),
+      h("div", { class: "name" }, [
+        document.createTextNode(`${unit.id} — ${unit.title || ""}`),
+        bottoneCosa(`unità ${unit.id}`, () =>
+          spiega(`Unità ${unit.id} — ${unit.title || ""}`, [
+            unit.deliverable
+              ? `Il risultato atteso: <b>${unit.deliverable}</b>.`
+              : "Il registro non dichiara un risultato atteso per questa unità: sta nei criteri.",
+            "Le sue quattro fasi vanno <b>una alla volta</b>: l'analisi dichiara perimetro e casi, l'esecuzione scrive i byte, la verifica misura, l'accettazione giudica e chiude.",
+            (unit.depends_on || []).length
+              ? `Aspetta: <b>${(unit.depends_on || []).join(", ")}</b>. Finché quelle unità non sono accettate, questa non parte.`
+              : "Nessun prerequisito esterno dichiarato: può procedere in parallelo.",
+            ...unit.phases
+              .filter((f) => f.status !== "accepted")
+              .slice(0, 1)
+              .map((f) => `Adesso il prossimo atto è <b>${f.id}</b> (${f.status}).`),
+          ])
+        ),
+      ]),
       h("div", {
         class: "id",
         text: [
@@ -3257,7 +3304,13 @@ function unitRow(unit) {
           )
         : null,
     ]),
-    h("div", { class: "phases" }, unit.phases.map(phaseButton)),
+    h(
+      "div",
+      { class: "phases" },
+      unit.phases.map((fase) =>
+        h("span", { class: "phasecell" }, [phaseButton(fase), bottoneCosa(`fase ${fase.id}`, () => spiegaFase(fase))])
+      )
+    ),
   ]);
 }
 
@@ -3440,7 +3493,107 @@ function initHeaderHeight() {
   window.addEventListener("resize", misura);
 }
 
+/* ---------------------------------------------------------------- il glossario e «Cos'è» */
+/* Le parole di questo progetto non si indovinano: presa, ordine, riserva, «non rieseguito». Finora
+   stavano in un documento; qui stanno accanto alla pagina, e ogni blocco/unità/fase ha il suo
+   «Cos'è» che dice cosa si fa MATERIALMENTE. */
+const SPIEGAZIONI_FASE = {
+  analisi: [
+    "Legge il problema e decide cosa deve esistere: dichiara il <b>perimetro</b> (i path che l'esecuzione toccherà), deriva i <b>casi di prova PRIMA</b> di vedere l'esecuzione, e scrive le decisioni con il loro costo.",
+    "Consegna: il report dell'atto, il puntatore e il <b>next</b> (cosa resta da fare). Non scrive prodotto.",
+  ],
+  esecuzione: [
+    "Scrive i <b>byte del prodotto</b>, solo nei path dichiarati dal design. Niente lavoro che i criteri non chiedono.",
+    "Consegna: report + puntatore + next. Non dichiara sé stessa accettata.",
+  ],
+  "verifica indipendente": [
+    "Esegue i casi derivati dal design sui <b>byte vivi</b>: una corsa autorevole, impronte prima e dopo, e dichiara cosa NON ha coperto.",
+    "È l'unica fase che <b>misura</b>. Non corregge il prodotto: il rosso torna a chi ha scritto.",
+  ],
+  accettazione: [
+    "Legge i criteri e i byte, e <b>giudica</b>: accettato, accettato con limiti, respinto. Dichiara i residui e chi li deve.",
+    "Non riesegue le batterie: la misura è della verifica. La firma è di chi <b>non ha eseguito</b> quei byte.",
+  ],
+};
+
+const GLOSSARIO = [
+  ["Presa", "La dichiarazione che una corsia sta lavorando su una fase: compare nel registro con nome e ora. Finché è viva, nessun altro deve toccare quei byte."],
+  ["Ordine", "Il file in `dispatch-queue/` che dice cosa fare e con quale prompt, con le impronte della revisione al momento dell'attivazione. Non avvia nessuno: è una promessa in attesa di un esecutore."],
+  ["Riservata", "Una fase con un ordine depositato e <b>nessun titolare</b>. Non è «in corso»: nessuno ci sta lavorando. Si sblocca dando il prompt a una corsia, o annullando la riserva."],
+  ["In corso", "Una fase con una <b>presa viva</b>: qualcuno l'ha dichiarata sua. La pagina mostra da quante ore, e segnala le prese che sembrano morte."],
+  ["Rilascio", "La chiusura della presa, alla fine del lavoro. Senza, la fase resta «in corso» anche se il report è pubblicato."],
+  ["A · E · T · R", "Le quattro fasi di un'unità, <b>in quest'ordine</b>: analisi, esecuzione, verifica indipendente, accettazione. Una alla volta: ognuna misura l'output della precedente."],
+  ["needs_changes", "Verdetto di una verifica o di un'accettazione che respinge: il lavoro torna a chi esegue, con i finding misurati."],
+  ["Consegnata", "Il report esiste (verdetto positivo) ma il registro non l'ha ancora accettata. Il passo dopo è l'accettazione, non un altro prompt."],
+  ["Non rieseguito", "Cosa l'atto NON ha rifatto, dichiarato invece di lasciarlo intendere. Per un'accettazione significa: «non ho rimisurato; ho letto le prove della verifica». Non significa «non ho guardato»."],
+  ["Accettazione (R)", "L'atto che chiude l'unità: si leggono criteri e byte, si giudica, si dichiarano limiti e residui. La firma deve essere di chi non ha eseguito quei byte."],
+  ["Coda dei registri", "Le richieste degli agenti non ancora applicate al registro. Se è piena, la pagina mostra uno stato vecchio: si applica col pulsante, che fa prima una copia."],
+  ["Prompt consegnato", "La traccia che un prompt è stato copiato e dato a una chat. Se dopo non compare una presa, il registro non sa che qualcuno ci sta lavorando."],
+  ["Testimone", "Il `next` del report: cosa resta da fare dopo, scritto da chi ha finito. È l'unico canale per la direzione; una chat non è un archivio."],
+];
+
+function spiega(titolo, paragrafi) {
+  const dialog = $("#spiega-dialog");
+  $("#spiega-title").textContent = titolo;
+  $("#spiega-body").replaceChildren(
+    ...[].concat(paragrafi).map((paragrafo) =>
+      typeof paragrafo === "string"
+        ? h("p", { html: paragrafo })
+        : paragrafo
+    )
+  );
+  if (!dialog.open) dialog.showModal();
+}
+
+function bottoneCosa(etichetta, apri) {
+  return h("button", {
+    type: "button",
+    class: "cosa",
+    text: "Cos'è",
+    title: etichetta,
+    onclick: apri,
+  });
+}
+
+function renderGlossario() {
+  const box = $("#glossario-lista");
+  if (!box) return;
+  box.replaceChildren(
+    ...GLOSSARIO.map(([voce, testo]) =>
+      h("details", {}, [
+        h("summary", { text: voce }),
+        h("p", { html: testo }),
+      ])
+    )
+  );
+  const chiudi = $("#spiega-chiudi");
+  if (chiudi) chiudi.addEventListener("click", () => $("#spiega-dialog").close());
+  const dialog = $("#spiega-dialog");
+  if (dialog) {
+    dialog.addEventListener("click", (evento) => {
+      if (evento.target === dialog) dialog.close();
+    });
+  }
+}
+
+/* Il «Cos'è» di una fase: la spiegazione del suo mestiere, più lo stato di QUESTA fase. */
+function spiegaFase(phase) {
+  const chiave = String(phase.kind || "").toLowerCase();
+  const base = SPIEGAZIONI_FASE[chiave] || [
+    "Questa fase non ha un mestiere dichiarato nel registro: leggi il titolo e i criteri dell'unità.",
+  ];
+  const stato = [
+    `Stato: <b>${phase.status}</b>`,
+    phase.delivered ? `consegna su disco: ${phase.delivery_path || "sì"}` : null,
+    phase.register_behind ? "il registro è in ritardo rispetto al file" : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  spiega(`${phase.id} — ${phase.title || phase.kind || "fase"}`, [...base, stato]);
+}
+
 initLogo();
+renderGlossario();
 initHeaderHeight();
 preparaScheda();
 loadConfig();

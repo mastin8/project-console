@@ -57,6 +57,15 @@
     </div>
   </header>
 
+  <!-- IL GLOSSARIO. Sta a sinistra e resta: le parole di questo progetto (presa, ordine, A/E/T/R,
+       «non rieseguito») sono la parte che nessuno indovina, e finora erano solo in un documento. Si
+       apre quello che serve; su schermo stretto il glossario si mette in cima, chiuso. -->
+  <div class="shell">
+    <aside class="glossario" id="glossario" aria-labelledby="glossario-head">
+      <h2 class="glossario-head" id="glossario-head">Glossario</h2>
+      <div id="glossario-lista"></div>
+    </aside>
+
   <main id="main">
     <!-- LA CODA DELLE TRANSIZIONI, sopra le schede perché vale per tutte: quando e' piena, il
          registro e' indietro rispetto ai file, e tutto quello che leggi in questa pagina — stato
@@ -205,6 +214,15 @@
       <div id="answered"></div>
     </section>
   </main>
+  </div>
+
+  <!-- «Cos'è»: una cosa sola, sempre la stessa forma — titolo, cosa si fa materialmente, cosa non
+       tocca a te. Lo usano i blocchi, le unità, le fasi e l'accettazione. -->
+  <dialog id="spiega-dialog" aria-labelledby="spiega-title">
+    <button type="button" class="ghost close" id="spiega-chiudi">Chiudi</button>
+    <h3 id="spiega-title"></h3>
+    <div id="spiega-body"></div>
+  </dialog>
 
   <dialog id="report-dialog" aria-labelledby="report-title">
     <form method="dialog"><button type="submit" class="ghost close">Chiudi</button></form>

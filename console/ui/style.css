@@ -357,6 +357,47 @@ body[data-page="percorso"] main [data-page="percorso"]{display:block}
    (l'attributo `hidden` da solo non basta, perche' la regola sopra e' piu' specifica di lui). */
 body[data-page="adesso"] main .scheda-pannello[hidden]{display:none}
 
+/* IL GLOSSARIO A SINISTRA. Non è una seconda navigazione: è il vocabolario, e sta accanto perché le
+   parole («presa», «ordine», «non rieseguito») servono MENTRE si legge la pagina. Su schermo stretto
+   va sotto, chiuso: la pagina resta la cosa che si guarda. */
+.shell{display:grid;grid-template-columns:236px minmax(0,1fr);gap:var(--s6);
+  max-width:calc(var(--page) + 236px + var(--s6));margin:0 auto;padding:0 var(--s5)}
+.shell>main{padding-left:0;padding-right:0;margin:0;max-width:none}
+.glossario{position:sticky;top:calc(var(--top-h, 118px) + var(--s4));align-self:start;
+  max-height:calc(100vh - var(--top-h, 118px) - var(--s6));overflow-y:auto;padding:var(--s4) 0;
+  scrollbar-width:thin;scrollbar-color:var(--line-strong) transparent}
+.glossario-head{margin:0 0 var(--s3);font-size:12px;font-weight:650;letter-spacing:.02em;
+  text-transform:uppercase;color:var(--ink-3)}
+.glossario details{border-bottom:1px solid var(--line);padding:var(--s2) 0}
+.glossario details:last-child{border-bottom:0}
+.glossario summary{list-style:none;cursor:pointer;font-size:13px;font-weight:550;color:var(--ink-2);
+  display:flex;justify-content:space-between;gap:var(--s2)}
+.glossario summary::-webkit-details-marker{display:none}
+.glossario summary::after{content:"+";color:var(--ink-3);font-weight:400}
+.glossario details[open] summary::after{content:"–"}
+.glossario details[open] summary{color:var(--ink)}
+.glossario p{margin:var(--s2) 0 0;font-size:12.5px;line-height:1.5;color:var(--ink-2);
+  text-wrap:pretty}
+@media (hover:hover) and (pointer:fine){.glossario summary:hover{color:var(--ink)}}
+@media (max-width:1100px){
+  .shell{grid-template-columns:1fr;gap:var(--s4);padding:0 var(--s4)}
+  .glossario{position:static;max-height:none;padding:var(--s3) 0 0;order:2}
+}
+/* «Cos'è»: un tastino piccolo, accanto alla cosa che spiega. Non è un'azione sul lavoro — è una
+   domanda — quindi è discreto, non un pulsante pieno. */
+.cosa{display:inline-flex;align-items:center;margin-left:var(--s2);padding:1px var(--s2);
+  border:1px solid var(--line-strong);border-radius:99px;background:var(--surface);color:var(--ink-2);
+  font-size:11.5px;font-weight:550;line-height:1.6;cursor:help;white-space:nowrap;
+  transition:background-color 140ms var(--ease-out),color 140ms var(--ease-out)}
+.cosa:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+@media (hover:hover) and (pointer:fine){.cosa:hover{background:var(--surface-2);color:var(--ink)}}
+#spiega-body{max-width:min(70ch, 80vw);color:var(--ink-2);font-size:13.5px;line-height:1.6}
+#spiega-body p{margin:0 0 var(--s3);text-wrap:pretty}
+#spiega-body ul{margin:0 0 var(--s3);padding-left:var(--s4)}
+#spiega-body li{margin-top:var(--s1)}
+#spiega-body b{color:var(--ink)}
+#spiega-body .passi{font-family:var(--mono);font-size:12.5px;color:var(--ink)}
+
 /* LA CODA DEI REGISTRI. Un avviso, non una decorazione: quando c'e', il registro e' indietro
    rispetto ai file e ogni numero di questa pagina puo' essere vecchio. Sta sopra le schede perche'
    vale per tutte, e sparisce quando la coda e' vuota — un avviso che c'e' sempre non si legge piu'.
