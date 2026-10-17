@@ -508,6 +508,22 @@ def prossimi(ws, state=None, tasks_doc=None):
             verdetto.startswith(prefisso)
             for prefisso in ("ready_for_execution", "pass", "delivered", "accepted")
         )
+        # UNA PRENOTAZIONE PIU' VECCHIA DELLA CONSEGNA E' SPAZZATURA. Se la fase e' stata consegnata
+        # e la prenotazione (`pre_registered`) e' anteriore al report, quell'ordine e' stato consumato:
+        # nessuno la "sta facendo", e mostrarla come riservata rimanda una fase gia' fatta. Misurato il
+        # 2026-10-17: `REG03T` consegnata alle 10:13 e ancora «riservata» da un ordine delle 10:02.
+        riserva_vecchia = False
+        if consegnata and percorso_report is not None and stato_presa in ("pre_registered", "ready"):
+            quando_presa = _momento(presa.get("registered_at") or presa.get("taken_at"))
+            try:
+                quando_report = datetime.fromtimestamp(
+                    percorso_report.stat().st_mtime, tz=timezone.utc
+                )
+            except OSError:
+                quando_report = None
+            if quando_presa and quando_report and quando_presa < quando_report:
+                riserva_vecchia = True
+                stato_presa = ""
         fuori.append(
             {
                 # `code` e `phase` sono la stessa cosa: la riga in pagina usa `code` per tutte le
@@ -527,6 +543,7 @@ def prossimi(ws, state=None, tasks_doc=None):
                 # sta lavorando — ne' offrire di attivarla (l'attivazione la rifiuta).
                 "live": stato_presa if stato_presa in ("taken", "active", "active_extension") else "",
                 "riservata": stato_presa in ("pre_registered", "ready"),
+                "riserva_vecchia": riserva_vecchia,
                 "consegnata": consegnata,
                 "verdetto": verdetto,
                 "report": str(percorso_report.relative_to(ws.root)) if percorso_report else "",
