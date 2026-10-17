@@ -3783,7 +3783,6 @@ if (campoCerca) {
   });
 }
 
-$("#refresh").addEventListener("click", load);
 const nuovoRegistro = $("#nuovo-registro");
 if (nuovoRegistro) nuovoRegistro.addEventListener("click", load);
 
