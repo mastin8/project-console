@@ -1080,12 +1080,20 @@ def build_handler(state):
                     ):
                         congelato = None
                     if congelato:
+                        # Il corpo congelato è quello consegnato, ma non deve perdere il testimone:
+                        # senza, END03E non sapeva dei tre bloccanti di END03A (misurato il 2026-10-18).
+                        aggiunta = mandate.testimone(
+                            state.workspace, target, state._load(state.workspace.state)
+                        )
+                        corpo = congelato["text"] + (
+                            "\n\n" + aggiunta.strip() if aggiunta else ""
+                        )
                         esito = {
                             **esito,
                             # La busta si mette anche davanti al corpo congelato: un ordine nato
                             # prima della busta non deve arrivare all'esecutore senza la
                             # dichiarazione del lavoro.
-                            "text": mandate.con_busta(state.workspace, target, congelato["text"]),
+                            "text": mandate.con_busta(state.workspace, target, corpo),
                             "source": f"ordine {congelato['file']} (corpo congelato)",
                             "order": congelato["file"],
                             "order_prompt_sha256": congelato["sha256"],

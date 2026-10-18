@@ -141,6 +141,36 @@ def _quando(documento, percorso):
     return None
 
 
+def _giudicato(ws, documento):
+    """Se `documento` è un atto di accettazione, l'atto che ha giudicato.
+
+    L'accettazione scrive un report nuovo e ne diventa il corrente: senza questo, il `next` e i
+    finding del report sostanziale spariscono dalla pagina e dal prompt della fase successiva
+    (misurato il 2026-10-18 su END03A: accettata, e END03E perse i tre bloccanti).
+    """
+    if not documento:
+        return None
+    if not str(documento.get("verdict") or "").lower().startswith("accept"):
+        return None
+    candidati = [
+        documento.get("judged_report"),
+        documento.get("report"),
+        documento.get("report_ref"),
+    ]
+    candidati += list(documento.get("judged_evidence") or [])
+    candidati.append(documento.get("summary"))
+    for valore in candidati:
+        if not valore:
+            continue
+        trovato = re.search(r"(?:reports|esiti|[\w.-]+)/[\w.-]+/attempt-\d+\.ya?ml", str(valore))
+        if not trovato:
+            continue
+        percorso = ws.root / trovato.group(0)
+        if percorso.is_file():
+            return percorso, _leggi(percorso)
+    return None
+
+
 def dichiarazioni(ws, state=None, tasks_doc=None):
     """Cosa c'e' da fare dopo, dichiarato da chi ha finito: una voce per fase, la piu' recente."""
     state = state if state is not None else (_leggi(ws.state_path))
@@ -164,6 +194,9 @@ def dichiarazioni(ws, state=None, tasks_doc=None):
         percorso, puntatore, doc_puntatore, doc_report = ultimo_report(ws, state, fase)
         if percorso is None:
             continue
+        sostanziale = _giudicato(ws, doc_report)
+        if sostanziale:
+            percorso, doc_report = sostanziale
         voci = []
         for chiave in CHIAVI:
             for testo in _testi(doc_report.get(chiave)) + _testi(doc_puntatore.get(chiave)):

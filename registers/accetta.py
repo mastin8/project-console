@@ -155,6 +155,9 @@ def per(ws, fase, nota=None, firmatario="utente", dry_run=False):
             f"Accettazione dell'utente su {riferimento or 'il report corrente'} "
             f"(registro: {quadro.get('status')} · attempt {quadro.get('attempt')})."
         ),
+        # Il percorso dell'atto giudicato, esplicito: il `next` e i finding restano leggibili
+        # anche quando questo report diventa il corrente della fase.
+        "judged_report": riferimento,
         "judged_evidence": [
             f"report giudicato: {riferimento or 'non dichiarato dal puntatore'}",
             f"coda della fase al momento della firma: {quadro['misure'].get('coda_sulla_fase', 0)} richieste non applicate",

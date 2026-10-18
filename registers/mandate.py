@@ -425,6 +425,13 @@ def _perche(ws, fase, state=None):
     return ""
 
 
+def testimone(ws, fase, state=None):
+    """Il blocco del testimone, per chi compone un prompt fuori da `per` (per esempio un ordine
+    congelato): il corpo dell'ordine resta quello consegnato, ma non deve perdere cosa ha lasciato
+    chi è venuto prima."""
+    return _perche(ws, fase, state)
+
+
 def busta(ws, fase):
     """La PRIMA ISTRUZIONE: dichiara che il lavoro sta andando, col deposito pronto da fare.
 
