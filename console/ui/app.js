@@ -1456,6 +1456,8 @@ function renderActivation(data) {
           if (bloccanti) {
             const chi = (voce.bloccanti_chi || []).filter(Boolean).join(", ");
             const chiBreve = chi.length > 70 ? `${chi.slice(0, 70)}…` : chi;
+            const prossima = (voce.apre || [])[0];
+            const analisi = String(voce.phase || "").toUpperCase().endsWith("A");
             testo.append(
               h("div", { class: "actmeta" }, [
                 h("b", {
@@ -1463,18 +1465,24 @@ function renderActivation(data) {
                   text: `${bloccanti} finding bloccanti aperti`,
                 }),
                 document.createTextNode(
-                  `${chiBreve ? ` (owner: ${chiBreve})` : ""} — leggili in «Esiti»: non spariscono con l'accettazione, restano a chi deve chiuderli.`
+                  `${chiBreve ? ` (owner: ${chiBreve})` : ""} — leggili in «Esiti». ` +
+                    (analisi
+                      ? `L'analisi non si rifà: i bloccanti sono il suo output e passano a ${
+                          prossima || "chi esegue"
+                        }.`
+                      : `Non spariscono con l'accettazione: passano a ${prossima || "chi esegue"}.`)
                 ),
               ])
             );
           }
           riga.append(testo);
           const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });
-          // «Rifai» non è un'azione normale: compare solo se c'è un motivo per rifare (finding
-          // bloccanti). Se il cancello rifiuta l'accettazione per una revisione mossa, il pulsante
-          // viene scoperto in quel momento: prima non aveva senso offrirlo.
+          // «Rifai» non è un'azione normale e i finding bloccanti NON sono un motivo per rifare:
+          // sono l'output dell'atto, e passano alla fase successiva. Il pulsante esiste solo per il
+          // caso in cui il cancello rifiuta l'accettazione (revisione mossa, puntatore indietro):
+          // in quel caso viene scoperto, perché l'atto va ripreso sui byte vivi.
           const rifai = owedPromptButton(voce.phase, "Rifai (prompt)");
-          rifai.hidden = !(Number(voce.bloccanti || 0) > 0);
+          rifai.hidden = true;
           riga.append(
             h("div", { class: "actactions" }, [
               bottoneEsiti(voce.phase),

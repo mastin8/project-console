@@ -337,8 +337,8 @@
         <li>La pagina mostra consegna e verdetti: tu <b>accetti</b>, oppure rimandi il lavoro.</li>
         <li>Un verdetto rosso <b>non si rilancia sugli stessi byte</b>: il report dice quale fase
           riprendere; una verifica T respinta torna all'esecuzione E dell'unità anche quando il
-          <code>next</code> non scrive il codice di E. La riga propone «Rifai (prompt)» solo se ci
-          sono finding bloccanti o se il cancello rifiuta l'accettazione.</li>
+          <code>next</code> non scrive il codice di E. La riga propone «Rifai (prompt)» solo se il
+          cancello rifiuta l'accettazione; i finding bloccanti passano alla fase successiva.</li>
       </ol>
       <p><b>Verifica contenuta.</b> La prima T copre tutti i casi derivati dal design. Dalla seconda
         in poi, dopo un E rifatto, si rieseguono solo i casi che avevano respinto e quelli che
@@ -350,11 +350,11 @@
         esiti, i limiti) e che <b>non hai rieseguito le prove</b>. L'atto lo scrive: non è «ho
         guardato il front-end», è «cosa ho rieseguito». I finding bloccanti non spariscono con la
         firma: restano a chi li deve chiudere.</p>
-      <p>La riga dice <b>quanti finding bloccanti</b> ha l'atto e chi li deve: senza quel numero
-        «Rifai» sembrerebbe un capriccio. Se il cancello rifiuta, il motivo è scritto: revisione
-        mossa, coda non applicata sulla fase, presa viva, puntatore indietro. «Rifai (prompt)»
-        compare solo quando c'è un bloccante o quando il cancello chiede di riprendere la fase sui
-        byte vivi.</p>
+      <p>La riga dice <b>quanti finding bloccanti</b> ha l'atto e chi li deve. I bloccanti non sono
+        un motivo per rifare: sono l'output dell'atto e passano alla fase successiva. In particolare
+        un'analisi non si rifà per i suoi bloccanti: si accetta A e si manda avanti E. «Rifai
+        (prompt)» compare solo se il cancello rifiuta l'accettazione — revisione mossa, puntatore
+        indietro — perché in quel caso l'atto va ripreso sui byte vivi.</p>
 
       <h4 id="tut-problemi">Se qualcosa non torna</h4>
       <ul>
