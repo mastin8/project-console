@@ -279,6 +279,17 @@ si verifica**. Il linguaggio deve essere comprensibile a una persona di 18 anni:
 termini tecnici senza una spiegazione, niente «sistema» o «flusso» da soli, esempi concreti. Se un
 fatto non è stato verificato, si dichiara.
 
+### Modalità normale e modalità rigorosa
+
+In **modalità normale** il front-end mostra il prossimo passo con un prompt breve, il ramo, il
+worktree, i task paralleli o in conflitto e una scheda risultato con test, errori,
+**Accetta** o **Riprendi dall'esecuzione**. A/E/T/R restano sotto «Dettagli tecnici».
+
+La **modalità rigorosa** si attiva dal toggle accanto a «Rifiniture finali» e apre il mandato
+completo, le fasi A/E/T/R, owner, claim e verifica indipendente. Le modifiche che toccano
+migrazioni, modelli/dati, sicurezza, release o file condivisi entrano automaticamente in
+rigorosa e devono dichiarare `strict`/`risk` nel registro.
+
 Quando tutte le unità e le fasi sono accettate, **Adesso** mostra l'insegna **«Rifinitura finale»**:
 dice quante cose bloccano ancora la chiusura, quante sono aperte ma non bloccanti e quante ricevute
 di posta restano da archiviare. Sotto, in **«Rifiniture finali»**, ci sono le voci con **Leggi**,

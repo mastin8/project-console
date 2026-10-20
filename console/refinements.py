@@ -164,6 +164,8 @@ def merge(obligation, item, workspace=None):
             "title": str(item.get("title") or ""),
             "owners": [str(voce) for voce in item.get("owners") or []],
             "paths": [str(percorso) for percorso in item.get("paths") or []],
+            "strict": item.get("strict") is True,
+            "risk": [str(rischio) for rischio in item.get("risk") or []],
             "branch": str(item.get("branch") or f"task/{obligation['id']}"),
             "worktree": str(item.get("worktree") or f".worktrees/{obligation['id']}"),
             "test": voce_fase.get("test") or {},
@@ -207,6 +209,8 @@ def update(
     errors=None,
     branch=None,
     worktree=None,
+    strict=None,
+    risk=None,
     claim_by=None,
     claim_task=None,
     release=False,
@@ -246,6 +250,14 @@ def update(
     if worktree is not None:
         item["worktree"] = worktree
         cambi.append("worktree")
+    if strict is not None:
+        item["strict"] = bool(strict)
+        cambi.append("strict")
+    if risk is not None:
+        if isinstance(risk, str):
+            risk = [voce.strip() for voce in risk.split(",") if voce.strip()]
+        item["risk"] = list(risk)
+        cambi.append("risk")
     if phase:
         fase = item.setdefault("phases", {}).setdefault(phase, {})
         for campo in ("status", "attempt", "report", "verdict", "author"):
@@ -323,6 +335,8 @@ def main(argv=None):
     parser.add_argument("--errors")
     parser.add_argument("--branch")
     parser.add_argument("--worktree")
+    parser.add_argument("--strict", action="store_true", default=None)
+    parser.add_argument("--risk")
     parser.add_argument("--claim-by")
     parser.add_argument("--claim-task")
     parser.add_argument("--release", action="store_true")
@@ -347,6 +361,8 @@ def main(argv=None):
         errors=args.errors,
         branch=args.branch,
         worktree=args.worktree,
+        strict=args.strict,
+        risk=args.risk,
         claim_by=args.claim_by,
         claim_task=args.claim_task,
         release=args.release,

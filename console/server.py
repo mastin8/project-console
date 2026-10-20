@@ -472,6 +472,11 @@ def _vibe_prompt(item):
         )
     if item.get("branch"):
         righe.append(f"Ramo: {item['branch']}; worktree: {item.get('worktree') or '—'}.")
+    if item.get("strict_required"):
+        righe.append(
+            "Questa modifica è rigorosa: usa il mandato completo, con verifica indipendente "
+            "e accettazione esplicita."
+        )
     if item.get("conflicts"):
         righe.append(
             "Non partire in parallelo con " + ", ".join(item["conflicts"]) +
@@ -495,6 +500,26 @@ def _vibe_prompt(item):
         ]
     )
     return "\n".join(righe) + "\n"
+
+
+def _risk_flags(item):
+    """Perché una modifica merita il flusso rigoroso, letto da percorsi e dichiarazioni."""
+    flags = [str(rischio) for rischio in item.get("risk") or []]
+    if item.get("strict") is True:
+        flags.append("dichiarato")
+    for percorso in item.get("paths") or []:
+        basso = str(percorso).lower()
+        if "migrations/" in basso or basso.endswith("models.py"):
+            flags.append("data")
+        if "settings" in basso:
+            flags.append("configuration")
+        if "auth" in basso or "security" in basso:
+            flags.append("security")
+        if "release" in basso:
+            flags.append("release")
+        if basso.endswith(("api.py", "worker.py", "workspace.html", "tender-workspace.js")):
+            flags.append("shared_files")
+    return sorted({flag for flag in flags if flag})
 
 
 def open_obligations(state, workspace=None):
@@ -863,6 +888,9 @@ class ReviewState:
                     paralleli.append(altro["id"])
             obligation["conflicts"] = conflitti
             obligation["parallel_with"] = paralleli
+            flags = _risk_flags(obligation)
+            obligation["risk_flags"] = flags
+            obligation["strict_required"] = bool(flags)
             obligation["vibe_prompt"] = _vibe_prompt(obligation)
         independence_debts = open_independence_debts(state)
 
@@ -2193,6 +2221,12 @@ def build_handler(state):
                         errors=payload.get("errors"),
                         branch=payload.get("branch") or None,
                         worktree=payload.get("worktree") or None,
+                        strict=(
+                            payload.get("strict")
+                            if "strict" in payload
+                            else None
+                        ),
+                        risk=payload.get("risk"),
                         claim_by=(
                             payload.get("claim_by") or "utente"
                             if azione == "claim" or payload.get("claim_by")

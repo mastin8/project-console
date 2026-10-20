@@ -8,6 +8,7 @@ const $ = (sel) => document.querySelector(sel);
    L'unica cosa che il coordinatore deve sapere e' quale stato CHIUDE: `accepted`. */
 const CLOSED_STATES = ["accepted"];
 let snapshot = null;
+let strictMode = false;
 let filter = "open";
 let loadedAt = 0;
 let versioneVista = null;
@@ -2027,6 +2028,17 @@ function obligationsGroup(voci) {
       text: "Nuova rifinitura",
       onclick: () => apriRifinitura(null, { add: true }),
     }),
+    h("label", { class: "strict-toggle" }, [
+      h("input", {
+        type: "checkbox",
+        checked: strictMode,
+        onchange: (event) => {
+          strictMode = event.target.checked;
+          if (snapshot) render(snapshot);
+        },
+      }),
+      document.createTextNode(" Modalità rigorosa"),
+    ]),
     h("details", { class: "actdetails" }, [
       h("summary", { text: "Come funziona il ciclo" }),
       h("p", {
@@ -2106,7 +2118,8 @@ function pinsGroup(timbri) {
 function obligationRow(voce) {
   const riga = h("div", { class: "actrow" });
   const testo = h("div", { class: "acttext" });
-  const dettagli = h("details", { class: "actdetails" });
+  const rigorosa = Boolean(strictMode || voce.strict_required);
+  const dettagli = h("details", { class: "actdetails", open: rigorosa });
   dettagli.append(h("summary", { text: "Dettagli tecnici" }));
   const corpoDettagli = h("div", { class: "actdetails-body" });
   dettagli.append(corpoDettagli);
@@ -2264,8 +2277,9 @@ function obligationRow(voce) {
       .filter(Boolean)
       .join("\n\n");
   const promptObbligo = () =>
-    voce.vibe_prompt ||
-    voce.next_prompt ||
+    (rigorosa
+      ? voce.next_prompt || voce.vibe_prompt
+      : voce.vibe_prompt || voce.next_prompt) ||
     [
       `Lavora sull'obbligo ${voce.id}.`,
       voce.required_before
@@ -2360,6 +2374,27 @@ function obligationRow(voce) {
       text: `In parallelo con ${voce.parallel_with.join(", ")}; non toccare i loro file.`,
     }));
   }
+  if (voce.strict_required) {
+    const riskLabels = {
+      data: "dati",
+      shared_files: "file condivisi",
+      security: "sicurezza",
+      migrations: "migrazioni",
+      release: "release",
+      configuration: "configurazione",
+      provenance: "provenienza",
+      dichiarato: "dichiarato",
+    };
+    primary.append(
+      h("span", { class: "actbadge gate", text: "RIGOROSA" }),
+      h("p", {
+        class: "actparallel",
+        text: `Perché: ${(voce.risk_flags || [])
+          .map((flag) => riskLabels[flag] || flag)
+          .join(", ")}.`,
+      })
+    );
+  }
   const testText =
     voce.test && (voce.test.command || voce.test.exit != null)
       ? `Test: ${voce.test.command || "—"} · RC=${voce.test.exit ?? "—"} · ${
@@ -2418,7 +2453,7 @@ function obligationRow(voce) {
       h("button", {
         type: "button",
         class: "actbtn",
-        text: "Copia prompt",
+        text: rigorosa ? "Copia mandato" : "Copia prompt",
         onclick: () => copia.click(),
       })
     );
@@ -4920,7 +4955,13 @@ function initFinishing() {
         const testo = [
           "Rifiniture finali del workspace. Ogni voce ha la sua fase A/E/T/R e il suo prossimo atto.",
           ...rifiniture.map(
-            (voce) => `## ${voce.id}\n${voce.vibe_prompt || voce.next_prompt || ""}`.trim()
+            (voce) => {
+              const testoVoce =
+                strictMode || voce.strict_required
+                  ? voce.next_prompt
+                  : voce.vibe_prompt || voce.next_prompt;
+              return `## ${voce.id}\n${testoVoce || ""}`.trim();
+            }
           ),
         ].join("\n\n") + "\n";
         const copiato = await copiaTesto(testo);
@@ -5373,6 +5414,8 @@ function apriRifinitura(voce, { add = false } = {}) {
   $("#ref-test-duration").value = voce?.test?.duration || "";
   $("#ref-branch").value = voce?.branch || "";
   $("#ref-worktree").value = voce?.worktree || "";
+  $("#ref-strict").checked = Boolean(voce?.strict || voce?.strict_required);
+  $("#ref-risk").value = (voce?.risk || []).join(", ");
   $("#ref-errors").value = Array.isArray(voce?.errors) ? voce.errors.join("; ") : "";
   $("#ref-claim-by").value = voce?.last_claim_by || "";
   $("#ref-claim-task").value = voce?.last_claim_task || "";
@@ -5405,6 +5448,8 @@ async function inviaRifinitura(action) {
     errors: $("#ref-errors").value.trim() || null,
     branch: $("#ref-branch").value.trim() || null,
     worktree: $("#ref-worktree").value.trim() || null,
+    strict: $("#ref-strict").checked,
+    risk: $("#ref-risk").value.trim() || null,
     claim_by: $("#ref-claim-by").value.trim() || null,
     claim_task: $("#ref-claim-task").value.trim() || null,
     next: $("#ref-next").value.trim() || null,
@@ -5453,6 +5498,8 @@ function initRifinitura() {
     $("#ref-test-duration").value = "";
     $("#ref-branch").value = "";
     $("#ref-worktree").value = "";
+    $("#ref-strict").checked = false;
+    $("#ref-risk").value = "";
     $("#ref-errors").value = "";
     $("#ref-obligation").focus();
   });

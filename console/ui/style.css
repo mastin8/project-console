@@ -519,6 +519,11 @@ body[data-page="svolto"] .top-bar{display:none}
   color: var(--ink-3);
   font-size: 12px;
 }
+#refinement-form label.ref-check {
+  flex-direction: row;
+  align-items: center;
+  gap: var(--s15);
+}
 #refinement-form input,
 #refinement-form select,
 #refinement-form textarea {
@@ -828,6 +833,14 @@ details[open] > .acthead::before{content:"▾ "}
   font-weight: 600;
 }
 .actdetails-body > * { margin-top: var(--s15); }
+.strict-toggle {
+  display: inline-flex;
+  gap: var(--s15);
+  align-items: center;
+  margin: 0 0 var(--s2);
+  color: var(--ink-2);
+  font-size: 12px;
+}
 .actstages {
   display: flex;
   flex-wrap: wrap;
