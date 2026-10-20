@@ -30,7 +30,19 @@ d'esempio `examples/demo` e' nel repo: `python3 console/server.py --workspace ex
 
 ## Il primo giorno di un progetto vero
 
-Parti da un'idea e vuoi la vista accesa, coi TUOI blocchi e i TUOI nomi. Sono quattro passi.
+Parti da un'idea e vuoi la vista accesa, coi TUOI blocchi e i TUOI nomi. Prima si compila il
+progetto con l'utente; poi si eseguono quattro passi operativi.
+
+### Passo 0 — scarica la repository e apri il primo prompt
+
+Ogni progetto, anche un foglio bianco, parte dal download/clone di questa repository. Il primo
+prompt non è ancora un via libera al codice: in `FIRST-PROMPT.md` scrivi cosa vuoi ottenere e
+consegna all'agente anche l'**Addendum obbligatorio**.
+
+L'agente deve farti domande e compilare `constitution.md` con obiettivo, stack, deliverable,
+numero e ampiezza dei task, skill, flusso normale/rigoroso, parallelismo, test, accettazione,
+rischi e stop rule. Solo dopo la tua conferma la constitution passa a `approved` e si crea la
+mappa del lavoro.
 
 ### Passo 1 — la cartella dei registri
 
@@ -45,6 +57,9 @@ toccano i path che dichiari.
 Accendendo subito la vista vedi il vuoto detto bene: *0 di 0 unita' accettate*, *nessuna data da
 disegnare*, *nessun prompt nel quaderno*. Non e' un errore: e' un progetto che non ha ancora
 scritto niente.
+
+**Fermati qui prima del Passo 2.** Compila `FIRST-PROMPT.md`, fai l'intervista e approva
+`constitution.md`: senza constitution approvata non si creano task.
 
 ### Passo 2 — la mappa del lavoro: `tasks.yaml`
 

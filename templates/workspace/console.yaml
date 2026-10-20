@@ -4,6 +4,8 @@ project: "__PROJECT__"
 surface: "verifica del percorso"
 # state: state.yaml
 # tasks: tasks.yaml
+# constitution: constitution.md
+# first_prompt: FIRST-PROMPT.md
 # questions: questions.yaml
 # decisions: decisions.yaml
 # user_decisions: user_decisions.yaml

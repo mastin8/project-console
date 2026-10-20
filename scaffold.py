@@ -24,6 +24,8 @@ MODELLI = ROOT / "templates" / "workspace"
 
 #: I modelli da copiare, e dove vanno. `?esempio` significa: solo con `--esempio`.
 MAPPATURA = (
+    ("constitution.md", "constitution.md", True),
+    ("FIRST-PROMPT.md", "FIRST-PROMPT.md", True),
     ("console.yaml", "console.yaml", True),
     ("state.yaml", "state.yaml", True),
     ("tasks-esempio.yaml", "tasks.yaml", True),
@@ -130,6 +132,7 @@ def main(argv=None):
     for path in saltati:
         print(f"lasciato  {path}  (esisteva gia')")
     print(f"\nworkspace pronto: {root}")
+    print(f"primo passo: apri {root / 'FIRST-PROMPT.md'} e compila {root / 'constitution.md'} con l'agente")
     print(f"avvialo con: python3 console/server.py --workspace {root}")
     return 0
 

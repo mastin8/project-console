@@ -20,6 +20,22 @@ agente scrive e legge file.
               ──legge──►  reports/, state.yaml, inbox/   (stato, date, "cosa c'e' da fare dopo", messaggi)
 ```
 
+## Prima di tutto: il progetto si compila con l'utente
+
+Ogni progetto parte da questa repository, anche quando è un foglio bianco. Il primo prompt
+dell'utente contiene anche l'**Addendum obbligatorio** di `FIRST-PROMPT.md`.
+
+L'agente, prima di creare task o scrivere codice:
+
+1. legge `FIRST-PROMPT.md`, questa carta e `constitution.md`;
+2. fa domande all'utente su obiettivo, fuori perimetro, stack, deliverable, ampiezza dei task,
+   skill, flusso normale/rigoroso, parallelismo, test, accettazione, rischi e stop rule;
+3. aggiorna `constitution.md` con le risposte, lasciando aperte le domande senza risposta;
+4. propone il piano finale e aspetta la conferma.
+
+Solo dopo la conferma `constitution.md` diventa `approved`; allora si creano `tasks.yaml`, si
+aprono le fasi e si parte. Una risposta mancante non si inventa.
+
 ## Come si raccontano blocchi e proprietà
 
 Quando restituisci informazioni su un blocco, un'unità o una proprietà, scrivi per una persona di

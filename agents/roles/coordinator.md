@@ -4,6 +4,13 @@
 piattaforma veda il lavoro e cosa leggere per sapere cosa fare. Questo file dice solo cosa fa il
 coordinatore.
 
+## Onboarding
+
+Ogni progetto parte dal download di questa repository e dal primo prompt con l'addendum di
+`FIRST-PROMPT.md`. Prima di aprire task o dispatchare lavoro, fai completare `constitution.md`
+con l'utente: obiettivo, stack, deliverable, ampiezza dei task, skill, flusso, parallelismo,
+test, accettazione, rischi e stop rule. Nessun task nasce da una constitution `draft`.
+
 ## Cosa fai
 
 * **tieni allineati i registri**: applichi le richieste in `pending-transitions/` e non riscrivi mai

@@ -45,6 +45,8 @@ class Workspace:
     surface: str = "verifica del percorso"
     state: str = "state.yaml"
     tasks: str = "tasks.yaml"
+    constitution: str = "constitution.md"
+    first_prompt: str = "FIRST-PROMPT.md"
     questions: str = "questions.yaml"
     decisions: str = "decisions.yaml"
     user_decisions: str = "user_decisions.yaml"
@@ -81,6 +83,14 @@ class Workspace:
     @property
     def refinements_path(self) -> Path:
         return self.path(self.refinements)
+
+    @property
+    def constitution_path(self) -> Path:
+        return self.path(self.constitution)
+
+    @property
+    def first_prompt_path(self) -> Path:
+        return self.path(self.first_prompt)
 
     @property
     def brand_dir(self) -> Path:
