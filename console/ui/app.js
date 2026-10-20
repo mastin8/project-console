@@ -102,6 +102,7 @@ function render(data) {
   );
   $("#generated").textContent = `aggiornato ${data.generated} · dati letti dai registri del progetto`;
   renderConstitutionGate(data.constitution_gate);
+  renderPlanGate(data.plan_gate, data.constitution_gate);
 
   const ratio = s.units ? Math.round((s.accepted / s.units) * 100) : 0;
   const line = $("#status-line");
@@ -192,6 +193,46 @@ function renderConstitutionGate(gate) {
 
 function constitutionReady() {
   return Boolean(snapshot && snapshot.constitution_gate && snapshot.constitution_gate.approved);
+}
+
+function planReady() {
+  return Boolean(
+    snapshot
+    && snapshot.plan_gate
+    && (!snapshot.plan_gate.required || snapshot.plan_gate.approved)
+  );
+}
+
+function actionsReady() {
+  return constitutionReady() && planReady();
+}
+
+function renderPlanGate(gate, constitutionGate) {
+  const banner = $("#plan-gate-global");
+  if (!banner) return;
+  const richiesto = Boolean(gate && gate.required);
+  if (!richiesto || gate.approved || !constitutionGate?.approved) {
+    banner.hidden = true;
+    return;
+  }
+  banner.hidden = false;
+  const vuoto = gate.status === "empty" || gate.status === "invalid";
+  const cambiato = gate.status === "changed";
+  $("#plan-gate-title").textContent = cambiato
+    ? "Il piano è cambiato"
+    : vuoto
+      ? "Il piano dei task non è ancora pronto"
+      : "Conferma il piano dei task";
+  $("#plan-gate-copy").textContent = cambiato
+    ? "tasks.yaml è diverso dal piano che avevi approvato. Le nuove attivazioni restano bloccate finché non lo riconfermi."
+    : vuoto
+      ? gate.message || "Il piano deve contenere almeno un'unità e un task."
+      : "La Costituzione è approvata. Controlla unità, task, dipendenze e ampiezza; poi conferma questa mappa.";
+  const approva = $("#plan-gate-approve");
+  approva.hidden = vuoto;
+  approva.disabled = vuoto;
+  approva.textContent = cambiato ? "Riconferma il piano" : "Approva il piano";
+  approva.dataset.expected = gate.tasks_sha256 || "";
 }
 
 /* ----------------------------------------------------------------- domande */
@@ -1556,6 +1597,37 @@ function initCostituzione() {
   });
 }
 
+function initPlanGate() {
+  $("#plan-gate-approve")?.addEventListener("click", async () => {
+    const bottone = $("#plan-gate-approve");
+    const conferma = window.confirm(
+      "Confermare questa mappa dei task?\n\n" +
+      "Da questo momento nuove modifiche a tasks.yaml bloccheranno le attivazioni finché non la riconfermi."
+    );
+    if (!conferma) return;
+    bottone.disabled = true;
+    try {
+      const response = await fetch("/api/plan/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ expected_sha256: bottone.dataset.expected || "" }),
+      });
+      const payload = await response.json();
+      if (!response.ok) {
+        throw Object.assign(
+          new Error(payload.error || `HTTP ${response.status}`),
+          payload
+        );
+      }
+      await load();
+    } catch (error) {
+      if (error.code === "plan_conflict") await load();
+      window.alert(`Piano non approvato: ${error.message}`);
+      bottone.disabled = false;
+    }
+  });
+}
+
 /* I testi lunghi (prompt, dichiarazioni, report) vivono in un dialogo: la pagina resta una lista di
    righe, e il testo e' a un clic con «Copia» accanto. */
 function promptConCostituzione(testo) {
@@ -1674,6 +1746,11 @@ function renderActivation(data) {
     box.replaceChildren(activationConstitutionGate(gate));
     return;
   }
+  const piano = data.plan_gate || {
+    required: false,
+    approved: true,
+    status: "not_required",
+  };
   const obblighi = data.obligations || [];
   const obblighiGate = obblighi.filter((voce) => voce.gate).length;
   const debiti = data.independence_debts || [];
@@ -1717,7 +1794,9 @@ function renderActivation(data) {
   if (suggerimento) {
     suggerimento.replaceChildren(
       document.createTextNode(
-        pronti.length
+        piano.required && !piano.approved
+          ? "La Costituzione è approvata. Prima di far partire i task serve la tua conferma del piano: controlla la mappa e approvala nel banner sopra."
+          : pronti.length
           ? "Il percorso è obbligato: una unità alla volta, e si parte solo con i prerequisiti accettati. Una riga, un'azione — premi e incolla il prompt in una chat."
           : obblighi.length || debiti.length
             ? "Non ci sono fasi da mandare, ma restano obblighi aperti e ratifiche mancanti. Parti dalle rifiniture marcate GATE."
@@ -1848,6 +1927,9 @@ function renderActivation(data) {
   if (timbri.length) parti.unshift(pinsGroup(timbri));
   if (debiti.length) parti.unshift(debtsGroup(debiti));
   if (dovuti.length) parti.push(owedGroup(dovuti));
+  if (piano.required && !piano.approved) {
+    parti.unshift(activationPlanGate(piano));
+  }
   if (!parti.length) {
     parti.push(
       h("p", { class: "empty" }, [
@@ -1857,6 +1939,27 @@ function renderActivation(data) {
     );
   }
   box.replaceChildren(...parti);
+}
+
+function activationPlanGate(gate) {
+  const cambiato = gate.status === "changed";
+  const vuoto = gate.status === "empty" || gate.status === "invalid";
+  return h("p", { class: "empty" }, [
+    h("b", {
+      text: cambiato
+        ? "Piano modificato. "
+        : vuoto
+          ? "Piano incompleto. "
+          : "Piano da confermare. ",
+    }),
+    document.createTextNode(
+      cambiato
+        ? "Le nuove attivazioni sono bloccate finché non riconfermi la mappa nel banner sopra."
+        : vuoto
+          ? gate.message || "Servono almeno un'unità e un task."
+          : "Controlla la mappa e confermala dal banner sopra prima di attivare un task."
+    ),
+  ]);
 }
 
 function activationConstitutionGate(gate) {
@@ -2133,7 +2236,7 @@ function copiaPromptButton(code, message, etichetta) {
     type: "button",
     class: "actbtn",
     text: etichetta || "Copia il prompt",
-    disabled: !constitutionReady(),
+    disabled: !actionsReady(),
   });
   bottone.addEventListener("click", async () => {
     bottone.disabled = true;
@@ -2167,7 +2270,7 @@ function attivaEConsegna(phase, message, etichetta) {
     type: "button",
     class: "actbtn",
     text: etichetta || "Attiva e copia il prompt",
-    disabled: !constitutionReady(),
+    disabled: !actionsReady(),
   });
   bottone.addEventListener("click", async () => {
     bottone.disabled = true;
@@ -2207,7 +2310,7 @@ function attivaButtonPlain(phase, message) {
     type: "button",
     class: "actbtn release",
     text: "Solo l'ordine",
-    disabled: !constitutionReady(),
+    disabled: !actionsReady(),
     title: "deposita l'ordine e riserva la fase, senza copiare il prompt",
     onclick: async () => {
       try {
@@ -3254,7 +3357,7 @@ function owedPromptButton(code, etichetta) {
     type: "button",
     class: "actbtn",
     text: etichetta || `Prompt ${code}`,
-    disabled: !constitutionReady(),
+    disabled: !actionsReady(),
     title: `il prompt da incollare per far partire o rifare ${code} sui byte vivi`,
     onclick: async () => {
       try {
@@ -3785,7 +3888,12 @@ async function chiediPrompt(phase) {
 
 function promptCopiaButton(phase) {
   const esito = h("span", { class: "msg", role: "status", "aria-live": "polite" });
-  const bottone = h("button", { type: "button", class: "actbtn", text: "Copia il prompt" });
+  const bottone = h("button", {
+    type: "button",
+    class: "actbtn",
+    text: "Copia il prompt",
+    disabled: !actionsReady(),
+  });
   bottone.addEventListener("click", async () => {
     bottone.disabled = true;
     esito.className = "msg show pending";
@@ -3811,7 +3919,12 @@ function promptCopiaButton(phase) {
 }
 
 function promptLeggiButton(phase) {
-  const bottone = h("button", { type: "button", class: "actbtn release", text: "Leggi" });
+  const bottone = h("button", {
+    type: "button",
+    class: "actbtn release",
+    text: "Leggi",
+    disabled: !actionsReady(),
+  });
   bottone.addEventListener("click", async () => {
     bottone.disabled = true;
     try {
@@ -3831,7 +3944,12 @@ function promptLeggiButton(phase) {
    posto che lo riceve, non nel prompt. */
 function promptSalvaButton(phase) {
   const etichetta = "Salva come file";
-  const bottone = h("button", { type: "button", class: "actbtn release", text: etichetta });
+  const bottone = h("button", {
+    type: "button",
+    class: "actbtn release",
+    text: etichetta,
+    disabled: !actionsReady(),
+  });
   const ripiglia = () => setTimeout(() => (bottone.textContent = etichetta), 2500);
   bottone.addEventListener("click", async () => {
     bottone.disabled = true;
@@ -3866,6 +3984,7 @@ function activationPromptButton(phase, apri) {
     type: "button",
     class: "actbtn release",
     text: "Prompt",
+    disabled: !actionsReady(),
     title: "il testo da incollare in una chat per far partire questa fase",
   });
   const scatola = h("div", { class: "actprompt", hidden: true });
@@ -3918,7 +4037,7 @@ function activationPromptButton(phase, apri) {
   });
   const contenitore = h("span", { class: "actprompt-box" });
   contenitore.append(button, scatola);
-  if (apri) setTimeout(mostra, 0);
+  if (apri && actionsReady()) setTimeout(mostra, 0);
   return contenitore;
 }
 
@@ -4020,7 +4139,7 @@ function closeObligationButton(voce, message) {
 }
 
 function activationButton(phase, action, label, message, disabled) {
-  const gated = action !== "release" && !constitutionReady();
+  const gated = action !== "release" && !actionsReady();
   const button = h("button", {
     type: "button",
     class: `actbtn ${action}`,
@@ -5586,7 +5705,7 @@ function renderFinishing(data) {
   const banner = $("#finishing-banner");
   if (!banner) return;
   const headerButton = $("#recap-sospesi");
-  if (!constitutionReady()) {
+  if (!actionsReady()) {
     banner.hidden = true;
     if (headerButton) headerButton.hidden = true;
     return;
@@ -6357,6 +6476,7 @@ initFinishing();
 initWorklog();
 initRifinitura();
 initCostituzione();
+initPlanGate();
 renderGlossario();
 initTutorial();
 initHeaderHeight();

@@ -51,6 +51,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import apply_transitions  # noqa: E402 - la scrittura sui registri passa sempre da li'
 import next_prompts  # noqa: E402 - il quaderno, per il testo del prompt
 import next_action  # noqa: E402 - la decisione unica: accetta, torna in E, passa a T
+from registers import plan  # noqa: E402 - il piano dei task approvato e la sua impronta
 import rework  # noqa: E402 - quante volte una fase e' tornata indietro, e per cosa
 import handoff  # noqa: E402 - cosa il registro dice che e' dovuto dopo
 from console import constitution  # noqa: E402 - nessun task parte senza approvazione
@@ -304,7 +305,8 @@ def attivabili(ws, state=None, tasks_doc=None, dovuto=None):
     """
     try:
         constitution.require_approved(ws)
-    except constitution.ConstitutionError:
+        plan.require_approved(ws)
+    except (constitution.ConstitutionError, plan.PlanError):
         return []
     state = state if state is not None else (_carica(ws.state_path.read_text(encoding="utf-8")) or {})
     tasks_doc = tasks_doc if tasks_doc is not None else (_carica(ws.path(ws.tasks).read_text(encoding="utf-8")) or {})
@@ -474,7 +476,8 @@ def prossimi(ws, state=None, tasks_doc=None):
     """
     try:
         constitution.require_approved(ws)
-    except constitution.ConstitutionError:
+        plan.require_approved(ws)
+    except (constitution.ConstitutionError, plan.PlanError):
         return []
     state = state if state is not None else (_carica(ws.state_path.read_text(encoding="utf-8")) or {})
     tasks_doc = tasks_doc if tasks_doc is not None else (_carica(ws.path(ws.tasks).read_text(encoding="utf-8")) or {})
@@ -842,6 +845,7 @@ def _applica(ws, richieste):
 def attiva(ws, fase, dry_run=False):
     """Riserva la fase e deposita l'ordine. Rifiuta se qualcuno l'ha gia' presa."""
     constitution.require_approved(ws)
+    plan.require_approved(ws)
     state = _carica(ws.state_path.read_text(encoding="utf-8")) or {}
     tasks_doc = _carica(ws.path(ws.tasks).read_text(encoding="utf-8")) or {}
     voce = next((v for v in attivabili(ws, state, tasks_doc) if v["phase"] == fase), None)
@@ -1115,7 +1119,7 @@ def main(argv=None):
                 print(f"prompt nell'ordine: {len(esito['prompt'])} caratteri (fonte: {esito.get('prompt_source')})")
             return 0
         elenco(ws)
-    except constitution.ConstitutionError as error:
+    except (constitution.ConstitutionError, plan.PlanError) as error:
         print(f"BLOCCATO: {error}")
         return 1
     return 0

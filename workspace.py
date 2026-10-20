@@ -52,6 +52,7 @@ class Workspace:
     user_decisions: str = "user_decisions.yaml"
     reports: str = "reports"
     refinements: str = "refinements.yaml"
+    plan_approval: str = "plan-approval.yaml"
     queue: str = "PARALLEL-PROMPTS.md"
     transitions: str = "pending-transitions"
     #: La posta in arrivo: i messaggi depositati interi, uno per file. Vedi `registers/inbox.py`.
@@ -63,6 +64,10 @@ class Workspace:
     #: e l'atto di accettazione usa il suo, invece di imporgli quello di questa piattaforma.
     report_schema: str = "project-console-report/1.0"
     pointer_schema: str = "project-console-report-pointer/1.0"
+    #: Cancelli dei progetti nuovi. I workspace storici restano compatibili finché non li accendono.
+    require_usage: bool = False
+    require_git_provenance: bool = False
+    require_plan_approval: bool = False
     phases: tuple = ("A", "E", "T", "R")
     #: I comandi che una persona esegue a mano per verificare il progetto da sola (label, comando).
     #: Non si indovinano: un workspace che non li dichiara non ne mostra.
@@ -87,6 +92,10 @@ class Workspace:
     @property
     def constitution_path(self) -> Path:
         return self.path(self.constitution)
+
+    @property
+    def plan_approval_path(self) -> Path:
+        return self.path(self.plan_approval)
 
     @property
     def first_prompt_path(self) -> Path:

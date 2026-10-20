@@ -39,6 +39,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import apply_transitions  # noqa: E402
 import preflight  # noqa: E402 - il cancello: prima di firmare, la base deve essere quella giusta
+import report_contract  # noqa: E402 - l'atto del tool rispetta lo stesso contratto degli agenti
 from workspace import Workspace, lock_file  # noqa: E402
 
 
@@ -134,6 +135,17 @@ def per(ws, fase, nota=None, firmatario="utente", dry_run=False):
             "firmatario": firmatario,
             "registro": [f"status=accepted", f"attempt={numero}", f"report={riferimento}"],
         }
+    provenienza_git = (
+        report_contract.git_snapshot(ws) if ws.require_git_provenance else {}
+    )
+    if ws.require_git_provenance and not (
+        provenienza_git.get("branch")
+        and provenienza_git.get("worktree")
+        and provenienza_git.get("head_commit")
+    ):
+        raise ValueError(
+            "non si accetta fuori da un repository Git con branch e commit osservabili"
+        )
     atto = {
         # Lo schema lo dichiara il progetto (`console.yaml#report_schema`): una piattaforma che scrive
         # nei suoi registri non gli impone il proprio formato.
@@ -181,6 +193,12 @@ def per(ws, fase, nota=None, firmatario="utente", dry_run=False):
             else "L'accettazione riguarda questa fase: le fasi successive dell'unita' restano da accettare."
         ),
     }
+    if ws.require_usage:
+        atto["usage"] = report_contract.unavailable_usage(
+            "l'accettazione umana non esegue un modello e non consuma token del runtime"
+        )
+    if ws.require_git_provenance:
+        atto["git"] = provenienza_git
     corpo = yaml.safe_dump(atto, allow_unicode=True, sort_keys=False)
     # I nomi non si cablano: il percorso delle consegne lo dichiara il workspace
     # (`deliverable_prefix`). Un progetto che chiama la sua cartella `esiti/` deve funzionare.

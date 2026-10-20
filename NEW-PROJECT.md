@@ -19,8 +19,12 @@ Ogni progetto, anche un foglio bianco, parte da questa repository.
    è l'unico punto in cui la Costituzione diventa approvata; nessun agente può fare questo passo.
 7. Dopo l'approvazione il documento è immutabile. Solo allora l'agente crea `tasks.yaml`, apre le
    fasi e comincia il primo task.
+8. Controlla la mappa dei task in **Percorso** e premi **Approva il piano** in **Adesso**. Se
+   `tasks.yaml` cambia dopo, le nuove attivazioni si bloccano e il tool chiede una riconferma.
 
 Il cancello è applicato dal tool: senza Costituzione approvata non si attivano task, non si aprono
-fasi e non si compongono prompt.
+fasi e non si compongono prompt. I progetti nuovi richiedono inoltre `usage` e provenienza Git in
+ogni report; se un runtime non espone i token, l’agente deve dichiararli non disponibili con il
+motivo.
 
 Un progetto senza Costituzione approvata non è pronto per l'implementazione.

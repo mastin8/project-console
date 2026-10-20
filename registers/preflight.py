@@ -41,6 +41,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import coda  # noqa: E402 - la coda delle transizioni: se e' piena, la base puo' essere vecchia
+import report_contract  # noqa: E402 - usage e provenienza Git obbligatori nei progetti nuovi
 import validate_registries  # noqa: E402 - i registri si leggono?
 from workspace import Workspace  # noqa: E402
 
@@ -276,8 +277,15 @@ def leggi(ws, fase, state=None, tasks_doc=None):
     da_giudicare = (ws.root / str(riferimento)) if riferimento and (ws.root / str(riferimento)).is_file() else (
         cartella / f"attempt-{tentativi[-1]}.yaml" if tentativi else None
     )
-    dichiarate = _impronte_dichiarate(_leggi(da_giudicare)) if da_giudicare else []
-    consegnate = _impronte_consegnate(_leggi(da_giudicare)) if da_giudicare else {}
+    giudicato = _leggi(da_giudicare) if da_giudicare else {}
+    violazioni_contratto = report_contract.validate(ws, giudicato) if giudicato else []
+    if violazioni_contratto:
+        motivi.append(
+            "il report non rispetta il contratto obbligatorio: "
+            + "; ".join(violazioni_contratto)
+        )
+    dichiarate = _impronte_dichiarate(giudicato)
+    consegnate = _impronte_consegnate(giudicato)
     cambiate = []
     saltate = 0
     for percorso, dichiarata in dichiarate:

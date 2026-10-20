@@ -7,6 +7,10 @@ regole:
   what: "La prossima azione la decide il motore unico (accept, rework_e, run_phase, close_obligation, wait, review). Gli agenti non la deducono dal verdetto con una regola propria."
 - id: fast-lane
   what: "Una correzione circoscritta puo' usare lane: fast, cioe' E + verifica T mirata. Rischi, migrazioni, sicurezza, release o piu' di due file la riportano al percorso completo."
+- id: usage-declared
+  what: "Ogni report dichiara usage measured oppure unavailable con motivo; zero non sostituisce mai un dato assente."
+- id: git-provenance
+  what: "Ogni consegna dichiara branch, worktree, base_commit, head_commit, changed_paths, dirty_before e clean_after. Il commit della consegna si fa dopo i test mirati."
 - id: claim-before-bytes
   what: "Nessuno scrive prima di avere una voce di claim viva nel registro."
 - id: one-live-claim-per-phase

@@ -32,6 +32,10 @@ PORTE = {
         "decorate_obligation", "decorate_task", "close_obligation",
         "infer_lane", "main",
     ],
+    "registers/plan.py": ["gate", "require_approved", "approve", "main"],
+    "registers/report_contract.py": [
+        "validate", "usage_errors", "git_errors", "git_snapshot",
+    ],
     "registers/activate.py": ["attivabili", "attiva", "rilascia", "aggiorna_ordini", "elenco", "main"],
     "registers/handoff.py": ["dichiarazioni", "lacune", "dovuto", "scrivi", "main"],
     "registers/inbox.py": ["voci", "archivia", "trova", "chiudi", "non_lavorate", "main"],
@@ -58,6 +62,8 @@ PORTE = {
     "console/test_constitution.py": ["ConstitutionTests"],
     "console/test_next_action.py": ["NextActionTests"],
     "console/test_metrics.py": ["MetricsTests"],
+    "console/test_plan.py": ["PlanTests"],
+    "console/test_report_contract.py": ["ReportContractTests"],
     "console/test_refinements.py": ["main"],
     "console/server.py": ["main", "ReviewState"],
 }
@@ -73,6 +79,7 @@ COMANDI = (
     [sys.executable, "registers/preflight.py", "--help"],
     [sys.executable, "registers/accetta.py", "--help"],
     [sys.executable, "registers/next_action.py", "--help"],
+    [sys.executable, "registers/plan.py", "--help"],
     [sys.executable, "registers/mandate.py", "--help"],
     [sys.executable, "registers/sync_phases.py", "--help"],
     [sys.executable, "console/server.py", "--help"],

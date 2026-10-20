@@ -30,6 +30,14 @@ codice.
    inizia il primo task.
 7. Il tool applica il cancello: prima dell'approvazione non può attivare task né comporre prompt.
    Non aggirarlo scrivendo direttamente i registri o un ordine.
+8. Prima del primo task verifica di essere dentro un repository Git. Se non esiste, inizializzalo e
+   crea un commit iniziale. Ogni consegna futura dichiarerà branch, worktree, commit iniziale,
+   commit finale e path modificati.
+9. Ogni report dichiara `usage`: token misurati se il runtime li espone, altrimenti
+   `availability: unavailable` con il motivo. Non si scrive mai zero al posto di “non misurato”.
+10. Dopo aver creato `tasks.yaml`, fermati: l'utente controlla la mappa in **Percorso** e la
+    approva da **Adesso**. Non aprire le fasi e non attivare task prima di quella conferma; se il
+    piano cambia, chiedi una nuova approvazione.
 
 ### Regole di conversazione
 

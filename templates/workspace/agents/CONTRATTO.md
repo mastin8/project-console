@@ -43,6 +43,10 @@ Il cancello è tecnico: `activate.py`, `sync_phases.py` e `mandate.py` rifiutano
 finché la Costituzione non è approvata. Ogni prompt composto dal tool porta automaticamente le
 sezioni pertinenti della Costituzione e il suo sigillo SHA-256. Non rimuoverle.
 
+Quando scrivi `tasks.yaml`, fermati: l'utente deve controllarlo in **Percorso** e approvarlo da
+**Adesso**. Solo dopo puoi eseguire `sync_phases.py` o attivare una fase. Se il piano cambia, il tool
+rifiuta le nuove attivazioni finché l'utente non lo riconferma.
+
 ## Come si raccontano blocchi e proprietà
 
 Quando restituisci informazioni su un blocco, un'unità o una proprietà, scrivi per una persona di
@@ -74,8 +78,11 @@ Una consegna `delivered` o `needs_changes` deve portare con sé:
 
 * il percorso del report e il verdetto;
 * `test: {command, exit, duration}` — oppure `not_applicable` con il motivo;
-* `usage` — quando il runtime li espone: `input_tokens`, `output_tokens`, `total_tokens`.
-  Se non sono disponibili, il campo si omette: il cruscotto misurerà la copertura, non inventerà zero;
+* `usage` — obbligatorio nei progetti nuovi:
+  `availability: measured` con `input_tokens`/`output_tokens`/`total_tokens`, oppure
+  `availability: unavailable` con `reason`. Mai zero al posto di “non misurato”;
+* `git` — obbligatorio nei progetti nuovi: `branch`, `worktree`, `base_commit`, `head_commit`,
+  `changed_paths`, `dirty_before`, `clean_after`;
 * `errors`/finding quando la consegna è `needs_changes`;
 * `branch` e `worktree` usati;
 * il prossimo atto (`next`/`next_report`).
@@ -97,6 +104,24 @@ decisione:
 Una correzione circoscritta può dichiarare `lane: fast`: usa solo E e una verifica T mirata.
 Migrazioni, dati, sicurezza, release, configurazione o più di due file richiedono il percorso
 completo A/E/T/R. La corsia rapida non riduce le prove: riduce i passaggi amministrativi.
+
+## Git obbligatorio
+
+Prima del primo byte:
+
+* verifica repository, branch, worktree e modifiche locali;
+* crea un branch dedicato (`task/<id>`) e usa un worktree separato se il lavoro può correre in
+  parallelo;
+* non sovrascrivere modifiche preesistenti e non usare reset/checkout distruttivi.
+
+Prima di consegnare:
+
+* `git diff --check`;
+* test mirati;
+* commit della consegna;
+* report con `base_commit` (alla presa), `head_commit` (dopo il commit), `changed_paths`,
+  `dirty_before` e `clean_after`;
+* push solo se richiesto dal contratto del progetto.
 
 ## INPUT — quello che scrivi TU, e dove
 

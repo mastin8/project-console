@@ -68,6 +68,16 @@
     </div>
     <a href="/costituzione" id="constitution-gate-link">Apri la Costituzione</a>
   </div>
+  <div class="constitution-gate plan-gate" id="plan-gate-global" role="alert" hidden>
+    <div>
+      <strong id="plan-gate-title">Conferma il piano dei task</strong>
+      <p id="plan-gate-copy">La Costituzione è approvata. Controlla la mappa dei task prima di far partire il lavoro.</p>
+    </div>
+    <div class="plan-gate-actions">
+      <a href="/percorso" class="plan-gate-review">Vedi il piano</a>
+      <button type="button" id="plan-gate-approve">Approva il piano</button>
+    </div>
+  </div>
 
   <!-- IL GLOSSARIO. Sta a sinistra e resta: le parole di questo progetto (presa, ordine, A/E/T/R,
        «non rieseguito») sono la parte che nessuno indovina, e finora erano solo in un documento. Si
@@ -545,6 +555,9 @@
       <p>Il tool non conosce questo progetto: nomi, fasi, registri e comandi vengono da
         <code>console.yaml</code> e dal workspace. La stessa pagina serve qualsiasi progetto;
         cambiano i blocchi, le unità e le fasi, non il funzionamento.</p>
+      <p>Prima del codice servono due conferme umane: la <b>Costituzione</b> e, subito dopo aver
+        creato la mappa, il <b>piano dei task</b>. Se <code>tasks.yaml</code> cambia, il piano va
+        riconfermato. Ogni consegna dichiara inoltre token e provenienza Git.</p>
     </div>
   </dialog>
 

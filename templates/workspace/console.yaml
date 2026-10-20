@@ -10,6 +10,7 @@ surface: "verifica del percorso"
 # decisions: decisions.yaml
 # user_decisions: user_decisions.yaml
 # reports: reports
+# plan_approval: plan-approval.yaml
 # queue: PARALLEL-PROMPTS.md
 # transitions: pending-transitions
 # inbox: inbox
@@ -18,6 +19,10 @@ surface: "verifica del percorso"
 # deliverable_prefix: reports/
 # report_schema: project-console-report/1.0
 # pointer_schema: project-console-report-pointer/1.0
+# Cancelli obbligatori dei progetti nuovi. Un workspace storico può lasciarli a false.
+require_usage: true
+require_git_provenance: true
+require_plan_approval: true
 # phases: [A, E, T, R]
 # I comandi che una persona esegue a mano per verificare il progetto da sola: finiscono nella
 # vista statica. Il coordinatore non li esegue, li mostra.

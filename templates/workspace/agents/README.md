@@ -8,7 +8,7 @@ cui si incolla un prompt.
 0. **`FIRST-PROMPT.md` + `constitution.md`** — l'onboarding: il primo prompt contiene l'addendum
    obbligatorio, l'agente intervista l'utente e compila la bozza. L'utente la approva dalla pagina
    **Costituzione**; nessun agente scrive `status: approved`. Nessun task prima
-   dell'approvazione.
+   dell'approvazione. Dopo aver creato `tasks.yaml`, l'utente approva anche il piano da **Adesso**.
 1. **`agents/CONTRATTO.md`** — IL CONTRATTO: cosa scrivere perche' la piattaforma veda il lavoro
    (presa, consegna, testimone, rilascio — con i campi che legge) e cosa leggere per sapere cosa
    fare. Chi non lo legge lavora alla cieca: e' l'unico file che va letto per intero.

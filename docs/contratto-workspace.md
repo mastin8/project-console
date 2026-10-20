@@ -15,6 +15,10 @@ piu' di un errore all'avvio.
 project: "Nome del progetto"        # quello che si legge in testa alla pagina
 surface: "verifica del percorso"    # cosa si sta guardando
 brand: brand                        # dove sta il logo (logo.svg, logo.png, logo-dark.png)
+plan_approval: plan-approval.yaml   # impronta del piano dei task approvata dall'utente
+require_usage: true                 # ogni report dichiara token misurati o unavailable
+require_git_provenance: true        # ogni report dichiara branch, worktree e commit
+require_plan_approval: true         # tasks.yaml cambiato blocca le nuove attivazioni
 verify:                             # comandi di verifica, mostrati nella vista statica
   - label: "Suite"
     command: "python -m pytest -q"
@@ -67,6 +71,12 @@ Il conto «accettate» compare due volte, di proposito: quello **stretto** (tutt
 e quello **per ratifica** (l'ultima fase accettata, e le unita' figlie con lei). La pagina dichiara
 quale sta usando invece di sceglierne uno in silenzio.
 
+### `plan-approval.yaml` — il piano che l'utente ha confermato
+
+Contiene lo SHA-256 di `tasks.yaml` nel momento dell'approvazione. Se il file cambia, il gate
+risponde `plan_changed`: attivazioni e prompt restano bloccati finché l'utente non riconferma.
+I workspace storici possono lasciare `require_plan_approval: false`.
+
 ### `questions.yaml` — cosa aspetta l'utente
 
 ```yaml
@@ -108,6 +118,28 @@ Ogni tentativo e' un file: `reports/<fase>/attempt-N.yaml`, con `status`, `verdi
 — `published_at`, la data che il coordinatore usa per datare la barra. Accanto, il puntatore
 `reports/<fase>.yaml` dice qual e' il tentativo corrente. **Il file del tentativo non si
 riscrive**: un tentativo nuovo e' un file nuovo.
+
+Nei progetti nuovi il report dichiara inoltre:
+
+```yaml
+usage:
+  availability: measured       # oppure unavailable
+  input_tokens: 12000
+  output_tokens: 3400
+  total_tokens: 15400
+git:
+  branch: task/ES01E
+  worktree: /percorso/repository
+  base_commit: 1234567
+  head_commit: 89abcde
+  changed_paths: [src/esempio.py]
+  dirty_before: []
+  clean_after: true
+```
+
+Se il runtime non espone i token, `usage.availability` e' `unavailable` e `reason` e'
+obbligatorio. I workspace storici possono disattivare i controlli con `require_usage: false` e
+`require_git_provenance: false`.
 
 ### `PARALLEL-PROMPTS.md` — il quaderno
 

@@ -17,6 +17,9 @@ Il cancello è applicato dal tool, non solo da questa carta: attivazione, apertu
 composizione dei prompt falliscono finché la Costituzione non è approvata. Ogni prompt porta con sé
 i vincoli pertinenti approvati.
 
+Dopo la creazione di `tasks.yaml` non aprire le fasi: l'utente deve approvare il piano dalla
+pagina Adesso. Se il file cambia, le nuove attivazioni restano bloccate fino alla riconferma.
+
 ## Cosa fai
 
 * **tieni allineati i registri**: applichi le richieste in `pending-transitions/` e non riscrivi mai

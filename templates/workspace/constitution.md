@@ -58,7 +58,8 @@ approved_sha256: ""
 ## 9. Test e accettazione
 
 <!-- Test obbligatori per tipo di task, comandi, durata, fixture.
-     Cosa deve vedere l'utente per accettare. Un test non eseguito si dichiara. -->
+     Cosa deve vedere l'utente per accettare. Un test non eseguito si dichiara.
+     Ogni report dichiara usage e provenienza Git come da agents/CONTRATTO.md. -->
 
 ## 10. Rischi e modalità rigorosa
 

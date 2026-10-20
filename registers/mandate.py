@@ -38,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import activate  # noqa: E402 - le impronte del perimetro sono sue
 import next_prompts  # noqa: E402 - il quaderno, per il prompt che esiste gia'
+from registers import plan  # noqa: E402 - il piano dei task deve essere approvato
 from console import constitution  # noqa: E402 - la Costituzione approvata e' parte del mandato
 from workspace import Workspace  # noqa: E402
 
@@ -270,6 +271,7 @@ def per(ws, fase, state=None):
     riga della pagina.
     """
     constitution.require_approved(ws)
+    plan.require_approved(ws)
     # Cache per fase: la pagina chiede il prompt di ogni riga attivata insieme, e senza questa
     # ogni riga ricostruiva il quaderno (o componeva da capo) — misurato 4-5 s per prompt.
     # La cache vale finche' i registri non cambiano: il prompt porta dentro l'occorrenza della presa
@@ -564,7 +566,7 @@ def main(argv=None):
     next_prompts.configure(queue=ws.queue, deliverable_prefix=ws.deliverable_prefix)
     try:
         esito = per(ws, args.phase)
-    except constitution.ConstitutionError as error:
+    except (constitution.ConstitutionError, plan.PlanError) as error:
         print(f"BLOCCATO: {error}")
         return 1
     print(f"# fonte: {esito['source']}")

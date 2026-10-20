@@ -47,6 +47,10 @@ tool ne verifica il sigillo SHA-256. Il cancello è tecnico: attivazione, apertu
 composizione dei prompt sono bloccate finché la Costituzione resta in bozza o manca. Solo dopo
 l'approvazione si crea la mappa del lavoro.
 
+Quando `tasks.yaml` è pronto, l'utente lo controlla in **Percorso** e lo approva da **Adesso**. Il
+tool salva l'impronta del piano: ogni modifica successiva al file blocca le nuove attivazioni
+finché il piano non viene riconfermato.
+
 ### Passo 1 — la cartella dei registri
 
 ```bash
@@ -303,6 +307,11 @@ file o cartelle reali lo compongono**, **cosa vede o può fare l'utente**, **cos
 si verifica**. Il linguaggio deve essere comprensibile a una persona di 18 anni: niente sigle o
 termini tecnici senza una spiegazione, niente «sistema» o «flusso» da soli, esempi concreti. Se un
 fatto non è stato verificato, si dichiara.
+
+Ogni progetto nuovo accende inoltre il contratto di consegna: `usage` dichiara token misurati o
+esplicitamente non disponibili con il motivo; `git` dichiara branch, worktree, commit iniziale e
+finale, path modificati e stato finale pulito. I progetti storici possono tenere questi cancelli
+disattivati in `console.yaml`.
 
 ### Modalità normale e modalità rigorosa
 
@@ -582,10 +591,14 @@ predefiniti sono la convenzione, e un workspace scritto a mano funziona senza co
 | `decisions.yaml` | `decisions.yaml` | le decisioni prese, in ordine |
 | `user_decisions.yaml` | idem | le decisioni di governo, che appartengono all'utente |
 | `reports/` | idem | le consegne: `reports/<id>/attempt-N.yaml` e il puntatore `reports/<id>.yaml` |
+| `plan_approval` | `plan-approval.yaml` | l'impronta umanamente approvata di `tasks.yaml` |
 | `PARALLEL-PROMPTS.md` | idem | il quaderno dei prompt, coi codici di riconoscimento |
 | `pending-transitions/` | idem | la coda delle scritture sui registri |
 | `brand/` | idem | `logo.svg` o `logo.png`: l'intestazione li usa senza toccare codice |
 | `verify` | vuoto | i comandi di verifica del progetto, mostrati nella vista statica |
+| `require_usage` | `false` | impone `usage` nei report; nei nuovi progetti è `true` |
+| `require_git_provenance` | `false` | impone branch, worktree e commit nei report; nei nuovi progetti è `true` |
+| `require_plan_approval` | `false` | blocca il lavoro finché `tasks.yaml` non è approvato; nei nuovi progetti è `true` |
 
 Il significato di ogni campo, la forma di ogni registro e le regole che rendono un prompt
 riconoscibile sono in **[docs/contratto-workspace.md](docs/contratto-workspace.md)**. Il modello

@@ -658,6 +658,7 @@ import mandate  # noqa: E402 - il prompt di una fase: dal quaderno, o composto d
 import metrics  # noqa: E402 - le misure del metodo: primo colpo, rifacimenti, tempi
 import next_action  # noqa: E402 - la decisione unica della pagina
 import next_prompts  # noqa: E402 - una sola implementazione della regola, condivisa con STATUS.html
+from registers import plan  # noqa: E402 - il piano dei task approvato e la sua impronta
 import coda  # noqa: E402 - la coda delle transizioni: il registro che non sa cosa e' successo
 import accetta  # noqa: E402 - l'atto di accettazione firmato da chi lo prende in carico
 import rework  # noqa: E402 - quante volte una fase torna indietro, per la domanda in parole povere
@@ -751,10 +752,15 @@ class ReviewState:
         """I prompt del quaderno con la stessa busta e gli stessi vincoli di ogni altro prompt."""
         voci = next_prompts.build(self.pack, state=state)
         gate = constitution.gate(self.workspace)
+        piano = plan.gate(self.workspace)
         for voce in voci:
             if not gate["approved"]:
                 voce["prompt"] = None
                 voce["blocked"] = gate["message"]
+                continue
+            if piano["required"] and not piano["approved"]:
+                voce["prompt"] = None
+                voce["blocked"] = piano["message"]
                 continue
             if voce.get("prompt") and voce.get("anchor"):
                 try:
@@ -1124,12 +1130,14 @@ class ReviewState:
         # registro dice che e' dovuto». Leggerle due volte costava il doppio su ogni caricamento.
         dovuto = handoff.dovuto(self.workspace, state, tasks_doc, prese=set(activate.prese(state)))
         gate_costituzione = constitution.gate(self.workspace)
+        piano = plan.gate(self.workspace)
         contesto_costituzione = ""
         if gate_costituzione["approved"]:
             contesto_costituzione = constitution.prompt_context(self.workspace)
         return {
             "generated": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "constitution_gate": gate_costituzione,
+            "plan_gate": piano,
             "constitution_context": contesto_costituzione,
             # L'impronta di TEMPO dei registri: due `stat`, nessun parse. La pagina la usa per
             # accorgersi che la sua istantanea e' vecchia (una presa applicata dopo il caricamento
@@ -1929,6 +1937,9 @@ def build_handler(state):
                 status = 500
             self._json(status, {"error": str(error), "code": error.code})
 
+        def _plan_error(self, error):
+            self._json(409, {"error": str(error), "code": error.code})
+
         def do_GET(self):
             parsed = urlparse(self.path)
             route = parsed.path
@@ -1953,6 +1964,8 @@ def build_handler(state):
                     return self._constitution_error(error)
                 except Exception as error:  # noqa: BLE001
                     return self._json(500, {"error": str(error)})
+            if route == "/api/plan":
+                return self._json(200, plan.gate(state.workspace))
             if route == "/api/state":
                 try:
                     return self._json(200, state.snapshot())
@@ -2037,6 +2050,8 @@ def build_handler(state):
                     return self._json(200, {"phase": target, **esito})
                 except constitution.ConstitutionError as error:
                     return self._constitution_error(error)
+                except plan.PlanError as error:
+                    return self._plan_error(error)
                 except Exception as error:  # noqa: BLE001
                     return self._json(400, {"error": str(error)})
             if route == "/api/esiti":
@@ -2136,6 +2151,24 @@ def build_handler(state):
             if route == "/api/constitution/draft":
                 try:
                     esito = constitution.create_draft(state.workspace)
+                except constitution.ConstitutionError as error:
+                    return self._constitution_error(error)
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
+                return self._json(200, {"ok": True, **esito})
+            if route == "/api/plan/approve":
+                length = int(self.headers.get("Content-Length") or 0)
+                try:
+                    payload = json.loads(self.rfile.read(length) or b"{}")
+                except json.JSONDecodeError as error:
+                    return self._json(400, {"error": f"JSON non valido: {error}"})
+                try:
+                    esito = plan.approve(
+                        state.workspace,
+                        expected_sha256=payload.get("expected_sha256") or None,
+                    )
+                except plan.PlanError as error:
+                    return self._plan_error(error)
                 except constitution.ConstitutionError as error:
                     return self._constitution_error(error)
                 except Exception as error:  # noqa: BLE001
@@ -2444,9 +2477,12 @@ def build_handler(state):
                     return self._json(400, {"error": "serve task_id"})
                 try:
                     constitution.require_approved(state.workspace)
+                    plan.require_approved(state.workspace)
                     result = state.dispatch_draft(task_id, payload.get("note"))
                 except constitution.ConstitutionError as error:
                     return self._constitution_error(error)
+                except plan.PlanError as error:
+                    return self._plan_error(error)
                 except NotStalledError as error:
                     return self._json(
                         409,
@@ -2480,6 +2516,8 @@ def build_handler(state):
                     )
                 except constitution.ConstitutionError as error:
                     return self._constitution_error(error)
+                except plan.PlanError as error:
+                    return self._plan_error(error)
                 except apply_transitions.TransitionError as error:
                     return self._json(409, {"error": str(error)})
                 except Exception as error:  # noqa: BLE001

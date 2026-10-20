@@ -20,6 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from workspace import Workspace, lock_file
 from registers import next_action
+from registers import report_contract
 
 SCHEMA = "project-console-refinements/1.0"
 PHASES = ("A", "E", "T", "R")
@@ -412,6 +413,15 @@ def update(
                 raise ValueError(
                     "consegna non valida: mancano " + ", ".join(mancanti)
                 )
+            if workspace.require_usage or workspace.require_git_provenance:
+                report = _report_state(workspace, fase.get("report"))
+                if not report:
+                    raise ValueError("consegna non valida: il report non è leggibile")
+                violazioni = report_contract.validate(workspace, report)
+                if violazioni:
+                    raise ValueError(
+                        "report fuori contratto: " + "; ".join(violazioni)
+                    )
     if claim_by:
         item["claim"] = {
             "status": "taken",
