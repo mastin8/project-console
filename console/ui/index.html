@@ -306,6 +306,18 @@
       </div>
       <p class="hint">Tutto quello che i registri dichiarano concluso: unità, fasi A/E/T/R, report,
         tentativi, verdetti e autori. Le rifiniture sono in fondo, con il loro stato esplicito.</p>
+      <div class="method-panel" aria-labelledby="method-head">
+        <div class="method-head">
+          <h3 id="method-head">Come sta andando il metodo</h3>
+          <span id="method-generated"></span>
+        </div>
+        <p>Le misure vengono dai report pubblicati. Quando un dato non esiste, la copertura lo
+          dichiara: il tool non trasforma “non misurato” in zero.</p>
+        <div id="method-metrics" class="method-metrics">
+          <p class="hint">Calcolo le misure dai report…</p>
+        </div>
+        <div id="method-warnings"></div>
+      </div>
       <div id="worklog-summary" class="worklog-summary"></div>
       <div class="row worklog-filters">
         <input id="worklog-search" type="search" placeholder="Cerca unità, fase, verdetto, autore…">
@@ -466,7 +478,8 @@
           in corso, risposte che hai già dato. I numeri rossi sono cose da verificare; quelli verdi
           sono risposte già date.</li>
         <li><b>Svolto</b>: tutto ciò che i registri dichiarano concluso, con ricerca, filtri e
-          l'elenco completo di unità, fasi, report e tentativi.</li>
+          l'elenco completo di unità, fasi, report e tentativi. In testa misura primo colpo,
+          rifacimenti, tempo, token dichiarati e interventi umani.</li>
         <li><b>Tempo</b>: il gantt con le date <i>misurate</i> e la mappa delle dipendenze, che
           mostra tutte le unità anche quando il filtro sopra dice «Aperte».</li>
         <li><b>Testimone</b>: il campo <code>next</code> dei report, parola per parola: cosa ha

@@ -655,6 +655,7 @@ import pins  # noqa: E402 - i timbri diversi: resoconto e raccordo unico
 import handoff  # noqa: E402 - cosa c'e' da fare dopo: il testimone lasciato da chi ha finito
 import inbox  # noqa: E402 - la posta in arrivo: i messaggi depositati interi, uno per file
 import mandate  # noqa: E402 - il prompt di una fase: dal quaderno, o composto dal registro
+import metrics  # noqa: E402 - le misure del metodo: primo colpo, rifacimenti, tempi
 import next_action  # noqa: E402 - la decisione unica della pagina
 import next_prompts  # noqa: E402 - una sola implementazione della regola, condivisa con STATUS.html
 import coda  # noqa: E402 - la coda delle transizioni: il registro che non sa cosa e' successo
@@ -1960,6 +1961,18 @@ def build_handler(state):
             if route == "/api/svolto":
                 try:
                     return self._json(200, state.worklog())
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
+            if route == "/api/metrics":
+                try:
+                    return self._json(
+                        200,
+                        metrics.build(
+                            state.workspace,
+                            state=state._load(state.workspace.state) or {},
+                            tasks_doc=state._load(state.workspace.tasks) or {},
+                        ),
+                    )
                 except Exception as error:  # noqa: BLE001
                     return self._json(500, {"error": str(error)})
             if route == "/api/versione":

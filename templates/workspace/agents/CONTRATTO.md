@@ -74,6 +74,8 @@ Una consegna `delivered` o `needs_changes` deve portare con sé:
 
 * il percorso del report e il verdetto;
 * `test: {command, exit, duration}` — oppure `not_applicable` con il motivo;
+* `usage` — quando il runtime li espone: `input_tokens`, `output_tokens`, `total_tokens`.
+  Se non sono disponibili, il campo si omette: il cruscotto misurerà la copertura, non inventerà zero;
 * `errors`/finding quando la consegna è `needs_changes`;
 * `branch` e `worktree` usati;
 * il prossimo atto (`next`/`next_report`).

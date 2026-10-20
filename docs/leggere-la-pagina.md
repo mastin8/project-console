@@ -222,12 +222,16 @@ sicurezza, release, configurazione o piu' di due file riportano al ciclo complet
 
 | Pagina | Cosa ci trovi |
 | --- | --- |
-| **Svolto** | tutto ciò che i registri dichiarano concluso: unità, fasi, report, tentativi e autori, con ricerca e filtri |
+| **Svolto** | tutto ciò che i registri dichiarano concluso, più le misure del metodo: primo colpo, rifacimenti, tempo mediano, copertura dei token e interventi umani |
 | **Tempo** | blocchi, unita', fasi con le barre datate dagli artefatti che **dichiarano** una data (`published_at`) o, in mancanza, dall'mtime; la riga dei commit. Nessuna previsione |
 | **Testimone** | cosa c'e' da fare dopo, parola per parola: le dichiarazioni dei report, con filtro (unita' aperte / tutte / senza direzione) e ricerca |
 | **Prompt** | i prompt del quaderno raggruppati per stato d'azione (da fare, in corso, respinti, fatti), col testo da copiare |
 | **Percorso** | una scheda per blocco: unita', risultato atteso, fasi del ciclo, commit che toccano i suoi path |
 | **Costituzione** | la bozza del piano si modifica e si salva; **solo l'utente** può approvarla. Dopo l'approvazione il testo è in sola lettura, il console verifica il sigillo SHA-256 e rifiuta ogni modifica |
+
+Le misure del metodo non sono stime. Se un report non dichiara i token, la copertura dice quanti
+report li hanno misurati e il totale resta “non misurato”, mai zero. Il tempo mediano è tempo di
+calendario fra la prima presa/report e l'accettazione: può includere attese umane e pause.
 
 Finché la Costituzione non è approvata, la pagina **Adesso** mostra soltanto il cancello: nessun
 task può essere attivato e nessun prompt può essere composto. I progetti nati prima di questa

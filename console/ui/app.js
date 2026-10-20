@@ -1879,8 +1879,11 @@ function activationConstitutionGate(gate) {
 function codaRow(voce) {
   const riga = h("div", { class: "actrow" });
   const testo = h("div", { class: "acttext" });
-  testo.append(h("code", { class: "actcode", text: voce.code }));
-  if (voce.lane_effective === "fast") {
+  const semplice = !strictMode;
+  if (!semplice) {
+    testo.append(h("code", { class: "actcode", text: voce.code }));
+  }
+  if (!semplice && voce.lane_effective === "fast") {
     testo.append(
       h("span", {
         class: "actbadge normal",
@@ -1891,7 +1894,16 @@ function codaRow(voce) {
   const titolo = String(voce.title || (voce.fase || {}).title || "")
     .trim()
     .replace(/^(Accettare|Implementare|Verificare|Analizzare):\s*/, "");
-  if (titolo) testo.append(document.createTextNode(` ${titolo}`));
+  if (semplice) {
+    testo.append(
+      h("b", {
+        class: "actsimple-title",
+        text: titolo || voce.phase || "Lavoro da fare",
+      })
+    );
+  } else if (titolo) {
+    testo.append(document.createTextNode(` ${titolo}`));
+  }
   const traccia = rigaConsegna(voce.code, Boolean(voce.report));
   if (traccia) testo.append(traccia);
   // LA STESSA UNITA' CON UN'ALTRA FASE IN CORSO. Non si vieta (il tester puo' derivare i casi dal
@@ -1945,10 +1957,33 @@ function codaRow(voce) {
   };
   testo.append(
     h("div", { class: "actnext" }, [
-      h("b", { text: azione.label || "Prossima azione" }),
-      document.createTextNode(azione.reason ? ` — ${azione.reason}` : ""),
+      h("b", {
+        text: semplice
+          ? azione.code === "rework_e"
+            ? "Qualcosa non va"
+            : azione.code === "accept"
+              ? "Pronto per l'accettazione"
+              : "Prossimo passo"
+          : azione.label || "Prossima azione",
+      }),
+      document.createTextNode(
+        semplice
+          ? ` — ${humanActionReason(voce, azione, voce.verdetto)}`
+          : azione.reason
+            ? ` — ${azione.reason}`
+            : ""
+      ),
     ])
   );
+  if (semplice && azione.code === "rework_e") {
+    const chi =
+      (voce.bloccanti_chi || []).filter(Boolean).join(", ") ||
+      voce.owner ||
+      "l'unità proprietaria";
+    testo.append(
+      h("p", { class: "actsimple-owner", text: `Lo corregge: ${chi}.` })
+    );
+  }
   if ((voce.busy || []).length) {
     // Le fasi della stessa unità sono sequenziali: qui non c'è niente da mandare, si aspetta.
     testo.append(
@@ -1967,18 +2002,36 @@ function codaRow(voce) {
     (voce2) => voce2.phase === target
   );
   if (azione.code === "accept") {
-    azioni.append(acceptButton(azione.accept_phase || voce.code, message));
+    azioni.append(
+      acceptButton(
+        azione.accept_phase || voce.code,
+        message,
+        undefined,
+        semplice ? "Accetta il lavoro" : undefined
+      )
+    );
   } else if (azione.code === "rework_e") {
     azioni.append(
       targetAttivabile && target === voce.code
         ? attivaEConsegna(target, message)
-        : owedPromptButton(target, azione.label)
+        : owedPromptButton(
+            target,
+            semplice ? "Copia istruzioni per correggere" : azione.label
+          )
     );
   } else if (azione.code === "run_phase" || azione.code === "dispatch") {
     azioni.append(
       targetAttivabile
-        ? attivaEConsegna(target, message)
-        : copiaPromptButton(target, message)
+        ? attivaEConsegna(
+            target,
+            message,
+            semplice ? "Avvia e copia istruzioni" : undefined
+          )
+        : copiaPromptButton(
+            target,
+            message,
+            semplice ? "Copia istruzioni" : undefined
+          )
     );
   } else if (azione.code === "review") {
     azioni.append(
@@ -1995,7 +2048,12 @@ function codaRow(voce) {
   }
   if (voce.esiti_di) {
     const suffisso = voce.unit ? String(voce.esiti_di).slice(String(voce.unit).length) : "";
-    azioni.append(bottoneEsiti(voce.esiti_di, `Esiti di ${suffisso || voce.esiti_di}`));
+    azioni.append(
+      bottoneEsiti(
+        voce.esiti_di,
+        semplice ? "Vedi i controlli" : `Esiti di ${suffisso || voce.esiti_di}`
+      )
+    );
   }
   riga.append(azioni, message);
   return riga;
@@ -2070,11 +2128,11 @@ function reworkLine(misura) {
 /* UN PULSANTE SOLO: attiva (ordine + riserva) e poi COPIA il prompt, aprendolo come ripiego. */
 /* Il prompt di una fase che NON si attiva — perché è già accettata e l'atto dovuto è un tentativo
    nuovo. Copia, apre, e lascia la traccia che l'hai consegnato. */
-function copiaPromptButton(code, message) {
+function copiaPromptButton(code, message, etichetta) {
   const bottone = h("button", {
     type: "button",
     class: "actbtn",
-    text: "Copia il prompt",
+    text: etichetta || "Copia il prompt",
     disabled: !constitutionReady(),
   });
   bottone.addEventListener("click", async () => {
@@ -2104,11 +2162,11 @@ function copiaPromptButton(code, message) {
   return bottone;
 }
 
-function attivaEConsegna(phase, message) {
+function attivaEConsegna(phase, message, etichetta) {
   const bottone = h("button", {
     type: "button",
     class: "actbtn",
-    text: "Attiva e copia il prompt",
+    text: etichetta || "Attiva e copia il prompt",
     disabled: !constitutionReady(),
   });
   bottone.addEventListener("click", async () => {
@@ -2415,24 +2473,58 @@ function pinsGroup(timbri) {
   return box;
 }
 
+function humanActionReason(voce, azione, errore = "") {
+  if (voce.stop_required) {
+    return voce.stop_reason || "Ci sono stati tentativi sufficienti: serve una decisione.";
+  }
+  if (azione.code === "rework_e") {
+    return errore
+      ? `Qualcosa non va: ${errore}`
+      : "La verifica ha trovato qualcosa da correggere.";
+  }
+  if (azione.code === "accept") {
+    return "Il lavoro ha superato i controlli ed è pronto per la tua approvazione.";
+  }
+  if (azione.code === "close_obligation") {
+    return "Il report dichiara che non resta più nulla: puoi registrare la chiusura.";
+  }
+  if (azione.code === "run_phase" || azione.code === "dispatch") {
+    const titolo = String(voce.title || "")
+      .trim()
+      .replace(/^(Accettare|Implementare|Verificare|Analizzare):\s*/, "");
+    return azione.code === "dispatch"
+      ? "Il lavoro è pronto per essere assegnato."
+      : titolo
+        ? `Il prossimo passo è: ${titolo}.`
+        : "C'è un altro passo da eseguire.";
+  }
+  if (azione.code === "wait") {
+    return "Non devi fare nulla: il lavoro è già in corso o aspetta una fase precedente.";
+  }
+  return azione.reason || "Serve una decisione prima di continuare.";
+}
+
 function obligationRow(voce) {
   const riga = h("div", { class: "actrow" });
   const testo = h("div", { class: "acttext" });
   const rigorosa = Boolean(strictMode || voce.strict_required);
+  const semplice = !strictMode;
   const dettagli = h("details", { class: "actdetails", open: rigorosa });
   dettagli.append(h("summary", { text: "Dettagli tecnici" }));
   const corpoDettagli = h("div", { class: "actdetails-body" });
   dettagli.append(corpoDettagli);
-  testo.append(h("code", { class: "actcode", text: voce.id }));
-  testo.append(
-    document.createTextNode(
-      voce.required_before ? ` prima di ${voce.required_before}` : " senza scadenza di gate"
-    )
-  );
-  testo.append(h("span", {
-    class: `actbadge ${voce.gate ? "gate" : "normal"}`,
-    text: voce.gate ? `BLOCCA ${voce.required_before}` : "NON BLOCCA",
-  }));
+  if (!semplice) {
+    testo.append(h("code", { class: "actcode", text: voce.id }));
+    testo.append(
+      document.createTextNode(
+        voce.required_before ? ` prima di ${voce.required_before}` : " senza scadenza di gate"
+      )
+    );
+    testo.append(h("span", {
+      class: `actbadge ${voce.gate ? "gate" : "normal"}`,
+      text: voce.gate ? `BLOCCA ${voce.required_before}` : "NON BLOCCA",
+    }));
+  }
   const ultimaPresa = voce.last_claim_task
     ? ` · ultima presa: ${voce.last_claim_by || "titolare non dichiarato"} · ${voce.last_claim_task}`
     : "";
@@ -2770,6 +2862,135 @@ function obligationRow(voce) {
         text: "Vedi report",
       })
     : null;
+  if (semplice) {
+    dettagli.open = false;
+    if (accettaRif) accettaRif.textContent = "Accetta il lavoro";
+    const contenuto = h("div", { class: "acttext actsimple" });
+    contenuto.append(
+      h("b", {
+        class: "actsimple-title",
+        text: voce.title || voce.what || "Lavoro da completare",
+      }),
+      h("p", {
+        class: "actsimple-reason",
+        text: humanActionReason(voce, azione, errorText),
+      })
+    );
+    if (azione.code === "rework_e") {
+      const chi =
+        (voce.owners || []).filter(Boolean).join(", ") ||
+        voce.owner ||
+        "la fase di esecuzione";
+      contenuto.append(
+        h("p", { class: "actsimple-owner", text: `Lo corregge: ${chi}.` })
+      );
+    }
+    if (voce.strict_required) {
+      contenuto.append(
+        h("p", {
+          class: "actsimple-risk",
+          text: "Modifica delicata: il controllo completo resta obbligatorio.",
+        })
+      );
+    }
+    if (azione.code === "accept" && pending && !pendingTestOk) {
+      contenuto.append(
+        h("p", {
+          class: "actsimple-risk",
+          text: "Manca il risultato del controllo: l'accettazione resta bloccata.",
+        })
+      );
+    }
+    contenuto.append(dettagli);
+    corpoDettagli.append(
+      h("div", { class: "row" }, [
+        h("button", {
+          type: "button",
+          class: "ghost",
+          text: "Leggi l'obbligo",
+          onclick: () =>
+            apriTesto(
+              `${voce.id} — obbligo`,
+              testoObbligo(),
+              { copia: true, file: `obbligo-${voce.id}.md` }
+            ),
+        }),
+        h("button", {
+          type: "button",
+          class: "ghost",
+          text: "Gestisci tecnicamente",
+          onclick: () =>
+            apriRifinitura(voce, {
+              add: voce.stage_source !== "refinements.yaml",
+            }),
+        }),
+        voce.report_path
+          ? h("a", {
+              class: "ghost actfile",
+              href: `/file?path=${encodeURIComponent(voce.report_path)}`,
+              target: "_blank",
+              rel: "noopener",
+              text: "Apri l'ultimo report",
+            })
+          : null,
+      ])
+    );
+    const azioni = h("div", { class: "actactions actsimple-actions" });
+    if (azione.code === "accept" && accettaRif) {
+      azioni.append(accettaRif);
+    } else if (azione.code === "accept") {
+      azioni.append(
+        h("button", {
+          type: "button",
+          class: "actbtn",
+          text: "Allinea il risultato",
+          onclick: () => apriRifinitura(voce),
+        })
+      );
+    } else if (azione.code === "close_obligation") {
+      azioni.append(closeObligationButton(voce, esito));
+    } else if (azione.code === "rework_e") {
+      azioni.append(
+        h("button", {
+          type: "button",
+          class: "actbtn",
+          text: "Copia istruzioni per correggere",
+          onclick: () => copia.click(),
+        })
+      );
+    } else if (azione.code === "run_phase" || azione.code === "dispatch") {
+      azioni.append(
+        h("button", {
+          type: "button",
+          class: "actbtn",
+          text: "Copia istruzioni per procedere",
+          onclick: () => copia.click(),
+        })
+      );
+    } else if (azione.code === "review") {
+      azioni.append(
+        h("button", {
+          type: "button",
+          class: "actbtn",
+          text: "Apri la decisione",
+          onclick: () => apriRifinitura(voce),
+        })
+      );
+    }
+    if (voce.report_path) {
+      azioni.append(
+        h("a", {
+          class: "actbtn release",
+          href: `/file?path=${encodeURIComponent(voce.report_path)}`,
+          target: "_blank",
+          rel: "noopener",
+          text: "Vedi cosa è stato fatto",
+        })
+      );
+    }
+    riga.append(contenuto, azioni, esito);
+    return riga;
+  }
   primary.append(
     h("div", { class: "actnext" }, [
       h("b", { text: azione.label || "Prossima azione" }),
@@ -2915,28 +3136,35 @@ function owedRow(voce) {
   const riga = h("div", { class: "actrow" });
   const testo = h("div", { class: "acttext" });
   const codici = voce.codes || [];
+  const semplice = !strictMode;
   const azione = voce.next_action || {
     code: "review",
     label: "Leggi la direzione",
     reason: "Il motore non ha ricevuto una decisione.",
   };
-  testo.append(h("code", { class: "actcode", text: voce.from_phase }));
-  testo.append(
-    document.createTextNode(" — direzione lasciata nel report, non un ordine")
-  );
-  testo.append(
-    h("div", {
-      class: "actmeta",
-      text: [
-        voce.from_status,
-        String(voce.when || "").slice(0, 16).replace("T", " "),
-        voce.from_open ? "unità aperta" : "unità chiusa",
-        voce.source,
-      ]
-        .filter(Boolean)
-        .join(" · "),
-    })
-  );
+  if (semplice) {
+    testo.append(
+      h("b", { class: "actsimple-title", text: "Indicazione lasciata dal lavoro precedente" })
+    );
+  } else {
+    testo.append(h("code", { class: "actcode", text: voce.from_phase }));
+    testo.append(
+      document.createTextNode(" — direzione lasciata nel report, non un ordine")
+    );
+    testo.append(
+      h("div", {
+        class: "actmeta",
+        text: [
+          voce.from_status,
+          String(voce.when || "").slice(0, 16).replace("T", " "),
+          voce.from_open ? "unità aperta" : "unità chiusa",
+          voce.source,
+        ]
+          .filter(Boolean)
+          .join(" · "),
+      })
+    );
+  }
   // Il TESTO è la direzione vera. La riga sintetica «il prossimo atto è X» faceva sembrare
   // un ordine ciò che è solo una frase del report, e i codici citati potevano essere già
   // accettati. Qui si legge cosa ha scritto chi ha finito; i pulsanti arrivano dopo.
@@ -2951,12 +3179,19 @@ function owedRow(voce) {
   }
   testo.append(
     h("div", { class: "actnext" }, [
-      h("b", { text: azione.label }),
-      document.createTextNode(azione.reason ? ` — ${azione.reason}` : ""),
+      h("b", { text: semplice ? "Prossimo passo" : azione.label }),
+      document.createTextNode(
+        semplice
+          ? ` — ${humanActionReason(voce, azione)}`
+          : azione.reason
+            ? ` — ${azione.reason}`
+            : ""
+      ),
     ])
   );
   riga.append(testo);
   const azioni = h("div", { class: "actactions" });
+  const statoCodici = [];
   codici.forEach((codice) => {
     // NIENTE PULSANTE PER UNA FASE GIÀ ACCETTATA. Misurato dall'utente il 2026-10-19 su
     // END03R: la riga nominava END03T, QA06T e QA06R, tutte accepted, e la pagina offriva
@@ -2968,15 +3203,32 @@ function owedRow(voce) {
         : codice.status === "accepted"
           ? "accettata"
           : codice.status || "da verificare";
-    azioni.append(
+    statoCodici.push(
       h("span", {
         class: "actbtn release taken",
         text: `${codice.code}: ${etichetta}`,
       })
     );
   });
+  if (statoCodici.length) {
+    if (semplice) {
+      azioni.append(
+        h("details", { class: "actdetails" }, [
+          h("summary", { text: "Dettagli tecnici" }),
+          h("div", { class: "row" }, statoCodici),
+        ])
+      );
+    } else {
+      azioni.append(...statoCodici);
+    }
+  }
   if (azione.code === "run_phase" && azione.target_phase) {
-    azioni.append(owedPromptButton(azione.target_phase, azione.label));
+    azioni.append(
+      owedPromptButton(
+        azione.target_phase,
+        semplice ? "Copia istruzioni" : azione.label
+      )
+    );
   }
   azioni.append(
     h("button", {
@@ -3675,11 +3927,11 @@ function activationPromptButton(phase, apri) {
    l'ATTO firmato `utente` (una mano che quei byte non li ha scritti): report, puntatore e stato nel
    registro, sotto il lock. Il cancello decide se si puo': se la base non e' pronta, non firma e dice
    perche' — e l'atto dichiara cosa ha letto e cosa NON ha rieseguito. */
-function acceptButton(phase, message, seServeRifai) {
+function acceptButton(phase, message, seServeRifai, etichetta) {
   const bottone = h("button", {
     type: "button",
     class: "actbtn",
-    text: "Accetta (firmato da te)",
+    text: etichetta || "Accetta (firmato da te)",
     title:
       "scrive l'atto di accettazione firmato da te: dichiara cosa hai letto e che non hai rieseguito le prove",
   });
@@ -5589,6 +5841,7 @@ function spiegaFase(phase) {
 }
 
 let worklogData = null;
+let metricsData = null;
 const WORKLOG_KIND = {
   analysis: "Analisi",
   implementation: "Esecuzione",
@@ -5624,6 +5877,148 @@ function worklogStrip(stages, nextStage) {
 
 function worklogMatches(testo, query) {
   return !query || String(testo || "").toLowerCase().includes(query);
+}
+
+function durataUmana(secondi) {
+  if (secondi === null || secondi === undefined) return "non misurato";
+  const valore = Number(secondi);
+  if (!Number.isFinite(valore)) return "non misurato";
+  if (valore < 60) return `${Math.round(valore)} s`;
+  if (valore < 3600) return `${Math.round(valore / 60)} min`;
+  if (valore < 86400) {
+    const ore = valore / 3600;
+    return `${ore < 10 ? ore.toFixed(1) : Math.round(ore)} h`;
+  }
+  const giorni = valore / 86400;
+  return `${giorni < 10 ? giorni.toFixed(1) : Math.round(giorni)} giorni`;
+}
+
+function percentuale(valore) {
+  return valore === null || valore === undefined
+    ? "non disponibile"
+    : `${Math.round(Number(valore) * 100)}%`;
+}
+
+function plurale(numero, singolare, plurale) {
+  return `${numero} ${Number(numero) === 1 ? singolare : plurale}`;
+}
+
+function renderMethodMetrics(data) {
+  metricsData = data;
+  const box = $("#method-metrics");
+  if (!box) return;
+  const s = data.summary || {};
+  const token = s.tokens || {};
+  const umani = s.human_interventions || {};
+  const tempo = s.cycle_time || {};
+  const generated = $("#method-generated");
+  if (generated) generated.textContent = `misure del ${String(data.generated || "").slice(0, 16).replace("T", " ")}`;
+  const righe = [
+    {
+      label: "Passati al primo colpo",
+      value: `${s.first_pass_accepted ?? 0}/${s.first_pass_comparable ?? 0}`,
+      detail: `${percentuale(s.first_pass_rate)} delle fasi accettate con un esito leggibile è passata senza un atto precedente negativo.`,
+      tone: s.first_pass_rate !== null && s.first_pass_rate >= 0.7 ? "ok" : "warn",
+    },
+    {
+      label: "Lavori tornati indietro",
+      value: `${s.reworked_phases ?? 0}/${s.rework_comparable ?? 0}`,
+      detail: `${percentuale(s.rework_rate)} delle fasi con un esito leggibile ha richiesto almeno un rifacimento.`,
+      tone: s.rework_rate !== null && s.rework_rate <= 0.3 ? "ok" : "warn",
+    },
+    {
+      label: "Tempo mediano per fase",
+      value: durataUmana(tempo.median_seconds),
+      detail: `${plurale(
+        tempo.measured_phases ?? 0,
+        "fase ha",
+        "fasi hanno"
+      )} inizio e fine datati. È tempo di calendario, non tempo attivo di lavoro.`,
+      tone: "neutral",
+    },
+    {
+      label: "Token dichiarati",
+      value: `${token.reports_measured ?? 0}/${token.reports_total ?? 0} report`,
+      detail:
+        token.reports_measured > 0
+          ? `${token.total} token totali dichiarati nei report.`
+          : "Nessun report dichiara ancora i token: la misura è assente, non pari a zero.",
+      tone: token.reports_measured > 0 ? "neutral" : "warn",
+    },
+    {
+      label: "Interventi umani",
+      value: String(umani.total ?? 0),
+      detail: `${plurale(umani.acceptances ?? 0, "accettazione", "accettazioni")} · ${plurale(
+        umani.answers ?? 0,
+        "risposta",
+        "risposte"
+      )} · ${plurale(umani.decisions ?? 0, "decisione", "decisioni")} · ${plurale(
+        umani.notes ?? 0,
+        "nota",
+        "note"
+      )} · ${plurale(umani.dispatches ?? 0, "prompt consegnato", "prompt consegnati")}.`,
+      tone: "neutral",
+    },
+  ];
+  box.replaceChildren(
+    ...righe.map((riga) =>
+      h("div", { class: `method-row ${riga.tone}` }, [
+        h("span", { class: "method-label", text: riga.label }),
+        h("b", { class: "method-value", text: riga.value }),
+        h("span", { class: "method-detail", text: riga.detail }),
+      ])
+    )
+  );
+  const warnings = $("#method-warnings");
+  if (warnings) {
+    const voci = data.warnings || [];
+    const hotspot = data.rework_hotspots || [];
+    const contenuti = [];
+    if (voci.length) {
+      contenuti.push(
+        h("div", { class: "method-warning" }, [
+          h("b", { text: "Da migliorare: " }),
+          document.createTextNode(voci.join(" ")),
+        ])
+      );
+    }
+    if (hotspot.length) {
+      contenuti.push(
+        h("details", { class: "method-details" }, [
+          h("summary", { text: "Dove tornano più spesso" }),
+          h(
+            "ul",
+            {},
+            hotspot.map((voce) =>
+              h("li", {
+                text: `${voce.phase}: ${plurale(
+                  voce.negative_attempts,
+                  "esito negativo",
+                  "esiti negativi"
+                )} su ${plurale(voce.attempts, "tentativo", "tentativi")}`,
+              })
+            )
+          ),
+        ])
+      );
+    }
+    warnings.replaceChildren(...contenuti);
+  }
+}
+
+async function loadMethodMetrics() {
+  const box = $("#method-metrics");
+  if (!box) return;
+  try {
+    const response = await fetch("/api/metrics");
+    const data = await response.json();
+    if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+    renderMethodMetrics(data);
+  } catch (error) {
+    box.replaceChildren(
+      h("p", { class: "hint", text: `Misure del metodo non disponibili: ${error.message}` })
+    );
+  }
 }
 
 function renderWorklogSummary() {
@@ -5793,6 +6188,7 @@ async function loadWorklog() {
   if (!box) return;
   box.setAttribute("aria-busy", "true");
   box.replaceChildren(h("p", { class: "hint", text: "Leggo i registri…" }));
+  void loadMethodMetrics();
   try {
     const response = await fetch("/api/svolto");
     const payload = await response.json();

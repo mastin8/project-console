@@ -44,6 +44,7 @@ PORTE = {
     "registers/sync_phases.py": ["inserisci", "main"],
     "console/timeline.py": ["build", "configure", "repository_facts", "main"],
     "console/recap.py": ["costruisci", "main"],
+    "console/metrics.py": ["build", "main"],
     "console/refinements.py": [
         "load", "merge", "sync", "update", "stage_map", "next_phase", "is_closed",
         "required_phases", "effective_lane", "latest_report", "main",
@@ -56,6 +57,7 @@ PORTE = {
     ],
     "console/test_constitution.py": ["ConstitutionTests"],
     "console/test_next_action.py": ["NextActionTests"],
+    "console/test_metrics.py": ["MetricsTests"],
     "console/test_refinements.py": ["main"],
     "console/server.py": ["main", "ReviewState"],
 }
@@ -74,6 +76,7 @@ COMANDI = (
     [sys.executable, "registers/mandate.py", "--help"],
     [sys.executable, "registers/sync_phases.py", "--help"],
     [sys.executable, "console/server.py", "--help"],
+    [sys.executable, "console/metrics.py", "--help"],
 )
 
 

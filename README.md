@@ -277,8 +277,11 @@ report) non sta mai in pagina: si apre in un dialogo, con **Copia** e **Salva co
   report, respinte in verifica, e i commit che toccano i path dichiarati dal blocco.
 - **Svolto** (`/svolto`) — tutto il lavoro registrato: 70 unità, 280 fasi A/E/T/R, report,
   tentativi, verdetti, autori e date, raggruppati per blocco. Le rifiniture sono in fondo con
-  fasi, claim e prossimo report. Filtri per blocco e testo, "Espandi tutto" e "Chiudi tutto".
-  Dati da `/api/svolto` (`project-console-worklog/1.0`), letti dai registri e dai puntatori.
+  fasi, claim e prossimo report. In testa c'è **Come sta andando il metodo**: primo colpo,
+  rifacimenti, tempo mediano, token dichiarati e interventi umani, con la copertura delle fonti.
+  Filtri per blocco e testo, "Espandi tutto" e "Chiudi tutto".
+  Dati da `/api/svolto` (`project-console-worklog/1.0`) e `/api/metrics`
+  (`project-console-method-metrics/1.0`), letti dai registri e dai report.
 - **Costituzione** (`/costituzione`) — la bozza del piano si modifica e si salva dall'onboarding.
   Solo l'utente può approvarla. Dopo il clic il file diventa immutabile; il console verifica il
   sigillo SHA-256 a ogni lettura e rifiuta modifiche esterne. Per un progetto nato prima di questa
@@ -303,9 +306,12 @@ fatto non è stato verificato, si dichiara.
 
 ### Modalità normale e modalità rigorosa
 
-In **modalità normale** il front-end mostra il prossimo passo con un prompt breve, il ramo, il
-worktree, i task paralleli o in conflitto e una scheda risultato con test, errori,
-**Accetta** o **Riprendi dall'esecuzione**. A/E/T/R restano sotto «Dettagli tecnici».
+In **modalità normale** il front-end mostra il prossimo passo con un prompt breve e una scheda
+risultato in lingua semplice, con **Accetta** oppure **Copia istruzioni per correggere**.
+
+La prima lettura è in lingua semplice: cosa è successo, cosa devi fare e, se c'è un errore, chi
+deve correggerlo. ID, gate, fasi, ramo, test, impronte e percorsi restano sotto
+**Dettagli tecnici**; **Modalità rigorosa** li apre dall'inizio.
 
 La decisione viene da `registers/next_action.py`: il report produce `accetta`, `torna in E`,
 `passa alla fase successiva`, `chiudi obbligo`, `aspetta` oppure `serve una revisione`. La pagina

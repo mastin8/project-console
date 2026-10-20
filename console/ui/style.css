@@ -481,6 +481,35 @@ body[data-page="costituzione"] .indice{display:none}
   }
 }
 
+/* Le misure del metodo: righe leggibili, non una dashboard di numeri decorativi. */
+.method-panel{margin:var(--s4) 0 var(--s5);padding:var(--s4);border:1px solid var(--line-strong);
+  border-radius:var(--r-md);background:var(--surface)}
+.method-head{display:flex;align-items:baseline;justify-content:space-between;gap:var(--s3);
+  flex-wrap:wrap}
+.method-head h3{margin:0;font-size:16px;letter-spacing:-.01em}
+.method-head span{color:var(--ink-3);font-size:12px}
+.method-panel>p{margin:var(--s1) 0 var(--s3);color:var(--ink-3);font-size:12.5px;
+  max-width:80ch}
+.method-metrics{border-top:1px solid var(--line)}
+.method-row{display:grid;grid-template-columns:minmax(170px,.8fr) minmax(90px,.35fr) minmax(0,1.6fr);
+  gap:var(--s2) var(--s3);align-items:baseline;padding:var(--s2) 0;
+  border-bottom:1px solid var(--line)}
+.method-label{color:var(--ink-2);font-size:13px;font-weight:600}
+.method-value{color:var(--ink);font-size:15px;font-variant-numeric:tabular-nums}
+.method-row.ok .method-value{color:var(--ok)}
+.method-row.warn .method-value{color:var(--warn)}
+.method-detail{color:var(--ink-3);font-size:12.5px;text-wrap:pretty}
+.method-warning{margin-top:var(--s3);padding:var(--s2) var(--s3);border:1px solid var(--warn);
+  border-radius:var(--r-sm);background:var(--warn-soft);color:var(--ink-2);font-size:12.5px}
+.method-warning b{color:var(--warn)}
+.method-details{margin-top:var(--s3);font-size:12.5px;color:var(--ink-2)}
+.method-details summary{cursor:pointer;color:var(--accent);font-weight:600}
+.method-details ul{margin:var(--s2) 0 0;padding-left:var(--s5)}
+@media (max-width:720px){
+  .method-row{grid-template-columns:1fr auto}
+  .method-detail{grid-column:1 / -1}
+}
+
 /* Lavoro svolto: il registro completo, leggibile per blocco e unità. */
 .worklog-summary {
   display: grid;
@@ -860,6 +889,14 @@ details[open] > .acthead::before{content:"▾ "}
   border-radius:var(--r-sm);background:var(--accent-soft);color:var(--ink-2);font-size:12.5px;
   text-wrap:pretty}
 .actnext b{color:var(--accent);font-size:13px}
+.actsimple-title{display:block;color:var(--ink);font-size:14px;line-height:1.35;
+  letter-spacing:-.005em}
+.actsimple-reason{margin:var(--s1) 0 0;color:var(--ink-2);font-size:13px;
+  max-width:68ch;text-wrap:pretty}
+.actsimple-owner{margin:var(--s2) 0 0;color:var(--warn);font-size:12.5px;font-weight:600}
+.actsimple-risk{margin:var(--s2) 0 0;padding:var(--s1) var(--s2);border:1px solid var(--warn);
+  border-radius:var(--r-sm);background:var(--warn-soft);color:var(--warn);font-size:12px}
+.actsimple .actdetails{margin-top:var(--s3)}
 .actbadge {
   display: inline-block;
   margin-left: var(--s2);
