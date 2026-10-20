@@ -502,6 +502,7 @@ body[data-page="costituzione"] .indice{display:none}
 .method-warning{margin-top:var(--s3);padding:var(--s2) var(--s3);border:1px solid var(--warn);
   border-radius:var(--r-sm);background:var(--warn-soft);color:var(--ink-2);font-size:12.5px}
 .method-warning b{color:var(--warn)}
+.method-warning ul{margin:var(--s1) 0 0;padding-left:var(--s5)}
 .method-details{margin-top:var(--s3);font-size:12.5px;color:var(--ink-2)}
 .method-details summary{cursor:pointer;color:var(--accent);font-weight:600}
 .method-details ul{margin:var(--s2) 0 0;padding-left:var(--s5)}

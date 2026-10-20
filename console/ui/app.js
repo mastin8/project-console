@@ -5977,8 +5977,8 @@ function renderMethodMetrics(data) {
     if (voci.length) {
       contenuti.push(
         h("div", { class: "method-warning" }, [
-          h("b", { text: "Da migliorare: " }),
-          document.createTextNode(voci.join(" ")),
+          h("b", { text: "Da migliorare" }),
+          h("ul", {}, voci.map((voce) => h("li", { text: voce }))),
         ])
       );
     }
