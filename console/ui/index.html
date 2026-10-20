@@ -61,6 +61,14 @@
     </div>
   </header>
 
+  <div class="constitution-gate" id="constitution-gate-global" role="alert" hidden>
+    <div>
+      <strong id="constitution-gate-title">Costituzione non approvata</strong>
+      <p id="constitution-gate-copy">Nessun task o prompt può partire finché il progetto non ha una Costituzione approvata.</p>
+    </div>
+    <a href="/costituzione" id="constitution-gate-link">Apri la Costituzione</a>
+  </div>
+
   <!-- IL GLOSSARIO. Sta a sinistra e resta: le parole di questo progetto (presa, ordine, A/E/T/R,
        «non rieseguito») sono la parte che nessuno indovina, e finora erano solo in un documento. Si
        apre quello che serve; su schermo stretto il glossario si mette in cima, chiuso. -->
@@ -85,8 +93,12 @@
       <p class="constitution-loading" id="constitution-loading" role="status">Leggo la Costituzione…</p>
       <div class="constitution-missing" id="constitution-missing" hidden>
         <h3>La Costituzione non è presente</h3>
-        <p>Questo workspace non contiene ancora <code>constitution.md</code>. Non viene ricreato
-          automaticamente: un progetto nuovo deve partire da <code>scaffold.py</code>.</p>
+        <p>Questo workspace è nato prima della Costituzione. Puoi creare una bozza dal modello e
+          compilarla qui; non viene mai approvata automaticamente.</p>
+        <div class="row">
+          <button type="button" id="constitution-create">Crea la bozza</button>
+          <span class="msg" id="constitution-create-message" role="status" aria-live="polite"></span>
+        </div>
       </div>
       <div class="constitution-problem" id="constitution-problem" role="alert" hidden></div>
       <span class="msg" id="constitution-message" role="status" aria-live="polite"></span>
@@ -368,6 +380,13 @@
       <label>Test durata <input id="ref-test-duration" autocomplete="off"></label>
       <label>Branch <input id="ref-branch" autocomplete="off"></label>
       <label>Worktree <input id="ref-worktree" autocomplete="off"></label>
+      <label>Corsia
+        <select id="ref-lane">
+          <option value="auto">automatica</option>
+          <option value="standard">completa A/E/T/R</option>
+          <option value="fast">rapida E/T</option>
+        </select>
+      </label>
       <label class="ref-check"><input type="checkbox" id="ref-strict"> Modo rigoroso</label>
       <label>Rischi <input id="ref-risk" placeholder="data, security, release" autocomplete="off"></label>
       <label>Errori <textarea id="ref-errors" rows="2" placeholder="Un errore per riga o separati da ;"></textarea></label>

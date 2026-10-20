@@ -43,7 +43,9 @@ L'agente deve farti domande e compilare `constitution.md` con obiettivo, stack, 
 numero e ampiezza dei task, skill, flusso normale/rigoroso, parallelismo, test, accettazione,
 rischi e stop rule. La bozza si controlla e si approva **solo dalla pagina Costituzione** del
 console. Gli agenti non possono approvarla; dopo il tuo clic il documento diventa immutabile e il
-tool ne verifica il sigillo SHA-256. Solo allora si crea la mappa del lavoro.
+tool ne verifica il sigillo SHA-256. Il cancello è tecnico: attivazione, apertura delle fasi e
+composizione dei prompt sono bloccate finché la Costituzione resta in bozza o manca. Solo dopo
+l'approvazione si crea la mappa del lavoro.
 
 ### Passo 1 — la cartella dei registri
 
@@ -279,7 +281,8 @@ report) non sta mai in pagina: si apre in un dialogo, con **Copia** e **Salva co
   Dati da `/api/svolto` (`project-console-worklog/1.0`), letti dai registri e dai puntatori.
 - **Costituzione** (`/costituzione`) — la bozza del piano si modifica e si salva dall'onboarding.
   Solo l'utente può approvarla. Dopo il clic il file diventa immutabile; il console verifica il
-  sigillo SHA-256 a ogni lettura e rifiuta modifiche esterne.
+  sigillo SHA-256 a ogni lettura e rifiuta modifiche esterne. Per un progetto nato prima di questa
+  regola, la pagina crea una bozza dal modello; l'approvazione resta un clic separato.
 
 «Salva come file» scarica un `.md` col testo esatto del prompt, senza passare dalla clipboard: serve
 a isolare dove si rompe un testo — se il file e' giusto e il testo incollato no, il difetto e' nel
@@ -303,6 +306,14 @@ fatto non è stato verificato, si dichiara.
 In **modalità normale** il front-end mostra il prossimo passo con un prompt breve, il ramo, il
 worktree, i task paralleli o in conflitto e una scheda risultato con test, errori,
 **Accetta** o **Riprendi dall'esecuzione**. A/E/T/R restano sotto «Dettagli tecnici».
+
+La decisione viene da `registers/next_action.py`: il report produce `accetta`, `torna in E`,
+`passa alla fase successiva`, `chiudi obbligo`, `aspetta` oppure `serve una revisione`. La pagina
+non ricava più il pulsante leggendo la prosa del verdetto.
+
+Una correzione circoscritta può dichiarare `lane: fast`: usa E e una verifica T mirata. Rischi,
+migrazioni, sicurezza, release, configurazione o più di due file riportano automaticamente al
+percorso completo A/E/T/R.
 
 La **modalità rigorosa** si attiva dal toggle accanto a «Rifiniture finali» e apre il mandato
 completo, le fasi A/E/T/R, owner, claim e verifica indipendente. Le modifiche che toccano

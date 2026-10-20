@@ -101,6 +101,7 @@ function render(data) {
       : (data.independence_debts || []).length
   );
   $("#generated").textContent = `aggiornato ${data.generated} · dati letti dai registri del progetto`;
+  renderConstitutionGate(data.constitution_gate);
 
   const ratio = s.units ? Math.round((s.accepted / s.units) * 100) : 0;
   const line = $("#status-line");
@@ -162,6 +163,35 @@ function render(data) {
   renderCoda(data.queue, data.applicazione);
   loadTimeline();
   refreshAge();
+}
+
+function renderConstitutionGate(gate) {
+  const banner = $("#constitution-gate-global");
+  if (!banner) return;
+  const approvata = Boolean(gate && gate.approved);
+  banner.hidden = approvata;
+  if (approvata) return;
+  const mancante = gate && gate.status === "missing";
+  const invalida = gate && gate.status === "invalid";
+  $("#constitution-gate-title").textContent = invalida
+    ? "La Costituzione non è verificabile"
+    : mancante
+      ? "La Costituzione non esiste ancora"
+      : "La Costituzione è ancora una bozza";
+  $("#constitution-gate-copy").textContent = invalida
+    ? "Il file o il sigillo sono incoerenti. Apri la pagina, leggi l'errore e non avviare lavoro finché non è risolto."
+    : mancante
+      ? "Crea la bozza dal modello e compilala: finché non è approvata, nessun task o prompt può partire."
+      : "Nessun task o prompt può partire finché non premi «Approva e blocca» nella pagina Costituzione.";
+  $("#constitution-gate-link").textContent = invalida
+    ? "Controlla l'errore"
+    : mancante
+      ? "Crea la bozza"
+      : "Controlla e approva";
+}
+
+function constitutionReady() {
+  return Boolean(snapshot && snapshot.constitution_gate && snapshot.constitution_gate.approved);
 }
 
 /* ----------------------------------------------------------------- domande */
@@ -644,7 +674,13 @@ function promptCard(prompt) {
     ? `${prompt.anchor}${prompt.anchor_kind === "obbligo" ? " · obbligo" : ""}`
     : "senza codice";
   const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });
-  const copy = h("button", { type: "button", class: "ghost", text: "Copia il prompt" });
+  const bloccato = prompt.blocked || null;
+  const copy = h("button", {
+    type: "button",
+    class: "ghost",
+    text: "Copia il prompt",
+    disabled: Boolean(bloccato),
+  });
   copy.addEventListener("click", async () => {
     try {
       await navigator.clipboard.writeText(prompt.prompt || "");
@@ -698,6 +734,7 @@ function promptCard(prompt) {
         type: "button",
         class: "ghost",
         text: "Leggi il prompt",
+        disabled: Boolean(bloccato),
         onclick: () =>
           apriTesto(`${prompt.anchor || "§" + prompt.number} — il prompt`, prompt.prompt, {
             copia: true,
@@ -721,7 +758,9 @@ function promptCard(prompt) {
       ? null
       : h("p", {
           class: "pmeta",
-          text: "testo non estraibile dal quaderno: apri la sezione nel file.",
+          text:
+            bloccato ||
+            "testo non estraibile dal quaderno: apri la sezione nel file.",
         }),
   ]);
 }
@@ -1463,6 +1502,27 @@ async function inviaCostituzione(metodo, percorso, payload, etichetta) {
 }
 
 function initCostituzione() {
+  $("#constitution-create")?.addEventListener("click", async () => {
+    const bottone = $("#constitution-create");
+    const message = $("#constitution-create-message");
+    bottone.disabled = true;
+    message.className = "msg show pending";
+    message.textContent = "creo la bozza dal modello…";
+    try {
+      const response = await fetch("/api/constitution/draft", { method: "POST" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || `HTTP ${response.status}`);
+      await loadConstitution();
+      messaggioCostituzione(
+        "Bozza creata. Compila i campi con l'agente e approvala solo quando il piano è completo.",
+        "ok"
+      );
+    } catch (error) {
+      message.className = "msg show err";
+      message.textContent = `bozza non creata: ${error.message}`;
+      bottone.disabled = false;
+    }
+  });
   $("#constitution-form")?.addEventListener("submit", (event) => {
     event.preventDefault();
     inviaCostituzione(
@@ -1498,10 +1558,18 @@ function initCostituzione() {
 
 /* I testi lunghi (prompt, dichiarazioni, report) vivono in un dialogo: la pagina resta una lista di
    righe, e il testo e' a un clic con «Copia» accanto. */
+function promptConCostituzione(testo) {
+  const corpo = String(testo || "");
+  const contesto = (snapshot && snapshot.constitution_context) || "";
+  if (!contesto || corpo.includes("VINCOLI DELLA COSTITUZIONE APPROVATA")) return corpo;
+  return `${contesto}\n${corpo}`;
+}
+
 function apriTesto(titolo, testo, opzioni = {}) {
+  const contenuto = opzioni.copia ? promptConCostituzione(testo) : testo;
   const dialog = $("#report-dialog");
   $("#report-title").textContent = titolo;
-  $("#report-body").textContent = testo || "—";
+  $("#report-body").textContent = contenuto || "—";
   let azioni = $("#report-actions");
   if (!azioni) {
     azioni = h("div", { id: "report-actions", class: "row" });
@@ -1513,7 +1581,7 @@ function apriTesto(titolo, testo, opzioni = {}) {
     const copia = h("button", { type: "button", class: "ghost", text: "Copia" });
     copia.addEventListener("click", async () => {
       try {
-        const esitoCopia = await copiaTesto(testo || "");
+        const esitoCopia = await copiaTesto(contenuto || "");
         if (!esitoCopia.ok) throw new Error("il browser non ha concesso gli appunti: seleziona il testo e premi Ctrl+C");
         esito.className = "msg show ok";
         esito.textContent = "copiato: incollalo come primo messaggio di una chat nuova.";
@@ -1525,7 +1593,7 @@ function apriTesto(titolo, testo, opzioni = {}) {
     azioni.append(copia, esito);
   }
   if (opzioni.file) {
-    azioni.append(linkSalvaFile(testo, opzioni.file));
+    azioni.append(linkSalvaFile(contenuto, opzioni.file));
   }
   if (!dialog.open) dialog.showModal();
   // Se la copia non è riuscita, il ripiego utile è il testo SELEZIONATO: un Ctrl+C e basta. Il
@@ -1595,6 +1663,17 @@ function renderActivation(data) {
   const box = $("#activation");
   const count = $("#activation-count");
   if (!box || !count) return;
+  const gate = data.constitution_gate || { approved: false, status: "missing" };
+  if (!gate.approved) {
+    count.textContent = "bloccato dalla Costituzione";
+    const hint = $("#activation-hint");
+    if (hint) {
+      hint.textContent =
+        "Prima si chiude l'onboarding: la Costituzione deve essere approvata nel front-end. Fino ad allora nessun task o prompt può partire.";
+    }
+    box.replaceChildren(activationConstitutionGate(gate));
+    return;
+  }
   const obblighi = data.obligations || [];
   const obblighiGate = obblighi.filter((voce) => voce.gate).length;
   const debiti = data.independence_debts || [];
@@ -1780,13 +1859,38 @@ function renderActivation(data) {
   box.replaceChildren(...parti);
 }
 
+function activationConstitutionGate(gate) {
+  const mancante = gate.status === "missing";
+  const invalida = gate.status === "invalid";
+  return h("p", { class: "empty" }, [
+    h("b", { text: "Lavoro bloccato. " }),
+    document.createTextNode(
+      invalida
+        ? "Il contenuto approvato non coincide con il sigillo; il comando per aprire l'errore è nel banner sopra."
+        : mancante
+          ? "Questo workspace non ha ancora una Costituzione: crea la bozza dal banner sopra."
+          : "La bozza esiste ma non è approvata: il comando per controllarla è nel banner sopra."
+    ),
+  ]);
+}
+
 /* Una riga della coda: il codice, l'eventuale traccia del prompt consegnato, UN pulsante. La
    spiegazione («perche' lo dice X», la misura delle respinte) sta chiusa in un `details`. */
 function codaRow(voce) {
   const riga = h("div", { class: "actrow" });
   const testo = h("div", { class: "acttext" });
   testo.append(h("code", { class: "actcode", text: voce.code }));
-  const titolo = ((voce.fase || {}).title || "").trim().replace(/^(Accettare|Implementare|Verificare|Analizzare):\s*/, "");
+  if (voce.lane_effective === "fast") {
+    testo.append(
+      h("span", {
+        class: "actbadge normal",
+        text: "CORSIA RAPIDA · E/T",
+      })
+    );
+  }
+  const titolo = String(voce.title || (voce.fase || {}).title || "")
+    .trim()
+    .replace(/^(Accettare|Implementare|Verificare|Analizzare):\s*/, "");
   if (titolo) testo.append(document.createTextNode(` ${titolo}`));
   const traccia = rigaConsegna(voce.code, Boolean(voce.report));
   if (traccia) testo.append(traccia);
@@ -1833,14 +1937,18 @@ function codaRow(voce) {
 
   const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });
   const azioni = h("div", { class: "actactions" });
-  // Il pulsante giusto dipende da cosa la fase è: attivabile (nessun ordine depositato) → si attiva
-  // e si copia il prompt; già accettata e con un atto dovuto → si copia e basta; accettazione → si può
-  // anche firmare.
-  const attivabile = ((snapshot && snapshot.activatable) || []).some((voce2) => voce2.phase === voce.code);
-  const fasi = (consoleConfig && consoleConfig.phases) || [];
-  const accettazione = fasi.length
-    ? String(voce.code).toUpperCase().endsWith(String(fasi[fasi.length - 1]).toUpperCase())
-    : false;
+  const azione = voce.next_action || {
+    code: "review",
+    label: "Serve una revisione",
+    reason: "Il motore non ha ricevuto una decisione.",
+    target_phase: voce.code,
+  };
+  testo.append(
+    h("div", { class: "actnext" }, [
+      h("b", { text: azione.label || "Prossima azione" }),
+      document.createTextNode(azione.reason ? ` — ${azione.reason}` : ""),
+    ])
+  );
   if ((voce.busy || []).length) {
     // Le fasi della stessa unità sono sequenziali: qui non c'è niente da mandare, si aspetta.
     testo.append(
@@ -1854,42 +1962,41 @@ function codaRow(voce) {
     riga.append(azioni);
     return riga;
   }
-  if (voce.rifai) {
-    // La verifica è rossa e il report dice dove tornare: rilanciare la stessa fase sugli stessi
-    // byte rifarebbe la stessa misura. Il pulsante è il prompt della fase da riprendere.
-    testo.append(
-      h("div", { class: "actmeta" }, [
-        h("b", { class: "warnnote", text: "da rifare a monte: " }),
-        document.createTextNode(
-          `${voce.code} ha respinto (${voce.verdetto})${
-            Number(voce.bloccanti || 0) ? ` con ${voce.bloccanti} finding bloccanti` : ""
-          } e il report dice di riprendere ${voce.rifai}. ` +
-            `Rilanciare ${voce.code} sugli stessi byte rifarebbe la stessa misura.`
-        ),
-      ])
+  const target = azione.target_phase || azione.phase || voce.code;
+  const targetAttivabile = ((snapshot && snapshot.activatable) || []).some(
+    (voce2) => voce2.phase === target
+  );
+  if (azione.code === "accept") {
+    azioni.append(acceptButton(azione.accept_phase || voce.code, message));
+  } else if (azione.code === "rework_e") {
+    azioni.append(
+      targetAttivabile && target === voce.code
+        ? attivaEConsegna(target, message)
+        : owedPromptButton(target, azione.label)
     );
-    azioni.append(owedPromptButton(voce.rifai));
-    riga.append(azioni, message);
-    return riga;
+  } else if (azione.code === "run_phase" || azione.code === "dispatch") {
+    azioni.append(
+      targetAttivabile
+        ? attivaEConsegna(target, message)
+        : copiaPromptButton(target, message)
+    );
+  } else if (azione.code === "review") {
+    azioni.append(
+      h("a", {
+        class: "actbtn release",
+        text: "Leggi il report",
+        href: voce.report
+          ? `/file?path=${encodeURIComponent(voce.report)}`
+          : `/file?path=${encodeURIComponent("state.yaml")}`,
+        target: "_blank",
+        rel: "noopener",
+      })
+    );
   }
-  if (voce.fase && (voce.fase.misura || {}).solo_firma) {
-    azioni.append(acceptButton(voce.code, message));
-  } else if (attivabile) {
-    azioni.append(attivaEConsegna(voce.code, message));
-  } else {
-    // La fase NON è attivabile: quasi sempre perché è GIÀ ACCETTATA, e l'atto dovuto è un tentativo
-    // NUOVO su di lei (il copy da rientrare, la verifica da rifare). Attivarla non si può e non
-    // serve: si copia il prompt e lo si dà a una corsia. Era l'errore che ha prodotto «fase non
-    // attivabile o inesistente: NAV03E» su un clic perfettamente legittimo.
-    azioni.append(copiaPromptButton(voce.code, message));
-  }
-  // La R non ha ancora un report suo: l'evidenza e' quella della fase che la precede.
-  if (accettazione && voce.esiti_di) {
+  if (voce.esiti_di) {
     const suffisso = voce.unit ? String(voce.esiti_di).slice(String(voce.unit).length) : "";
     azioni.append(bottoneEsiti(voce.esiti_di, `Esiti di ${suffisso || voce.esiti_di}`));
   }
-  if (accettazione && !(voce.busy || []).length) azioni.append(acceptButton(voce.code, message));
-  if (voce.fase) azioni.append(attivaButtonPlain(voce.code, message));
   riga.append(azioni, message);
   return riga;
 }
@@ -1964,7 +2071,12 @@ function reworkLine(misura) {
 /* Il prompt di una fase che NON si attiva — perché è già accettata e l'atto dovuto è un tentativo
    nuovo. Copia, apre, e lascia la traccia che l'hai consegnato. */
 function copiaPromptButton(code, message) {
-  const bottone = h("button", { type: "button", class: "actbtn", text: "Copia il prompt" });
+  const bottone = h("button", {
+    type: "button",
+    class: "actbtn",
+    text: "Copia il prompt",
+    disabled: !constitutionReady(),
+  });
   bottone.addEventListener("click", async () => {
     bottone.disabled = true;
     message.className = "msg show pending";
@@ -1993,7 +2105,12 @@ function copiaPromptButton(code, message) {
 }
 
 function attivaEConsegna(phase, message) {
-  const bottone = h("button", { type: "button", class: "actbtn", text: "Attiva e copia il prompt" });
+  const bottone = h("button", {
+    type: "button",
+    class: "actbtn",
+    text: "Attiva e copia il prompt",
+    disabled: !constitutionReady(),
+  });
   bottone.addEventListener("click", async () => {
     bottone.disabled = true;
     message.className = "msg show pending";
@@ -2032,6 +2149,7 @@ function attivaButtonPlain(phase, message) {
     type: "button",
     class: "actbtn release",
     text: "Solo l'ordine",
+    disabled: !constitutionReady(),
     title: "deposita l'ordine e riserva la fase, senza copiare il prompt",
     onclick: async () => {
       try {
@@ -2370,9 +2488,11 @@ function obligationRow(voce) {
     R: "Accettazione",
     OWNERS: "Riparazione dei proprietari",
     A2: "Design A2",
+    not_required: "Non richiesta dalla corsia rapida",
   };
   const strip = h("div", { class: "actstages", "aria-label": "Fasi della rifinitura" });
   ["A", "E", "T", "R"].forEach((chiave) => {
+    if (stages[chiave] === "not_required") return;
     strip.append(h("span", {
       class: `stage ${stages[chiave] || "missing"}`,
       text: chiave,
@@ -2389,6 +2509,15 @@ function obligationRow(voce) {
       class: "stage-next",
       text: `Prossimo: ${voce.next_stage} · ${stageLabels[voce.next_stage] || ""}`,
     }));
+  }
+  if (voce.lane_effective === "fast") {
+    strip.append(
+      h("span", {
+        class: "stage-next",
+        text: "Corsia rapida · E/T",
+        title: "La correzione è circoscritta: esecuzione e verifica mirata, senza A e R separate.",
+      })
+    );
   }
   corpoDettagli.append(strip);
   if ((voce.owners || []).length) {
@@ -2516,12 +2645,17 @@ function obligationRow(voce) {
       await load();
     }
   });
+  const azione = voce.next_action || {
+    code: "review",
+    label: "Serve una revisione",
+    reason: "Il motore non ha ricevuto una decisione.",
+  };
   const pending = voce.pending_refinement;
   let accettaRif = null;
   let pendingTestOk = true;
   if (pending) {
     const etichetta = pending.label || pending.phase;
-    const prossima = voce.next_stage || "la fase successiva";
+    const prossima = azione.after_phase || "";
     const testPending = pending.test || {};
     const testOk = Boolean(
       testPending.not_applicable ||
@@ -2535,8 +2669,8 @@ function obligationRow(voce) {
     accettaRif = h("button", {
       type: "button",
       class: "actbtn",
-      text: `Accetta ${etichetta} e apri ${prossima}`,
-      title: `segna ${etichetta} accettata e lascia aperta ${prossima}`,
+      text: azione.label || `Accetta ${etichetta}`,
+      title: `segna ${etichetta} accettata${prossima ? ` e lascia aperta ${prossima}` : ""}`,
     });
     accettaRif.disabled = !testOk;
     if (!testOk) accettaRif.title = "scheda test incompleta: accettazione bloccata";
@@ -2562,7 +2696,9 @@ function obligationRow(voce) {
         const payload = await risposta.json();
         if (!risposta.ok) throw new Error(payload.error || `errore ${risposta.status}`);
         esito.className = "msg show ok";
-        esito.textContent = `${etichetta} accettata. Prossimo atto: ${prossima}.`;
+        esito.textContent = `${etichetta} accettata.${
+          prossima ? ` Prossimo atto: ${prossima}.` : ""
+        }`;
         setTimeout(load, 1500);
       } catch (error) {
         esito.className = "msg show err";
@@ -2604,6 +2740,14 @@ function obligationRow(voce) {
       })
     );
   }
+  if (voce.lane_effective) {
+    primary.append(
+      h("span", {
+        class: `actbadge ${voce.lane_effective === "fast" ? "normal" : ""}`,
+        text: voce.lane_effective === "fast" ? "CORSIA RAPIDA · E/T" : "PERCORSO COMPLETO · A/E/T/R",
+      })
+    );
+  }
   const testText =
     voce.test && (voce.test.command || voce.test.exit != null)
       ? `Test: ${voce.test.command || "—"} · RC=${voce.test.exit ?? "—"} · ${
@@ -2626,16 +2770,32 @@ function obligationRow(voce) {
         text: "Vedi report",
       })
     : null;
-  if (voce.report_closed) {
-    primary.append(h("b", { text: "Fatto" }), reportLink);
-  } else if (pending && accettaRif) {
+  primary.append(
+    h("div", { class: "actnext" }, [
+      h("b", { text: azione.label || "Prossima azione" }),
+      document.createTextNode(azione.reason ? ` — ${azione.reason}` : ""),
+    ])
+  );
+  if (azione.code === "accept" && pending && accettaRif) {
     primary.append(
-      h("b", { text: `Da accettare: ${pending.label}` }),
       accettaRif,
       pendingTestOk
         ? null
         : h("p", { text: "Manca la scheda test: l'accettazione è bloccata." }),
       testText ? h("p", { text: testText }) : null,
+      reportLink
+    );
+  } else if (azione.code === "accept") {
+    primary.append(
+      h("p", {
+        text:
+          "La consegna è positiva, ma manca la voce di rifinitura che permette di registrare l'accettazione. Apri Gestisci e allinea il report.",
+      }),
+      reportLink
+    );
+  } else if (azione.code === "close_obligation") {
+    primary.append(
+      closeObligationButton(voce, esito),
       reportLink
     );
   } else if (voce.stop_required) {
@@ -2652,11 +2812,7 @@ function obligationRow(voce) {
       }),
       reportLink
     );
-  } else if (
-    /needs_changes|fail|open/i.test(String(voce.report_verdict || "")) ||
-    Object.values(voce.stages || {}).includes("partial")
-  ) {
-    primary.append(h("b", { text: "Errori" }));
+  } else if (azione.code === "rework_e") {
     const dettaglio = String(errorText || voce.report_verdict || "").trim();
     if (dettaglio) {
       primary.append(h("p", {
@@ -2668,20 +2824,30 @@ function obligationRow(voce) {
       h("button", {
         type: "button",
         class: "actbtn",
-        text: `Riprendi da ${voce.next_stage || "E"}`,
+        text: azione.label || "Correggi in E",
+        onclick: () => copia.click(),
+      }),
+      reportLink
+    );
+  } else if (azione.code === "run_phase" || azione.code === "dispatch") {
+    primary.append(
+      h("button", {
+        type: "button",
+        class: "actbtn",
+        text: rigorosa ? "Copia mandato" : azione.label || "Copia prompt",
         onclick: () => copia.click(),
       }),
       reportLink
     );
   } else {
     primary.append(
-      h("b", { text: `Da fare: ${voce.next_stage || "?"}` }),
       h("button", {
         type: "button",
         class: "actbtn",
-        text: rigorosa ? "Copia mandato" : "Copia prompt",
-        onclick: () => copia.click(),
-      })
+        text: "Apri Gestisci",
+        onclick: () => apriRifinitura(voce),
+      }),
+      reportLink
     );
   }
   testo.prepend(primary);
@@ -2707,7 +2873,6 @@ function obligationRow(voce) {
           { copia: true, file: `obbligo-${voce.id}.md` }
         ),
     }),
-    copia,
     h("a", {
       class: "actbtn",
       href: "/file?path=state.yaml",
@@ -2750,6 +2915,11 @@ function owedRow(voce) {
   const riga = h("div", { class: "actrow" });
   const testo = h("div", { class: "acttext" });
   const codici = voce.codes || [];
+  const azione = voce.next_action || {
+    code: "review",
+    label: "Leggi la direzione",
+    reason: "Il motore non ha ricevuto una decisione.",
+  };
   testo.append(h("code", { class: "actcode", text: voce.from_phase }));
   testo.append(
     document.createTextNode(" — direzione lasciata nel report, non un ordine")
@@ -2779,16 +2949,11 @@ function owedRow(voce) {
       })
     );
   }
-  const azionabili = codici.filter(
-    (codice) => !codice.live && !codice.done && codice.status !== "accepted"
-  );
   testo.append(
-    h("div", {
-      class: "actmeta",
-      text: azionabili.length
-        ? `Fasi da rilanciare: ${azionabili.map((codice) => codice.code).join(", ")}`
-        : "Nessuna fase da rilanciare: questa riga è una direzione da leggere, non un prompt.",
-    })
+    h("div", { class: "actnext" }, [
+      h("b", { text: azione.label }),
+      document.createTextNode(azione.reason ? ` — ${azione.reason}` : ""),
+    ])
   );
   riga.append(testo);
   const azioni = h("div", { class: "actactions" });
@@ -2810,7 +2975,9 @@ function owedRow(voce) {
       })
     );
   });
-  azionabili.forEach((codice) => azioni.append(owedPromptButton(codice.code)));
+  if (azione.code === "run_phase" && azione.target_phase) {
+    azioni.append(owedPromptButton(azione.target_phase, azione.label));
+  }
   azioni.append(
     h("button", {
       type: "button",
@@ -2835,6 +3002,7 @@ function owedPromptButton(code, etichetta) {
     type: "button",
     class: "actbtn",
     text: etichetta || `Prompt ${code}`,
+    disabled: !constitutionReady(),
     title: `il prompt da incollare per far partire o rifare ${code} sui byte vivi`,
     onclick: async () => {
       try {
@@ -3554,14 +3722,62 @@ function acceptButton(phase, message, seServeRifai) {
   ]);
 }
 
+function closeObligationButton(voce, message) {
+  const bottone = h("button", {
+    type: "button",
+    class: "actbtn",
+    text: voce.next_action?.label || "Chiudi l'obbligo",
+    title: "registra la chiusura solo perché il report dichiara soddisfatta la condizione",
+  });
+  bottone.addEventListener("click", async () => {
+    bottone.disabled = true;
+    message.className = "msg show pending";
+    message.textContent = "verifico il report e registro la chiusura…";
+    try {
+      const risposta = await fetch("/api/next-action/close", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          obligation: voce.id,
+          report: voce.report_path || null,
+        }),
+      });
+      const payload = await risposta.json();
+      if (!risposta.ok) throw new Error(payload.error || `errore ${risposta.status}`);
+      message.className = "msg show ok";
+      message.textContent = payload.already_closed
+        ? "L'obbligo era già chiuso."
+        : `Obbligo chiuso dal report ${payload.report}.`;
+      setTimeout(load, 1200);
+    } catch (error) {
+      message.className = "msg show err";
+      message.textContent = `chiusura non registrata: ${error.message}`;
+      bottone.disabled = false;
+    }
+  });
+  return h("span", { class: "phasecell" }, [
+    bottone,
+    bottoneCosa("chiusura obbligo", () =>
+      spiega(`Chiudere ${voce.id}`, [
+        "Il pulsante non decide se l'obbligo è chiuso: legge il report più recente e controlla `closure_condition_met` oppure `obligation_status_after: closed`.",
+        "Se il report non lo dichiara chiuso, la scrittura viene rifiutata.",
+        "La chiusura registra il report come prova e non cancella il report né i tentativi precedenti.",
+      ])
+    ),
+  ]);
+}
+
 function activationButton(phase, action, label, message, disabled) {
+  const gated = action !== "release" && !constitutionReady();
   const button = h("button", {
     type: "button",
     class: `actbtn ${action}`,
     text: label,
-    disabled: Boolean(disabled),
+    disabled: Boolean(disabled || gated),
     title: disabled
       ? "in attesa delle unita' a monte"
+      : gated
+        ? "serve una Costituzione approvata"
       : action === "release"
         ? "toglie la riserva: la fase torna disponibile, l'ordine resta sul disco"
         : "deposita l'ordine e riserva la fase nel registro",
@@ -4916,7 +5132,7 @@ async function promptPerVoce(voce) {
       // lasciare il pulsante muto: si usa l'istruzione mirata costruita qui sotto.
     }
   }
-  return [
+  return promptConCostituzione([
     `Lavora su: ${titolo}.`,
     voce.badge ? `Priorità: ${voce.badge}.` : "",
     voce.riassunto ? `Problema: ${voce.riassunto}` : "",
@@ -4926,7 +5142,7 @@ async function promptPerVoce(voce) {
     "Leggi gli esiti citati e verifica se la voce è ancora aperta.",
     "Se è chiusa, deposita l'atto di chiusura con l'evidenza esatta (file, attempt, comando, esito).",
     "Se è aperta, esegui la prossima azione e dichiara cosa hai misurato. Non inventare voci o esiti.",
-  ].filter(Boolean).join("\n") + "\n";
+  ].filter(Boolean).join("\n") + "\n");
 }
 
 function renderRecapPage(payload) {
@@ -5117,6 +5333,12 @@ function initRecapPage() {
 function renderFinishing(data) {
   const banner = $("#finishing-banner");
   if (!banner) return;
+  const headerButton = $("#recap-sospesi");
+  if (!constitutionReady()) {
+    banner.hidden = true;
+    if (headerButton) headerButton.hidden = true;
+    return;
+  }
   const s = data.summary || {};
   const gate = Number(s.open_gate_obligations || 0);
   const altri = Math.max(0, Number(s.open_obligations || 0) - gate);
@@ -5129,7 +5351,6 @@ function renderFinishing(data) {
   const consegnati = items.filter((voce) => voce.dispatched).length;
   const finiti = items.filter((voce) => voce.report_closed).length;
   banner.hidden = !concluso;
-  const headerButton = $("#recap-sospesi");
   if (headerButton) headerButton.hidden = !concluso;
   if (!concluso) return;
   const kicker = banner.querySelector(".finishing-kicker");
@@ -5640,6 +5861,7 @@ function apriRifinitura(voce, { add = false } = {}) {
   $("#ref-test-duration").value = voce?.test?.duration || "";
   $("#ref-branch").value = voce?.branch || "";
   $("#ref-worktree").value = voce?.worktree || "";
+  $("#ref-lane").value = voce?.lane || "auto";
   $("#ref-strict").checked = Boolean(voce?.strict || voce?.strict_required);
   $("#ref-risk").value = (voce?.risk || []).join(", ");
   $("#ref-errors").value = Array.isArray(voce?.errors) ? voce.errors.join("; ") : "";
@@ -5674,6 +5896,7 @@ async function inviaRifinitura(action) {
     errors: $("#ref-errors").value.trim() || null,
     branch: $("#ref-branch").value.trim() || null,
     worktree: $("#ref-worktree").value.trim() || null,
+    lane: $("#ref-lane").value || null,
     strict: $("#ref-strict").checked,
     risk: $("#ref-risk").value.trim() || null,
     claim_by: $("#ref-claim-by").value.trim() || null,
@@ -5724,6 +5947,7 @@ function initRifinitura() {
     $("#ref-test-duration").value = "";
     $("#ref-branch").value = "";
     $("#ref-worktree").value = "";
+    $("#ref-lane").value = "auto";
     $("#ref-strict").checked = false;
     $("#ref-risk").value = "";
     $("#ref-errors").value = "";

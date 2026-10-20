@@ -36,7 +36,9 @@ approved_sha256: ""
 
 <!-- Quanti task, quanto grandi, quanti file al massimo per task.
      Preferisci fette verticali utilizzabili a pezzi tecnici isolati.
-     Indica cosa può andare in parallelo e cosa deve restare seriale. -->
+     Indica cosa può andare in parallelo e cosa deve restare seriale.
+     Una correzione circoscritta può usare lane: fast (E + T mirata); rischi e file
+     condivisi richiedono il percorso completo A/E/T/R. -->
 
 ## 6. Skill e agenti
 

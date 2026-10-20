@@ -141,76 +141,6 @@ def _latest_obligation_report(workspace, prefix):
     return documento, percorso
 
 
-def _refinement_stage(item):
-    """Una lettura A/E/T/R dagli atti depositati, dichiarata come derivata.
-
-    Le rifiniture non hanno ancora una unita' nel registro: questa e' la forma che rende
-    leggibile quello che gli atti provano, senza spacciarla per una claim.
-    """
-    verdict = str(item.get("report_verdict") or "").lower()
-    phase = str(item.get("report_phase") or "").upper()
-    closed = bool(item.get("report_closed"))
-    taken = bool(item.get("taken"))
-    report = bool(verdict)
-    stages = {
-        "A": "done" if report or taken else "missing",
-        "E": "missing",
-        "T": "missing",
-        "R": "done" if closed else "missing",
-    }
-    if closed:
-        stages["E"] = "done"
-        stages["T"] = "done"
-        return stages, "R", "report.closed"
-    if phase == "R":
-        stages["E"] = "done"
-        stages["T"] = "done"
-        stages["R"] = "done"
-        return stages, "R", "report.phase"
-    if phase == "T":
-        stages["E"] = "done"
-        stages["T"] = "done"
-        if "fail" in verdict or "needs_changes" in verdict:
-            return stages, "E", "report.phase"
-        return stages, "R", "report.phase"
-    if phase == "A":
-        return stages, "E", "report.phase"
-    if phase in ("GATE_MEASUREMENT", "GATE"):
-        stages["E"] = "partial"
-        return stages, "E", "report.phase"
-    if report:
-        if "needs_changes" in verdict or "fail" in verdict:
-            stages["E"] = "in_progress" if taken else "partial"
-            return stages, "E", "report.verdict"
-        # Un obbligo può restare aperto NON perché manchi un altro E, ma perché le riparazioni
-        # sono di altri proprietari (F1/F2/F3, pin di F4/F5/F6). Misurato il 2026-10-19 su
-        # END01: il report diceva «riparare o riaccettare… e ripinnare…», e la pagina mostrava
-        # ancora «Prossimo: E» perché il verdetto conteneva `obligation_open`.
-        if "obligation_open" in verdict:
-            prossimo = str(item.get("report_next") or "").lower()
-            if any(parola in prossimo for parola in ("ripar", "ripinn", "proprietar", "owner")):
-                stages["E"] = "done"
-                return stages, "OWNERS", "report.next"
-        # `still_open_remeasured` e' una misura E consegnata; la verifica T resta da fare.
-        # `measurement_delivered...` e' una misura parziale: il prossimo atto e' ancora E.
-        if (
-            "remeasure_required" in verdict
-            or "partial" in verdict
-            or "measurement_delivered" in verdict
-            or "obligation_open" in verdict
-        ):
-            stages["E"] = "partial"
-            return stages, "E", "report.verdict"
-        if "still_open" in verdict or "remeasured" in verdict:
-            stages["E"] = "done"
-            return stages, "T", "report.verdict"
-        return stages, "?", "unknown"
-    if taken:
-        stages["E"] = "in_progress"
-        return stages, "E", "claim"
-    return stages, "A", "no_report"
-
-
 def _latest_obligation_note(item):
     """L'ultima nota datata del registro, quella che contiene i numeri correnti."""
     chiavi = [
@@ -273,7 +203,12 @@ def _next_report_path(item, workspace=None):
 
 
 def _refinement_prompt(item, workspace=None):
-    stage = item.get("next_stage") or "A"
+    azione = item.get("next_action") or {}
+    stage = (
+        azione.get("target_phase")
+        if azione.get("code") in ("rework_e", "run_phase", "dispatch")
+        else item.get("next_stage")
+    ) or item.get("next_stage") or "A"
     etichette = {
         "A": "Analisi",
         "E": "Esecuzione",
@@ -287,6 +222,8 @@ def _refinement_prompt(item, workspace=None):
     righe = [
         f"Sei l'agente di rifinitura per l'obbligo {item['id']}.",
         f"Fase da eseguire: {stage} · {fase_etichetta}.",
+        f"Decisione del motore: {azione.get('code') or 'non determinata'} · "
+        f"{azione.get('reason') or 'motivo non dichiarato'}.",
         f"Gate: {'BLOCCA ' + item['required_before'] if item['gate'] else 'non bloccante'}.",
         f"Prossimo report: {prossimo_report}.",
         # LEGGE DEL PROJECT-TOOL (2026-10-20): la rifinitura serve a sapere se il tool funziona.
@@ -432,6 +369,10 @@ def _refinement_prompt(item, workspace=None):
         "hai eseguito e perché. Non dichiarare chiuso l'obbligo senza un atto che lo chiuda; "
         "se qualcosa non è leggibile, dichiaralo invece di inventarlo."
     )
+    try:
+        righe.insert(0, constitution.prompt_context(workspace))
+    except constitution.ConstitutionError:
+        pass
     return "\n".join(righe) + "\n"
 
 
@@ -440,9 +381,10 @@ def _vibe_short(value, limit=260):
     return testo if len(testo) <= limit else testo[: limit - 1].rstrip() + "…"
 
 
-def _vibe_prompt(item):
+def _vibe_prompt(item, workspace=None):
     """Il prompt breve del flusso normale: obiettivo, punto di partenza, vincoli, test, esito."""
-    fase = item.get("next_stage") or "E"
+    azione_motore = item.get("next_action") or {}
+    fase = azione_motore.get("target_phase") or item.get("next_stage") or "E"
     azione = {
         "A": "Chiarisci il perimetro e cosa va costruito.",
         "E": "Completa l'esecuzione.",
@@ -460,7 +402,12 @@ def _vibe_prompt(item):
     )
     righe = [
         f"Obiettivo: {_vibe_short(item.get('title') or item.get('what') or item.get('id'), 220)}",
-        f"Cosa devi fare: {azione}",
+        f"Cosa devi fare: {azione_motore.get('label') or azione}",
+        (
+            f"Perché: {_vibe_short(azione_motore.get('reason'), 260)}"
+            if azione_motore.get("reason")
+            else ""
+        ),
     ]
     if item.get("report_path"):
         righe.append(f"Parti da: {item['report_path']}.")
@@ -515,7 +462,11 @@ def _vibe_prompt(item):
             "Non inventare: se un file o un test non è leggibile, dichiaralo.",
         ]
     )
-    return "\n".join(righe) + "\n"
+    try:
+        vincoli = constitution.prompt_context(workspace)
+    except (AttributeError, constitution.ConstitutionError):
+        vincoli = ""
+    return (vincoli + "\n" if vincoli else "") + "\n".join(righe) + "\n"
 
 
 def _risk_flags(item):
@@ -640,14 +591,10 @@ def open_obligations(state, workspace=None):
                 "note": str(item.get("note") or ""),
                 "origin": str(item.get("origin") or ""),
         }
-        stages, prossima, fonte_fase = _refinement_stage(voce)
-        voce["stages"] = stages
-        voce["next_stage"] = prossima
-        voce["stage_source"] = fonte_fase
-        voce["stage_known"] = prossima in ("A", "E", "T", "R")
+        next_action.decorate_obligation(voce)
         voce["latest_note"] = _latest_obligation_note(item)
         voce["next_prompt"] = _refinement_prompt(voce, workspace=workspace)
-        voce["vibe_prompt"] = _vibe_prompt(voce)
+        voce["vibe_prompt"] = _vibe_prompt(voce, workspace=workspace)
         fuori.append(voce)
     return fuori
 
@@ -700,7 +647,7 @@ sys.path.insert(0, str(ROOT))
 
 import apply_transitions  # noqa: E402
 import activate  # noqa: E402 - attivare: riserva la fase e deposita l'ordine
-import constitution  # noqa: E402 - la bozza approvata dall'utente diventa immutabile
+from console import constitution  # noqa: E402 - una sola classe anche fra server e registri
 import esiti  # noqa: E402 - gli esiti di un atto in punti: criteri, casi, finding, limiti
 import recap  # noqa: E402 - il recap dei sospesi: registri + esiti, in un prompt
 import refinements  # noqa: E402 - la forma esplicita delle rifiniture: A/E/T/R, claim, report
@@ -708,6 +655,7 @@ import pins  # noqa: E402 - i timbri diversi: resoconto e raccordo unico
 import handoff  # noqa: E402 - cosa c'e' da fare dopo: il testimone lasciato da chi ha finito
 import inbox  # noqa: E402 - la posta in arrivo: i messaggi depositati interi, uno per file
 import mandate  # noqa: E402 - il prompt di una fase: dal quaderno, o composto dal registro
+import next_action  # noqa: E402 - la decisione unica della pagina
 import next_prompts  # noqa: E402 - una sola implementazione della regola, condivisa con STATUS.html
 import coda  # noqa: E402 - la coda delle transizioni: il registro che non sa cosa e' successo
 import accetta  # noqa: E402 - l'atto di accettazione firmato da chi lo prende in carico
@@ -798,6 +746,27 @@ class ReviewState:
         )
         timeline.configure(self.workspace)
 
+    def _prompt_entries(self, state):
+        """I prompt del quaderno con la stessa busta e gli stessi vincoli di ogni altro prompt."""
+        voci = next_prompts.build(self.pack, state=state)
+        gate = constitution.gate(self.workspace)
+        for voce in voci:
+            if not gate["approved"]:
+                voce["prompt"] = None
+                voce["blocked"] = gate["message"]
+                continue
+            if voce.get("prompt") and voce.get("anchor"):
+                try:
+                    voce["prompt"] = mandate.con_busta(
+                        self.workspace,
+                        str(voce["anchor"]),
+                        str(voce["prompt"]),
+                    )
+                except constitution.ConstitutionError as error:
+                    voce["prompt"] = None
+                    voce["blocked"] = str(error)
+        return voci
+
     def snapshot(self):
         state = self._load(self.workspace.state) or {}
         tasks_doc = self._load(self.workspace.tasks) or {}
@@ -837,33 +806,6 @@ class ReviewState:
                     "report_verdict": obligation.get("report_verdict"),
                 }
                 refinements.merge(obligation, voce, workspace=self.workspace)
-                # La rifinitura dichiara le fasi, ma il report può dire che il prossimo atto non è
-                # un altro E: le riparazioni sono di altri proprietari (F1/F2/F3) e i pin di
-                # F4/F5/F6. In quel caso il report vince sulla fase dichiarata.
-                verdetto_obbligo = str(obligation.get("report_verdict") or "").lower()
-                prossimo_obbligo = str(obligation.get("report_next") or "").lower()
-                if "obligation_open" in verdetto_obbligo and any(
-                    parola in prossimo_obbligo
-                    for parola in ("ripar", "ripinn", "proprietar", "owner")
-                ):
-                    obligation["next_stage"] = "OWNERS"
-                    obligation["stage_source"] = "report.next"
-                    obligation["stage_known"] = True
-                    if isinstance(obligation.get("stages"), dict):
-                        obligation["stages"]["E"] = "done"
-                # La fase del prossimo atto la dice `next_report`, non la prosa del `next`: un
-                # testo che dice «Design A2 consegnato» può convivere con un `next_report` che
-                # punta a E attempt 3. Misurato il 2026-10-19 su UPL04Z-SUB300: la pagina restava
-                # su A2 dopo che A2 era stata consegnata.
-                prossimo_report_obbligo = str(obligation.get("next_report") or "")
-                base_prossimo = Path(prossimo_report_obbligo).parent.name.upper()
-                if base_prossimo and base_prossimo != str(obligation.get("id") or "").upper():
-                    for suffisso, fase in (("A2", "A2"), ("E", "E"), ("T", "T"), ("R", "R")):
-                        if base_prossimo.endswith(suffisso):
-                            obligation["next_stage"] = fase
-                            obligation["stage_source"] = "refinements.next_report"
-                            obligation["stage_known"] = True
-                            break
                 if (
                     int(proiezione.get("report_attempt") or 0)
                     > int(obligation.get("report_attempt") or 0)
@@ -880,8 +822,10 @@ class ReviewState:
                 pending = None
                 prossimo_rif = str(obligation.get("next_report") or "")
                 for rid, item_rif in rifiniture.items():
+                    if str(rid) != str(obligation.get("id")):
+                        continue
                     fasi_rif = item_rif.get("phases") or {}
-                    for fase_rif in ("A", "E", "T", "R"):
+                    for fase_rif in refinements.required_phases(item_rif):
                         voce_rif = fasi_rif.get(fase_rif) or {}
                         if str(voce_rif.get("status")) != "delivered":
                             continue
@@ -901,6 +845,7 @@ class ReviewState:
                             "id": rid,
                             "phase": fase_rif,
                             "label": etichetta,
+                            "status": voce_rif.get("status"),
                             "attempt": voce_rif.get("attempt"),
                             "report": percorso_rif,
                             "verdict": voce_rif.get("verdict"),
@@ -913,10 +858,13 @@ class ReviewState:
                     if pending:
                         break
                 obligation["pending_refinement"] = pending
+                next_action.decorate_obligation(obligation)
                 obligation["next_prompt"] = _refinement_prompt(
                     obligation, workspace=self.workspace
                 )
-                obligation["vibe_prompt"] = _vibe_prompt(obligation)
+                obligation["vibe_prompt"] = _vibe_prompt(
+                    obligation, workspace=self.workspace
+                )
         git_state = _git_state(self.workspace)
         for obligation in obligations:
             percorsi = set(obligation.get("paths") or [])
@@ -972,7 +920,9 @@ class ReviewState:
                 if percorsi and controlla_percorso
                 else []
             )
-            obligation["vibe_prompt"] = _vibe_prompt(obligation)
+            obligation["vibe_prompt"] = _vibe_prompt(
+                obligation, workspace=self.workspace
+            )
         independence_debts = open_independence_debts(state)
 
         blocks = {}
@@ -1172,8 +1122,14 @@ class ReviewState:
         # servono a due cose — la coda (quali fasi hanno la palla altrove) e il blocco «quello che il
         # registro dice che e' dovuto». Leggerle due volte costava il doppio su ogni caricamento.
         dovuto = handoff.dovuto(self.workspace, state, tasks_doc, prese=set(activate.prese(state)))
+        gate_costituzione = constitution.gate(self.workspace)
+        contesto_costituzione = ""
+        if gate_costituzione["approved"]:
+            contesto_costituzione = constitution.prompt_context(self.workspace)
         return {
             "generated": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "constitution_gate": gate_costituzione,
+            "constitution_context": contesto_costituzione,
             # L'impronta di TEMPO dei registri: due `stat`, nessun parse. La pagina la usa per
             # accorgersi che la sua istantanea e' vecchia (una presa applicata dopo il caricamento
             # restava invisibile finche' non si premeva «Ricarica»).
@@ -1228,7 +1184,7 @@ class ReviewState:
             # un ripiego silenzioso: se questo fallisce la vista esce in errore e lo dice. Una
             # lista vuota mandata al posto di un guasto si leggerebbe «non c'e' nessun prompt»,
             # che e' una cosa falsa detta con parole nostre.
-            "next_prompts": next_prompts.build(self.pack, state=state),
+            "next_prompts": self._prompt_entries(state),
             # Cosa si puo' far partire adesso: e' l'input che manca quando non ci sono domande,
             # decisioni o prompt da lanciare. Il calcolo sta in `registers/activate.py`.
             # Una sola lettura delle direzioni dichiarate: la usano sia la coda (per sapere quali
@@ -1270,6 +1226,7 @@ class ReviewState:
                     "when": voce["when"],
                     "text": voce["text"],
                     "codes": voce["codes"],
+                    "next_action": next_action.for_owed(voce),
                 }
                 for voce in dovuto
                 if voce["from_open"]
@@ -1435,7 +1392,7 @@ class ReviewState:
         rifiniture_voci = []
         for item in rifiniture.values():
             fasi = refinements.stage_map(item)
-            chiusa = all(stato == "done" for stato in fasi.values())
+            chiusa = refinements.is_closed(item)
             claim = item.get("claim") or {}
             rifiniture_voci.append(
                 {
@@ -2065,6 +2022,8 @@ def build_handler(state):
                             != mandate.impronta(mandate.senza_busta(esito["text"])),
                         }
                     return self._json(200, {"phase": target, **esito})
+                except constitution.ConstitutionError as error:
+                    return self._constitution_error(error)
                 except Exception as error:  # noqa: BLE001
                     return self._json(400, {"error": str(error)})
             if route == "/api/esiti":
@@ -2094,6 +2053,8 @@ def build_handler(state):
                 # finding/limiti dei report delle fasi aperte. Nessuna scrittura, nessun provider.
                 try:
                     return self._json(200, recap.costruisci(state))
+                except constitution.ConstitutionError as error:
+                    return self._constitution_error(error)
                 except Exception as error:  # noqa: BLE001
                     return self._json(500, {"error": str(error)})
             if route == "/file":
@@ -2159,6 +2120,14 @@ def build_handler(state):
 
         def do_POST(self):
             route = urlparse(self.path).path
+            if route == "/api/constitution/draft":
+                try:
+                    esito = constitution.create_draft(state.workspace)
+                except constitution.ConstitutionError as error:
+                    return self._constitution_error(error)
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
+                return self._json(200, {"ok": True, **esito})
             if route == "/api/constitution/approve":
                 length = int(self.headers.get("Content-Length") or 0)
                 try:
@@ -2176,6 +2145,26 @@ def build_handler(state):
                     )
                 except constitution.ConstitutionError as error:
                     return self._constitution_error(error)
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
+                return self._json(200, {"ok": True, **esito})
+            if route == "/api/next-action/close":
+                length = int(self.headers.get("Content-Length") or 0)
+                try:
+                    payload = json.loads(self.rfile.read(length) or b"{}")
+                except json.JSONDecodeError as error:
+                    return self._json(400, {"error": f"JSON non valido: {error}"})
+                obligation = str(payload.get("obligation") or "").strip()
+                if not obligation:
+                    return self._json(400, {"error": "serve obligation"})
+                try:
+                    esito = next_action.close_obligation(
+                        state.workspace,
+                        obligation,
+                        report_path=payload.get("report") or None,
+                    )
+                except ValueError as error:
+                    return self._json(409, {"error": str(error)})
                 except Exception as error:  # noqa: BLE001
                     return self._json(500, {"error": str(error)})
                 return self._json(200, {"ok": True, **esito})
@@ -2384,6 +2373,7 @@ def build_handler(state):
                             if "strict" in payload
                             else None
                         ),
+                        lane=payload.get("lane"),
                         risk=payload.get("risk"),
                         claim_by=(
                             payload.get("claim_by") or "utente"
@@ -2440,7 +2430,10 @@ def build_handler(state):
                 if not task_id:
                     return self._json(400, {"error": "serve task_id"})
                 try:
+                    constitution.require_approved(state.workspace)
                     result = state.dispatch_draft(task_id, payload.get("note"))
+                except constitution.ConstitutionError as error:
+                    return self._constitution_error(error)
                 except NotStalledError as error:
                     return self._json(
                         409,
@@ -2472,6 +2465,8 @@ def build_handler(state):
                         if azione == "release"
                         else activate.attiva(state.workspace, target)
                     )
+                except constitution.ConstitutionError as error:
+                    return self._constitution_error(error)
                 except apply_transitions.TransitionError as error:
                     return self._json(409, {"error": str(error)})
                 except Exception as error:  # noqa: BLE001

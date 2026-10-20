@@ -19,6 +19,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / "registers")]
 
 import esiti  # noqa: E402
 import handoff  # noqa: E402
+from console import constitution  # noqa: E402
 
 CATEGORIE = (
     ("bloccanti", "Bloccano la chiusura"),
@@ -339,6 +340,7 @@ def costruisci(state_obj):
     completo = not voci
     adesso = datetime.now().strftime("%Y-%m-%d %H:%M")
     progetto = getattr(state_obj.workspace, "project", "") or "questo progetto"
+    vincoli = constitution.prompt_context(state_obj.workspace)
 
     righe = [
         f"Sei nel workspace «{progetto}». Devo sapere se il lavoro è davvero finito.",
@@ -372,7 +374,7 @@ def costruisci(state_obj):
         "complete": completo,
         "counts": conteggi,
         "groups": gruppi,
-        "prompt": "\n".join(righe).strip() + "\n",
+        "prompt": vincoli + "\n" + "\n".join(righe).strip() + "\n",
     }
 
 

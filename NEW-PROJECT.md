@@ -20,4 +20,7 @@ Ogni progetto, anche un foglio bianco, parte da questa repository.
 7. Dopo l'approvazione il documento è immutabile. Solo allora l'agente crea `tasks.yaml`, apre le
    fasi e comincia il primo task.
 
+Il cancello è applicato dal tool: senza Costituzione approvata non si attivano task, non si aprono
+fasi e non si compongono prompt.
+
 Un progetto senza Costituzione approvata non è pronto per l'implementazione.

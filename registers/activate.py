@@ -50,8 +50,10 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import apply_transitions  # noqa: E402 - la scrittura sui registri passa sempre da li'
 import next_prompts  # noqa: E402 - il quaderno, per il testo del prompt
+import next_action  # noqa: E402 - la decisione unica: accetta, torna in E, passa a T
 import rework  # noqa: E402 - quante volte una fase e' tornata indietro, e per cosa
 import handoff  # noqa: E402 - cosa il registro dice che e' dovuto dopo
+from console import constitution  # noqa: E402 - nessun task parte senza approvazione
 from workspace import Workspace, lock_file  # noqa: E402
 
 LIVE = ("active", "taken", "pre_registered", "ready", "active_extension")
@@ -300,6 +302,10 @@ def attivabili(ws, state=None, tasks_doc=None, dovuto=None):
     Quelle voci tornano con `altrove: True` e con `next_act`: la pagina le mostra in una riga sola,
     senza pulsante, e `attiva()` le rifiuta dicendo perche'.
     """
+    try:
+        constitution.require_approved(ws)
+    except constitution.ConstitutionError:
+        return []
     state = state if state is not None else (_carica(ws.state_path.read_text(encoding="utf-8")) or {})
     tasks_doc = tasks_doc if tasks_doc is not None else (_carica(ws.path(ws.tasks).read_text(encoding="utf-8")) or {})
     registrate = state.get("tasks") or {}
@@ -379,13 +385,20 @@ def attivabili(ws, state=None, tasks_doc=None, dovuto=None):
             continue
         unita_dati = unita.get(unit_id) or {}
         attese = [d for d in (unita_dati.get("depends_on_units") or []) if str(d) not in chiuse]
-        fuori.append(
-            {
+        task_dati = per_id.get(fase) or {}
+        corsia = next_action.infer_lane(
+            task_dati.get("lane") or unita_dati.get("lane"),
+            strict=task_dati.get("strict") is True or unita_dati.get("strict") is True,
+            risk=task_dati.get("risk") or unita_dati.get("risk") or [],
+            paths=task_dati.get("paths") or unita_dati.get("paths") or [],
+        )
+        voce_attivabile = {
                 "phase": fase,
                 "unit": unit_id,
                 "block": str(unita_dati.get("domain") or "senza-dominio"),
                 "kind": kind,
                 "title": titolo or str(unita_dati.get("title") or ""),
+                "lane": corsia,
                 "status": stato,
                 "rework": stato in STALLED,
                 "misura": misure.get(fase),
@@ -412,8 +425,8 @@ def attivabili(ws, state=None, tasks_doc=None, dovuto=None):
                 # Il file di consegna e' il PROSSIMO tentativo, non sempre il primo: un rifacimento
                 # che chiedesse `attempt-1` chiederebbe di riscrivere un artefatto consegnato.
                 "deliverable": f"{ws.deliverable_prefix}{fase}/attempt-{prossimo_tentativo(state, fase)}.yaml",
-            }
-        )
+        }
+        fuori.append(next_action.decorate_task(voce_attivabile))
     fuori.sort(key=lambda voce: (bool(voce["waiting_on"]), voce["rework"] is False, voce["phase"]))
     return fuori
 
@@ -459,6 +472,10 @@ def prossimi(ws, state=None, tasks_doc=None):
     aspettano). Una riga per unita' = un atto alla volta per unita', e il parallelismo resta dove le
     unita' non si condizionano.
     """
+    try:
+        constitution.require_approved(ws)
+    except constitution.ConstitutionError:
+        return []
     state = state if state is not None else (_carica(ws.state_path.read_text(encoding="utf-8")) or {})
     tasks_doc = tasks_doc if tasks_doc is not None else (_carica(ws.path(ws.tasks).read_text(encoding="utf-8")) or {})
     registrate = state.get("tasks") or {}
@@ -471,11 +488,15 @@ def prossimi(ws, state=None, tasks_doc=None):
     }
     ordine = [str(s).upper() for s in (ws.phases or ("A", "E", "T", "R"))]
     stato_di = lambda fase: (registrate.get(fase) or {}).get("status", "pending")
+    fasi_per_unita = {}
+    for fase_id, unit_id, *_ in fasi(tasks_doc):
+        fasi_per_unita.setdefault(unit_id, []).append(fase_id)
 
     chiuse = {
         uid
         for uid in unita
-        if all(stato_di(uid + s) == "accepted" for s in ordine)
+        if fasi_per_unita.get(uid)
+        and all(stato_di(fase) == "accepted" for fase in fasi_per_unita[uid])
     }
     blocca = {}
     for uid, u in unita.items():
@@ -486,7 +507,8 @@ def prossimi(ws, state=None, tasks_doc=None):
     for uid, u in unita.items():
         if uid in chiuse:
             continue
-        fasi_aperte = [uid + s for s in ordine if stato_di(uid + s) != "accepted"]
+        fasi_unita = fasi_per_unita.get(uid) or []
+        fasi_aperte = [fase for fase in fasi_unita if stato_di(fase) != "accepted"]
         if not fasi_aperte:
             continue
         prossima = fasi_aperte[0]
@@ -518,33 +540,25 @@ def prossimi(ws, state=None, tasks_doc=None):
                 continue
             if "block" in str(finding.get("severity") or "").lower():
                 bloccanti.append(str(finding.get("owner") or "").strip())
-        consegnata = bool(verdetto) and any(
-            verdetto.startswith(prefisso)
-            # `ready_for_*` copre i verdetti con cui i progetti dichiarano «l'atto c'e' e passa la
-            # mano»: `ready_for_execution` (la console), `ready_for_handoff` e
-            # `ready_for_independent_verification` (il pack di Binche). Senza il prefisso GENERICO
-            # tre fasi consegnate su disco restavano «non consegnate» nella coda: misurato il
-            # 2026-10-17 su HIST01A, ZIP02A e QA05A, tutte con `verdict: ready_for_handoff`.
-            # `accept*` copre `accepted` e i verdetti dei progetti (`accept_unit_with_declared_limits`):
-            # un atto che accetta l'unita' E' una consegna, e senza questo la pagina non la vedeva.
-            for prefisso in ("ready_for_", "pass", "delivered", "accept")
-        )
+        consegnata = next_action.verdict_kind(verdetto) == "positive"
         # UN VERDETTO NEGATIVO NON SI RILANCIA SUGLI STESSI BYTE. Se la verifica e' rossa, il
         # report dice quale fase riprendere; rilanciare la stessa fase rifarebbe la stessa misura.
         # Eccezione misurata: se quella fase ha gia' un atto PIU' NUOVO della verifica, il
         # rifacimento e' stato consegnato e tocca di nuovo alla verifica. Senza questa seconda
         # parte, un T respinto continuerebbe a mandare a E anche dopo che E ha rifatto il lavoro.
-        suffisso = prossima[len(uid) :] if prossima.startswith(uid) else ""
         rifai = ""
-        if not consegnata and str(verdetto).startswith(("fail", "needs_changes")):
+        if not consegnata and next_action.verdict_kind(verdetto) == "negative":
             testi = str((documento or {}).get("next") or "")
-            precedenti = ordine[: ordine.index(suffisso)] if suffisso in ordine else []
-            candidati = [uid + p for p in precedenti if uid + p in testi]
+            posizione = fasi_unita.index(prossima) if prossima in fasi_unita else 0
+            precedenti = fasi_unita[:posizione]
+            candidati = [fase for fase in precedenti if fase in testi]
             # Una VERIFICA respinta torna all'esecuzione anche quando il `next` descrive i difetti
             # senza ripetere il codice: misurato il 2026-10-17 su A11Y01T, che diceva «prima di una
             # nuova ratifica: correggi F1/F2/F3» e lasciava la coda ferma sulla T.
             if not candidati and tipi.get(prossima) == "independent_verification":
-                candidati = [uid + p for p in precedenti if tipi.get(uid + p) == "implementation"]
+                candidati = [
+                    fase for fase in precedenti if tipi.get(fase) == "implementation"
+                ]
             for codice in candidati:
                 percorso_rifai, _, _, _ = handoff.ultimo_report(ws, state, codice)
                 if (
@@ -574,10 +588,19 @@ def prossimi(ws, state=None, tasks_doc=None):
         # l'evidenza su cui si firma. Si ricava dall'ordine dichiarato dal progetto, non dal nome:
         # un progetto puo' chiamare le fasi come vuole.
         esiti_di = ""
-        if suffisso in ordine and ordine.index(suffisso) > 0:
-            esiti_di = uid + ordine[ordine.index(suffisso) - 1]
-        fuori.append(
-            {
+        if prossima in fasi_unita and fasi_unita.index(prossima) > 0:
+            esiti_di = fasi_unita[fasi_unita.index(prossima) - 1]
+        task_corrente = next(
+            (t for t in tasks_doc.get("tasks") or [] if str(t.get("id")) == prossima),
+            {},
+        )
+        corsia = next_action.infer_lane(
+            task_corrente.get("lane") or u.get("lane"),
+            strict=task_corrente.get("strict") is True or u.get("strict") is True,
+            risk=task_corrente.get("risk") or u.get("risk") or [],
+            paths=task_corrente.get("paths") or u.get("paths") or [],
+        )
+        voce_prossima = {
                 # `code` e `phase` sono la stessa cosa: la riga in pagina usa `code` per tutte le
                 # sorgenti (dichiarazioni e percorso), e senza l'alias il disegno si fermava con
                 # «Cannot read properties of undefined».
@@ -605,8 +628,9 @@ def prossimi(ws, state=None, tasks_doc=None):
                 "rifai": rifai,
                 "bloccanti": len(bloccanti),
                 "bloccanti_chi": sorted({chi for chi in bloccanti if chi})[:3],
-            }
-        )
+                "lane": corsia,
+        }
+        fuori.append(next_action.decorate_task(voce_prossima))
     # Prima le unita' che tengono piu' altre (percorso critico), poi quelle piu' vicine alla fine.
     fuori.sort(key=lambda voce: (-voce["leva"], len(voce["apre"]), voce["phase"]))
     return fuori
@@ -817,6 +841,7 @@ def _applica(ws, richieste):
 
 def attiva(ws, fase, dry_run=False):
     """Riserva la fase e deposita l'ordine. Rifiuta se qualcuno l'ha gia' presa."""
+    constitution.require_approved(ws)
     state = _carica(ws.state_path.read_text(encoding="utf-8")) or {}
     tasks_doc = _carica(ws.path(ws.tasks).read_text(encoding="utf-8")) or {}
     voce = next((v for v in attivabili(ws, state, tasks_doc) if v["phase"] == fase), None)
@@ -1073,22 +1098,26 @@ def main(argv=None):
     if args.release:
         print(rilascia(ws, args.release))
         return 0
-    if args.refresh_orders:
-        aggiornati, lasciati = aggiorna_ordini(ws)
-        for nome in aggiornati:
-            print(f"prompt scritto   {nome}")
-        for nome, perche in lasciati:
-            print(f"lasciato com'era  {nome}  ({perche})")
-        print(f"\naggiornati: {len(aggiornati)} · lasciati: {len(lasciati)}")
-        return 0
-    if args.target:
-        esito = attiva(ws, args.target, dry_run=args.dry_run)
-        print(f"ordine: {esito['order']}")
-        print(f"scritto nel registro: {', '.join(esito['applied']) or 'niente (dry-run)'}")
-        if esito.get("prompt"):
-            print(f"prompt nell'ordine: {len(esito['prompt'])} caratteri (fonte: {esito.get('prompt_source')})")
-        return 0
-    elenco(ws)
+    try:
+        if args.refresh_orders:
+            aggiornati, lasciati = aggiorna_ordini(ws)
+            for nome in aggiornati:
+                print(f"prompt scritto   {nome}")
+            for nome, perche in lasciati:
+                print(f"lasciato com'era  {nome}  ({perche})")
+            print(f"\naggiornati: {len(aggiornati)} · lasciati: {len(lasciati)}")
+            return 0
+        if args.target:
+            esito = attiva(ws, args.target, dry_run=args.dry_run)
+            print(f"ordine: {esito['order']}")
+            print(f"scritto nel registro: {', '.join(esito['applied']) or 'niente (dry-run)'}")
+            if esito.get("prompt"):
+                print(f"prompt nell'ordine: {len(esito['prompt'])} caratteri (fonte: {esito.get('prompt_source')})")
+            return 0
+        elenco(ws)
+    except constitution.ConstitutionError as error:
+        print(f"BLOCCATO: {error}")
+        return 1
     return 0
 
 

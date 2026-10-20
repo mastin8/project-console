@@ -28,6 +28,8 @@ codice.
 6. Non scrivere mai `status: approved` e non approvare il documento al posto dell'utente. Solo
    dopo che la Costituzione risulta approvata dal front-end crea `tasks.yaml`, apri le fasi e
    inizia il primo task.
+7. Il tool applica il cancello: prima dell'approvazione non può attivare task né comporre prompt.
+   Non aggirarlo scrivendo direttamente i registri o un ordine.
 
 ### Regole di conversazione
 

@@ -39,6 +39,10 @@ dopo che il front-end lo ha approvato si creano `tasks.yaml`, si aprono le fasi 
 momento la Costituzione è immutabile: il console verifica il suo SHA-256 e rifiuta le modifiche.
 Una risposta mancante non si inventa.
 
+Il cancello è tecnico: `activate.py`, `sync_phases.py` e `mandate.py` rifiutano task, fasi e prompt
+finché la Costituzione non è approvata. Ogni prompt composto dal tool porta automaticamente le
+sezioni pertinenti della Costituzione e il suo sigillo SHA-256. Non rimuoverle.
+
 ## Come si raccontano blocchi e proprietà
 
 Quando restituisci informazioni su un blocco, un'unità o una proprietà, scrivi per una persona di
@@ -76,6 +80,21 @@ Una consegna `delivered` o `needs_changes` deve portare con sé:
 
 Senza questi campi la consegna non è accettabile: il console la rifiuta. Un test non eseguito si
 dichiara, non si sostituisce con «verde».
+
+## Prossima azione e corsia rapida
+
+Il verdetto non si interpreta a mano. `registers/next_action.py` traduce il report in una sola
+decisione:
+
+* `needs_changes`/`fail` → torna in E;
+* atto positivo → l'utente accetta;
+* dopo l'accettazione → passa alla fase successiva;
+* un report che dichiara chiuso l'obbligo → registra la chiusura;
+* verdetto non riconosciuto → revisione, mai un'ipotesi.
+
+Una correzione circoscritta può dichiarare `lane: fast`: usa solo E e una verifica T mirata.
+Migrazioni, dati, sicurezza, release, configurazione o più di due file richiedono il percorso
+completo A/E/T/R. La corsia rapida non riduce le prove: riduce i passaggi amministrativi.
 
 ## INPUT — quello che scrivi TU, e dove
 

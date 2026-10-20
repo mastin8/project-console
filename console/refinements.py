@@ -19,6 +19,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from workspace import Workspace, lock_file
+from registers import next_action
 
 SCHEMA = "project-console-refinements/1.0"
 PHASES = ("A", "E", "T", "R")
@@ -61,20 +62,42 @@ def _fase_breve(stato):
     return "missing"
 
 
+def effective_lane(item):
+    return next_action.infer_lane(
+        (item or {}).get("lane"),
+        strict=(item or {}).get("strict") is True,
+        risk=(item or {}).get("risk") or [],
+        paths=(item or {}).get("paths") or [],
+    )
+
+
+def required_phases(item):
+    return next_action.phases_for(effective_lane(item))
+
+
 def stage_map(item):
     fasi = item.get("phases") or {}
-    return {
+    fuori = {
         fase: _fase_breve((fasi.get(fase) or {}).get("status"))
         for fase in PHASES
     }
+    if effective_lane(item) == "fast":
+        fuori["A"] = "not_required"
+        fuori["R"] = "not_required"
+    return fuori
 
 
 def next_phase(item):
     fasi = item.get("phases") or {}
-    for fase in PHASES:
+    for fase in required_phases(item):
         if _fase_breve((fasi.get(fase) or {}).get("status")) != "done":
             return fase
-    return "R"
+    return required_phases(item)[-1]
+
+
+def is_closed(item):
+    fasi = stage_map(item)
+    return all(fasi.get(fase) == "done" for fase in required_phases(item))
 
 
 def latest_report(item):
@@ -116,11 +139,27 @@ def _report_state(workspace, path):
 def merge(obligation, item, workspace=None):
     """Sovrappone la rifinitura esplicita ai campi derivati dell'obbligo."""
     fasi = stage_map(item)
-    r_report = _report_state(workspace, (item.get("phases") or {}).get("R", {}).get("report"))
-    chiusa_da_report = bool(
+    lane = effective_lane(item)
+    richieste = required_phases(item)
+    ultimo = latest_report(item) or {}
+    r_report = _report_state(
+        workspace,
+        ultimo.get("path"),
+    )
+    chiusura_esplicita = (
         r_report.get("closure_condition_met") is True
         or str(r_report.get("obligation_status_after") or "") == "closed"
-        or "accept" in str(r_report.get("verdict") or "").lower()
+    )
+    chiusura_respinta = (
+        r_report.get("closure_condition_met") is False
+        or str(r_report.get("obligation_status_after") or "") == "open"
+    )
+    chiusa_da_report = bool(
+        chiusura_esplicita
+        or (
+            "accept" in str(r_report.get("verdict") or "").lower()
+            and not chiusura_respinta
+        )
     )
     # Un atto pubblicato non equivale a uno stadio chiuso: se il report dice `open`, lo stadio
     # resta parziale e non può far avanzare il ciclo. Questo impedisce che una R parta su E/T
@@ -128,7 +167,7 @@ def merge(obligation, item, workspace=None):
     if not chiusa_da_report:
         # A è un atto di design/decisione: resta done anche se l'obbligo è ancora aperto.
         # E/T/R, invece, non sono done se il loro report dichiara ancora `open`.
-        for fase in ("E", "T", "R"):
+        for fase in [voce for voce in richieste if voce != "A"]:
             voce = (item.get("phases") or {}).get(fase) or {}
             if _fase_breve(voce.get("status")) != "done":
                 continue
@@ -161,6 +200,9 @@ def merge(obligation, item, workspace=None):
             "next_stage": prossima,
             "stage_known": True,
             "stage_source": "refinements.yaml",
+            "lane": str(item.get("lane") or "standard"),
+            "lane_effective": lane,
+            "workflow_phases": list(richieste),
             "title": str(item.get("title") or ""),
             "owners": [str(voce) for voce in item.get("owners") or []],
             "paths": [str(percorso) for percorso in item.get("paths") or []],
@@ -197,7 +239,7 @@ def sync(workspace):
     documento = _carica(percorso) or {"schema": SCHEMA, "items": []}
     cambi = []
     for item in documento.get("items") or []:
-        for fase in PHASES:
+        for fase in required_phases(item):
             voce = (item.get("phases") or {}).get(fase) or {}
             report_path = voce.get("report")
             if not report_path:
@@ -269,6 +311,7 @@ def update(
     branch=None,
     worktree=None,
     strict=None,
+    lane=None,
     risk=None,
     claim_by=None,
     claim_task=None,
@@ -312,6 +355,11 @@ def update(
     if strict is not None:
         item["strict"] = bool(strict)
         cambi.append("strict")
+    if lane is not None:
+        if lane not in next_action.LANES and lane != "auto":
+            raise ValueError(f"lane non valida: {lane}")
+        item["lane"] = lane
+        cambi.append("lane")
     if risk is not None:
         if isinstance(risk, str):
             risk = [voce.strip() for voce in risk.split(",") if voce.strip()]
@@ -415,6 +463,7 @@ def main(argv=None):
     parser.add_argument("--branch")
     parser.add_argument("--worktree")
     parser.add_argument("--strict", action="store_true", default=None)
+    parser.add_argument("--lane", choices=("standard", "fast", "auto"))
     parser.add_argument("--risk")
     parser.add_argument("--claim-by")
     parser.add_argument("--claim-task")
@@ -451,6 +500,7 @@ def main(argv=None):
             branch=args.branch,
             worktree=args.worktree,
             strict=args.strict,
+            lane=args.lane,
             risk=args.risk,
             claim_by=args.claim_by,
             claim_task=args.claim_task,

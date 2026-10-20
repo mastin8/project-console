@@ -15,65 +15,75 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import refinements  # noqa: E402
-import server  # noqa: E402
+from registers import next_action  # noqa: E402
 from workspace import Workspace  # noqa: E402
 
 
 CASI = [
     (
         {"report_phase": "T", "report_verdict": "pass_with_declared_limits"},
-        {"A": "done", "E": "done", "T": "done", "R": "missing"},
-        "R",
+        "accept",
+        "T",
     ),
     (
         {"report_phase": "T", "report_verdict": "needs_changes"},
-        {"A": "done", "E": "done", "T": "done", "R": "missing"},
+        "rework_e",
         "E",
     ),
     (
         {"report_phase": "E", "report_verdict": "needs_changes", "taken": True},
-        {"A": "done", "E": "in_progress", "T": "missing", "R": "missing"},
+        "rework_e",
         "E",
     ),
     (
         {"report_phase": "", "report_verdict": "needs_changes"},
-        {"A": "done", "E": "partial", "T": "missing", "R": "missing"},
+        "rework_e",
         "E",
     ),
     (
         {"report_phase": "", "report_verdict": "measurement_delivered_obligation_open"},
-        {"A": "done", "E": "partial", "T": "missing", "R": "missing"},
+        "rework_e",
         "E",
     ),
     (
         {"report_phase": "", "report_verdict": "still_open_remeasured"},
-        {"A": "done", "E": "done", "T": "missing", "R": "missing"},
+        "run_phase",
         "T",
     ),
     (
         {"report_phase": "", "report_verdict": "esito_non_classificato"},
-        {"A": "done", "E": "missing", "T": "missing", "R": "missing"},
-        "?",
+        "review",
+        None,
     ),
     (
         {"taken": True},
-        {"A": "done", "E": "in_progress", "T": "missing", "R": "missing"},
-        "E",
+        "wait",
+        "A",
     ),
     (
         {},
-        {"A": "missing", "E": "missing", "T": "missing", "R": "missing"},
+        "run_phase",
         "A",
     ),
 ]
 
 
 def main():
-    for indice, (voce, attese, prossima) in enumerate(CASI, start=1):
-        fasi, ottenuta, fonte = server._refinement_stage(voce)
-        assert fasi == attese, f"caso {indice}: fasi {fasi} != {attese}"
-        assert ottenuta == prossima, f"caso {indice}: prossima {ottenuta} != {prossima}"
-        assert fonte, f"caso {indice}: fonte vuota"
+    for indice, (voce, codice, fase) in enumerate(CASI, start=1):
+        azione = next_action.decide_report(
+            voce.get("report_phase"),
+            voce.get("report_verdict"),
+            closure_condition_met=voce.get("report_closed"),
+        )
+        if not voce.get("report_phase") and voce.get("taken"):
+            azione = next_action.for_obligation(voce)
+        assert azione["code"] == codice, (
+            f"caso {indice}: azione {azione['code']} != {codice}"
+        )
+        if fase is not None:
+            assert azione.get("target_phase") == fase, (
+                f"caso {indice}: fase {azione.get('target_phase')} != {fase}"
+            )
     with tempfile.TemporaryDirectory() as tmp:
         radice = Path(tmp)
         (radice / "reports" / "RIF").mkdir(parents=True)
@@ -118,6 +128,12 @@ def main():
             pass
         else:
             raise AssertionError("una consegna senza test/report deve essere rifiutata")
+        refinements.update(workspace, "RIF", lane="fast")
+        veloce = refinements.load(workspace)["RIF"]
+        fasi_veloci = refinements.stage_map(veloce)
+        assert fasi_veloci["A"] == "not_required"
+        assert fasi_veloci["R"] == "not_required"
+        assert refinements.next_phase(veloce) in ("E", "T")
     print(f"ok {len(CASI)} casi A/E/T/R + sync + consegna validata")
     return 0
 

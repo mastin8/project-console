@@ -2,6 +2,7 @@
 units:
 - id: ES01
   domain: esempio
+  lane: standard
   title: "Prima unita' di esempio"
   deliverable: "Cosa deve esistere quando questa unita' e' accettata"
   requirement_ids: []

@@ -56,6 +56,10 @@ class ConstitutionInvalid(ConstitutionError):
     code = "constitution_invalid"
 
 
+class ConstitutionNotApproved(ConstitutionError):
+    code = "constitution_not_approved"
+
+
 def _normalize_body(body: str) -> str:
     """Una sola forma per lo stesso Markdown: niente differenze dovute a righe vuote finali."""
     return str(body or "").strip() + "\n"
@@ -190,6 +194,116 @@ def _payload(document: dict) -> dict:
 def load(workspace) -> dict:
     """Legge la Costituzione e verifica il sigillo se e' gia' approvata."""
     return _payload(_parse(workspace.constitution_path, workspace.project))
+
+
+def gate(workspace) -> dict:
+    """Lo stato del cancello, senza far fallire la lettura generale della pagina."""
+    try:
+        documento = load(workspace)
+    except ConstitutionError as error:
+        return {
+            "approved": False,
+            "status": "missing" if isinstance(error, ConstitutionMissing) else "invalid",
+            "code": error.code,
+            "message": str(error),
+        }
+    return {
+        "approved": documento["status"] == APPROVED,
+        "status": documento["status"],
+        "code": "" if documento["status"] == APPROVED else ConstitutionNotApproved.code,
+        "message": (
+            ""
+            if documento["status"] == APPROVED
+            else "la Costituzione è ancora una bozza: approvazione richiesta"
+        ),
+        "sha256": documento["draft_sha256"],
+    }
+
+
+def require_approved(workspace) -> dict:
+    """Fallisce chiuso quando un task, una fase o un prompt proverebbero a partire."""
+    documento = load(workspace)
+    if documento["status"] != APPROVED:
+        raise ConstitutionNotApproved(
+            "la Costituzione non è approvata: nessun task o prompt può partire"
+        )
+    return documento
+
+
+def create_draft(workspace) -> dict:
+    """Crea la sola BOZZA per un workspace avviato prima della Costituzione."""
+    percorso = workspace.constitution_path
+    if percorso.exists():
+        return load(workspace)
+    modello = Path(__file__).resolve().parent.parent / "templates" / "workspace" / "constitution.md"
+    if not modello.is_file():
+        raise ConstitutionMissing(f"modello della Costituzione non trovato: {modello}")
+    testo = modello.read_text(encoding="utf-8").replace("__PROJECT__", workspace.project)
+    trovato = _FRONTMATTER.match(testo)
+    corpo = testo[trovato.end():] if trovato else testo
+    metadata = {
+        "schema": SCHEMA,
+        "status": DRAFT,
+        "project": workspace.project,
+        "updated_at": "",
+        "approved_at": "",
+        "approved_sha256": "",
+    }
+    with _locked(workspace):
+        if percorso.exists():
+            return _payload(_parse(percorso, workspace.project))
+        _write(percorso, metadata, corpo)
+    return load(workspace)
+
+
+def _sezioni(body: str) -> list:
+    """Le sezioni Markdown `##`, con il titolo e il testo."""
+    trovati = list(re.finditer(r"(?m)^##\s+(.+?)\s*$", body))
+    fuori = []
+    for indice, trovato in enumerate(trovati):
+        fine = trovati[indice + 1].start() if indice + 1 < len(trovati) else len(body)
+        fuori.append((trovato.group(1).strip(), body[trovato.start():fine].strip()))
+    return fuori
+
+
+def prompt_context(workspace, limit=9000) -> str:
+    """I vincoli stabili da mettere in OGNI prompt, automaticamente.
+
+    Non si copia tutta la Costituzione: si prendono le sezioni che governano il lavoro e si cita
+    l'impronta approvata. Obiettivo e fuori perimetro restano inclusi perché cambiano cosa significa
+    «fatto»; le domande dell'onboarding no.
+    """
+    documento = require_approved(workspace)
+    chiavi = (
+        "obiettivo",
+        "fuori perimetro",
+        "stack tecnico",
+        "deliverable finale",
+        "ampiezza",
+        "flusso di lavoro",
+        "parallelismo",
+        "test e accettazione",
+        "rischi",
+        "stop rule",
+    )
+    selezionate = []
+    for titolo, testo in _sezioni(documento["body"]):
+        basso = titolo.lower()
+        if any(chiave in basso for chiave in chiavi):
+            selezionate.append(testo)
+    if not selezionate:
+        selezionate = [documento["body"]]
+    contenuto = "\n\n".join(selezionate)
+    if len(contenuto) > limit:
+        contenuto = contenuto[:limit].rstrip() + "\n… [testo troncato dal limite del prompt]"
+    return (
+        "════ VINCOLI DELLA COSTITUZIONE APPROVATA ════\n"
+        f"Sigillo SHA-256: {documento['draft_sha256']}\n"
+        "Questi vincoli vengono prima delle preferenze dell'esecutore. Se il lavoro richiesto li "
+        "contraddice, fermati e dichiara il conflitto.\n\n"
+        f"{contenuto}\n"
+        "══════════════════════════════════════════\n"
+    )
 
 
 def save_draft(workspace, body: str, expected_sha256: str | None = None) -> dict:

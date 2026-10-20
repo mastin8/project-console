@@ -38,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import activate  # noqa: E402 - le impronte del perimetro sono sue
 import next_prompts  # noqa: E402 - il quaderno, per il prompt che esiste gia'
+from console import constitution  # noqa: E402 - la Costituzione approvata e' parte del mandato
 from workspace import Workspace  # noqa: E402
 
 #: Che ruolo tocca, dal tipo di fase. E' un'etichetta, non un permesso: la mappa vera e' in
@@ -268,6 +269,7 @@ def per(ws, fase, state=None):
     `state` si passa gia' caricato quando c'e': evita di rileggere un registro da 1,9 MB per ogni
     riga della pagina.
     """
+    constitution.require_approved(ws)
     # Cache per fase: la pagina chiede il prompt di ogni riga attivata insieme, e senza questa
     # ogni riga ricostruiva il quaderno (o componeva da capo) — misurato 4-5 s per prompt.
     # La cache vale finche' i registri non cambiano: il prompt porta dentro l'occorrenza della presa
@@ -303,11 +305,15 @@ def per(ws, fase, state=None):
 
 
 def _versione_registri(ws):
-    """Il tempo di scrittura di registro e task: due `stat`, per non servire un prompt vecchio."""
+    """Il tempo di scrittura di registro, task e Costituzione."""
     try:
-        return (ws.state_path.stat().st_mtime_ns, ws.path(ws.tasks).stat().st_mtime_ns)
+        return (
+            ws.state_path.stat().st_mtime_ns,
+            ws.path(ws.tasks).stat().st_mtime_ns,
+            ws.constitution_path.stat().st_mtime_ns,
+        )
     except OSError:
-        return (0, 0)
+        return (0, 0, 0)
 
 
 def consegna_gia_scritta(ws, fase, testo):
@@ -487,11 +493,21 @@ def busta(ws, fase):
 
 
 def con_busta(ws, fase, testo):
-    """Il testo con la busta davanti, una volta sola: se c'e' gia', non si raddoppia."""
+    """Busta + vincoli costituzionali + corpo. Nessun prompt può saltare la Costituzione."""
     corpo = str(testo or "").strip()
-    if corpo.startswith("════ PRIMA ISTRUZIONE"):
+    vincoli = constitution.prompt_context(ws)
+    marcatore = "════ VINCOLI DELLA COSTITUZIONE APPROVATA"
+    if marcatore in corpo:
         return corpo + "\n"
-    return busta(ws, fase) + "\n\n" + corpo + "\n"
+    if corpo.startswith("════ PRIMA ISTRUZIONE"):
+        # Un ordine congelato può portare una busta vecchia: i vincoli nuovi entrano subito dopo,
+        # senza riscrivere il corpo che l'esecutore ha già ricevuto.
+        chiusura = corpo.find("══════════════════════════════════════")
+        fine = corpo.find("\n", chiusura) if chiusura != -1 else -1
+        if fine == -1:
+            return corpo + "\n\n" + vincoli + "\n"
+        return corpo[: fine + 1] + "\n" + vincoli + "\n" + corpo[fine + 1 :].lstrip()
+    return busta(ws, fase) + "\n\n" + vincoli + "\n" + corpo + "\n"
 
 
 def senza_busta(testo):
@@ -546,7 +562,11 @@ def main(argv=None):
     args = parser.parse_args(argv)
     ws = Workspace.load(args.workspace)
     next_prompts.configure(queue=ws.queue, deliverable_prefix=ws.deliverable_prefix)
-    esito = per(ws, args.phase)
+    try:
+        esito = per(ws, args.phase)
+    except constitution.ConstitutionError as error:
+        print(f"BLOCCATO: {error}")
+        return 1
     print(f"# fonte: {esito['source']}")
     print(esito["text"])
     return 0

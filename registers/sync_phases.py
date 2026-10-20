@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import apply_transitions  # noqa: E402 - backup, validazione e ripristino sono suoi
+from console import constitution  # noqa: E402 - nessun task si apre prima dell'approvazione
 from workspace import Workspace  # noqa: E402
 
 
@@ -79,6 +80,11 @@ def main(argv=None):
     parser.add_argument("--apply", action="store_true", help="scrive davvero (senza: mostra e basta)")
     args = parser.parse_args(argv)
     ws = Workspace.load(args.workspace)
+    try:
+        constitution.require_approved(ws)
+    except constitution.ConstitutionError as error:
+        print(f"BLOCCATO: {error}")
+        return 1
     tasks_doc = yaml.safe_load(ws.path(ws.tasks).read_text(encoding="utf-8")) or {}
     state = yaml.safe_load(ws.state_path.read_text(encoding="utf-8")) or {}
     registrate = set(state.get("tasks") or {})

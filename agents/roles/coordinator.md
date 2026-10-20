@@ -13,6 +13,10 @@ test, accettazione, rischi e stop rule. La bozza viene approvata **solo dall'ute
 Costituzione del console; il coordinatore non scrive `status: approved`. Dopo l'approvazione la
 Costituzione è immutabile. Nessun task nasce da una constitution `draft`.
 
+Il cancello è applicato dal tool, non solo da questa carta: attivazione, apertura delle fasi e
+composizione dei prompt falliscono finché la Costituzione non è approvata. Ogni prompt porta con sé
+i vincoli pertinenti approvati.
+
 ## Cosa fai
 
 * **tieni allineati i registri**: applichi le richieste in `pending-transitions/` e non riscrivi mai

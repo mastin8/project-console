@@ -111,7 +111,7 @@ mentre stai leggendo la terza.
 
 | Cosa leggi | Cosa significa | Cosa fare |
 | --- | --- | --- |
-| **Quello che il registro dice che è dovuto** | i `next` dei report: chi ha finito ha scritto cosa va fatto dopo. Una riga per dichiarazione: chi l'ha scritta, quando, e i codici che nomina | su ogni codice c'e' **Prompt `<FASE>`**: compone il prompt anche se quella fase e' **gia' accettata**, perche' l'atto dovuto e' un tentativo nuovo |
+| **Quello che il registro dice che è dovuto** | i `next` dei report, ridotti dal motore unico alla prima fase realmente eseguibile | un solo pulsante per dichiarazione, con la stessa forma `accetta / torna in E / passa a T / chiudi obbligo` |
 | `X: in corso` | quella fase ha una presa viva: qualcuno la sta facendo **adesso** | niente: e' in mano a qualcuno |
 | `X: consegnata` | la fase si e' mossa **dopo** la dichiarazione che la nominava: l'atto chiesto c'e' gia' | niente: guarda la riga nuova della dichiarazione che segue |
 | **Leggi** (accanto) | il testo della dichiarazione, intero | — |
@@ -211,6 +211,11 @@ Una **unita'** e' accettata quando **tutte** le sue fasi lo sono: e' il numero �
 7. **La ratifica** (`R`) chiude l'unita' quando il criterio e' soddisfatto. Se chiede una firma
    distinta, vale la regola scritta nel contratto del progetto: distinta **da chi ha eseguito**.
 
+Per una correzione circoscritta il registro puo' dichiarare `lane: fast`: il percorso richiesto
+diventa **E → T mirata**. Non e' una scorciatoia sulle prove; evita soltanto l'analisi e
+l'accettazione separate quando non aggiungono una decisione. Rischi dichiarati, migrazioni,
+sicurezza, release, configurazione o piu' di due file riportano al ciclo completo.
+
 ---
 
 ## 8. Le altre pagine
@@ -223,6 +228,11 @@ Una **unita'** e' accettata quando **tutte** le sue fasi lo sono: e' il numero �
 | **Prompt** | i prompt del quaderno raggruppati per stato d'azione (da fare, in corso, respinti, fatti), col testo da copiare |
 | **Percorso** | una scheda per blocco: unita', risultato atteso, fasi del ciclo, commit che toccano i suoi path |
 | **Costituzione** | la bozza del piano si modifica e si salva; **solo l'utente** può approvarla. Dopo l'approvazione il testo è in sola lettura, il console verifica il sigillo SHA-256 e rifiuta ogni modifica |
+
+Finché la Costituzione non è approvata, la pagina **Adesso** mostra soltanto il cancello: nessun
+task può essere attivato e nessun prompt può essere composto. I progetti nati prima di questa
+regola possono creare la bozza dal modello dentro la pagina Costituzione; l'approvazione resta
+sempre un atto separato dell'utente.
 
 ---
 

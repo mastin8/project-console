@@ -101,6 +101,40 @@ class ConstitutionTests(unittest.TestCase):
         with self.assertRaises(constitution.ConstitutionMissing):
             constitution.load(self.workspace)
 
+    def test_draft_is_not_a_technical_gate(self):
+        self.assertFalse(constitution.gate(self.workspace)["approved"])
+        with self.assertRaises(constitution.ConstitutionNotApproved):
+            constitution.require_approved(self.workspace)
+
+    def test_missing_constitution_can_be_drafted_from_the_front_end(self):
+        self.percorso.unlink()
+        creata = constitution.create_draft(self.workspace)
+        self.assertEqual(creata["status"], "draft")
+        self.assertTrue(self.percorso.is_file())
+        self.assertEqual(creata["project"], "Progetto")
+
+    def test_approved_constitution_enters_every_prompt_with_only_relevant_sections(self):
+        constitution.approve(
+            self.workspace,
+            body=(
+                "# Costituzione\n\n"
+                "## 1. Obiettivo\n\nUn prodotto verificabile.\n\n"
+                "## 2. Fuori perimetro\n\nNiente vendite.\n\n"
+                "## 7. Flusso di lavoro\n\nE poi T.\n\n"
+                "## 9. Test e accettazione\n\nSolo il modulo toccato.\n\n"
+                "## 12. Domande e risposte dell'onboarding\n\nQuesta parte non serve al prompt.\n"
+            ),
+        )
+        contesto = constitution.prompt_context(self.workspace)
+        self.assertIn("VINCOLI DELLA COSTITUZIONE APPROVATA", contesto)
+        self.assertIn("Un prodotto verificabile", contesto)
+        self.assertIn("Solo il modulo toccato", contesto)
+        self.assertNotIn("Questa parte non serve", contesto)
+        self.assertEqual(
+            constitution.require_approved(self.workspace)["status"],
+            "approved",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
