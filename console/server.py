@@ -700,6 +700,7 @@ sys.path.insert(0, str(ROOT))
 
 import apply_transitions  # noqa: E402
 import activate  # noqa: E402 - attivare: riserva la fase e deposita l'ordine
+import constitution  # noqa: E402 - la bozza approvata dall'utente diventa immutabile
 import esiti  # noqa: E402 - gli esiti di un atto in punti: criteri, casi, finding, limiti
 import recap  # noqa: E402 - il recap dei sospesi: registri + esiti, in un prompt
 import refinements  # noqa: E402 - la forma esplicita delle rifiniture: A/E/T/R, claim, report
@@ -1959,6 +1960,17 @@ def build_handler(state):
             # default=str: i registri portano date YAML (answered_on, asked_on) che json rifiuta.
             self._send(status, json.dumps(data, default=str), "application/json; charset=utf-8")
 
+        def _constitution_error(self, error):
+            if isinstance(error, constitution.ConstitutionMissing):
+                status = 404
+            elif isinstance(error, constitution.ConstitutionInvalid):
+                status = 400
+            elif isinstance(error, constitution.ConstitutionError):
+                status = 409
+            else:
+                status = 500
+            self._json(status, {"error": str(error), "code": error.code})
+
         def do_GET(self):
             parsed = urlparse(self.path)
             route = parsed.path
@@ -1976,6 +1988,13 @@ def build_handler(state):
                     "surface": state.workspace.surface,
                     "phases": list(state.workspace.phases),
                 })
+            if route == "/api/constitution":
+                try:
+                    return self._json(200, constitution.load(state.workspace))
+                except constitution.ConstitutionError as error:
+                    return self._constitution_error(error)
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
             if route == "/api/state":
                 try:
                     return self._json(200, state.snapshot())
@@ -2114,8 +2133,52 @@ def build_handler(state):
                 200, (UI_DIR / "index.html").read_text("utf-8"), "text/html; charset=utf-8"
             )
 
+        def do_PUT(self):
+            route = urlparse(self.path).path
+            if route != "/api/constitution":
+                return self._json(404, {"error": "rotta sconosciuta"})
+            length = int(self.headers.get("Content-Length") or 0)
+            try:
+                payload = json.loads(self.rfile.read(length) or b"{}")
+            except json.JSONDecodeError as error:
+                return self._json(400, {"error": f"JSON non valido: {error}"})
+            body = payload.get("body")
+            if not isinstance(body, str):
+                return self._json(400, {"error": "serve body: il testo Markdown della bozza"})
+            try:
+                esito = constitution.save_draft(
+                    state.workspace,
+                    body,
+                    expected_sha256=payload.get("expected_sha256") or None,
+                )
+            except constitution.ConstitutionError as error:
+                return self._constitution_error(error)
+            except Exception as error:  # noqa: BLE001
+                return self._json(500, {"error": str(error)})
+            return self._json(200, {"ok": True, **esito})
+
         def do_POST(self):
             route = urlparse(self.path).path
+            if route == "/api/constitution/approve":
+                length = int(self.headers.get("Content-Length") or 0)
+                try:
+                    payload = json.loads(self.rfile.read(length) or b"{}")
+                except json.JSONDecodeError as error:
+                    return self._json(400, {"error": f"JSON non valido: {error}"})
+                body = payload.get("body")
+                if body is not None and not isinstance(body, str):
+                    return self._json(400, {"error": "body deve essere testo Markdown"})
+                try:
+                    esito = constitution.approve(
+                        state.workspace,
+                        expected_sha256=payload.get("expected_sha256") or None,
+                        body=body,
+                    )
+                except constitution.ConstitutionError as error:
+                    return self._constitution_error(error)
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
+                return self._json(200, {"ok": True, **esito})
             if route == "/api/accept":
                 # «Dove accolgo i cambiamenti»: qui. Scrive un ATTO di accettazione firmato `utente`
                 # (una mano che quei byte non li ha scritti), col cancello davanti: se la base non e'

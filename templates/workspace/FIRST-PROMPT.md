@@ -23,9 +23,11 @@ codice.
 4. Aggiorna `constitution.md` con le risposte. Le domande aperte restano scritte come aperte;
    non riempirle con ipotesi.
 5. Quando la constitution è completa, proponi all'utente il piano finale: task, stack, skill,
-   parallelismo, test e modalità. Aspetta la conferma.
-6. Solo dopo la conferma scrivi `status: approved`, crea `tasks.yaml`, apre le fasi e inizia il
-   primo task.
+   parallelismo, test e modalità. Lascia la constitution in `status: draft` e chiedi all'utente di
+   controllarla e approvarla dalla pagina **Costituzione** del console.
+6. Non scrivere mai `status: approved` e non approvare il documento al posto dell'utente. Solo
+   dopo che la Costituzione risulta approvata dal front-end crea `tasks.yaml`, apri le fasi e
+   inizia il primo task.
 
 ### Regole di conversazione
 

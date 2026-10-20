@@ -14,6 +14,7 @@ let loadedAt = 0;
 let versioneVista = null;
 let selectedBlock = null;
 let consoleConfig = null;
+let constitutionData = null;
 
 /* L'interfaccia non conosce il progetto: nome, vista e fasi arrivano dal workspace. Se
    `/config.json` non risponde, quello che si vede resta quello di serie — la pagina funziona
@@ -46,6 +47,7 @@ async function loadConfig() {
       )
     );
   }
+  mostraPagina();
 }
 
 /* ------------------------------------------------------------------ utilità */
@@ -1310,6 +1312,7 @@ const PAGINE = {
   "/testimone": ["testimone", "Testimone"],
   "/prompt": ["prompt", "Prompt"],
   "/percorso": ["percorso", "Percorso"],
+  "/costituzione": ["costituzione", "Costituzione"],
 };
 
 function paginaCorrente() {
@@ -1328,6 +1331,169 @@ function mostraPagina() {
   const nome = (PAGINE[trovata] || [])[1] || "";
   const progetto = (consoleConfig && consoleConfig.project) || "";
   document.title = [progetto, nome].filter(Boolean).join(" · ");
+}
+
+/* La Costituzione ha una regola diversa dal resto della pagina: la bozza si scrive qui, ma
+   l'approvazione e' un atto umano irreversibile. Il server e' l'autorita'; questa funzione mostra
+   soltanto lo stato che il server ha verificato. */
+function messaggioCostituzione(testo, tono = "") {
+  const messaggio = $("#constitution-message");
+  messaggio.className = `msg${testo ? " show" : ""}${tono ? ` ${tono}` : ""}`;
+  messaggio.textContent = testo || "";
+}
+
+function problemaCostituzione(testo, codice = "") {
+  $("#constitution-loading").hidden = true;
+  $("#constitution-form").hidden = true;
+  $("#constitution-approved").hidden = true;
+  $("#constitution-missing").hidden = true;
+  const problema = $("#constitution-problem");
+  const integrita = codice === "constitution_integrity_failed";
+  problema.hidden = false;
+  problema.textContent = integrita
+    ? `Il contenuto non è più quello approvato. ${testo} Il file non verrà corretto automaticamente.`
+    : testo;
+  const stato = $("#constitution-status");
+  stato.hidden = false;
+  stato.dataset.status = "error";
+  stato.textContent = integrita ? "Sigillo non valido" : "Non disponibile";
+  $("#generated").textContent = "Costituzione non verificabile";
+}
+
+function renderCostituzione(data) {
+  constitutionData = data;
+  $("#constitution-loading").hidden = true;
+  $("#constitution-missing").hidden = true;
+  $("#constitution-problem").hidden = true;
+  const stato = $("#constitution-status");
+  stato.hidden = false;
+  stato.dataset.status = data.status;
+
+  if (data.status === "approved") {
+    $("#constitution-form").hidden = true;
+    $("#constitution-approved").hidden = false;
+    stato.textContent = "Approvata · immutabile";
+    $("#constitution-approved-at").textContent = data.approved_at || "data non disponibile";
+    $("#constitution-approved-sha").textContent = data.approved_sha256 || "—";
+    $("#constitution-readonly").textContent = data.body;
+    $("#generated").textContent = "Costituzione approvata · firma SHA-256 verificata";
+    return;
+  }
+
+  $("#constitution-approved").hidden = true;
+  $("#constitution-form").hidden = false;
+  stato.textContent = "Bozza modificabile";
+  $("#constitution-body").value = data.body || "";
+  $("#constitution-meta").textContent = data.updated_at
+    ? `Ultimo salvataggio: ${String(data.updated_at).replace("T", " ").replace("+00:00", " UTC")}`
+    : "Bozza non ancora salvata dal front-end.";
+  $("#generated").textContent = "Bozza letta dal workspace";
+}
+
+async function loadConstitution() {
+  $("#constitution-loading").hidden = false;
+  $("#constitution-problem").hidden = true;
+  $("#constitution-missing").hidden = true;
+  $("#constitution-form").hidden = true;
+  $("#constitution-approved").hidden = true;
+  messaggioCostituzione("");
+  try {
+    const response = await fetch("/api/constitution", { cache: "no-store" });
+    const data = await response.json().catch(() => ({}));
+    if (response.status === 404 && data.code === "constitution_missing") {
+      $("#constitution-loading").hidden = true;
+      $("#constitution-missing").hidden = false;
+      const stato = $("#constitution-status");
+      stato.hidden = false;
+      stato.dataset.status = "missing";
+      stato.textContent = "Non presente";
+      $("#generated").textContent = "Costituzione non trovata nel workspace";
+      return;
+    }
+    if (!response.ok) throw Object.assign(new Error(data.error || `HTTP ${response.status}`), data);
+    renderCostituzione(data);
+  } catch (error) {
+    problemaCostituzione(error.message, error.code || "");
+  }
+}
+
+async function inviaCostituzione(metodo, percorso, payload, etichetta) {
+  if (!constitutionData) return;
+  const salva = $("#constitution-save");
+  const approva = $("#constitution-approve");
+  salva.disabled = true;
+  approva.disabled = true;
+  messaggioCostituzione(`${etichetta}…`, "pending");
+  try {
+    const response = await fetch(percorso, {
+      method: metodo,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw Object.assign(new Error(data.error || `HTTP ${response.status}`), data);
+    renderCostituzione(data);
+    messaggioCostituzione(
+      metodo === "POST"
+        ? "Costituzione approvata e bloccata. Da questo momento il testo è immutabile."
+        : "Bozza salvata. L'approvazione resta un atto separato.",
+      "ok"
+    );
+  } catch (error) {
+    if (error.code === "constitution_conflict") {
+      messaggioCostituzione(
+        "La bozza è cambiata in un'altra sessione. L'ho ricaricata: controlla il testo prima di riprovare.",
+        "err"
+      );
+      await loadConstitution();
+      messaggioCostituzione(
+        "La bozza è cambiata in un'altra sessione. L'ho ricaricata: controlla il testo prima di riprovare.",
+        "err"
+      );
+    } else if (error.code === "constitution_locked") {
+      await loadConstitution();
+      messaggioCostituzione("La Costituzione è già approvata e non può essere modificata.", "err");
+    } else {
+      messaggioCostituzione(`Operazione non riuscita: ${error.message}`, "err");
+    }
+  } finally {
+    salva.disabled = false;
+    approva.disabled = false;
+  }
+}
+
+function initCostituzione() {
+  $("#constitution-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    inviaCostituzione(
+      "PUT",
+      "/api/constitution",
+      {
+        body: $("#constitution-body").value,
+        expected_sha256: constitutionData?.draft_sha256 || "",
+      },
+      "Salvo la bozza"
+    );
+  });
+  $("#constitution-approve")?.addEventListener("click", () => {
+    const conferma = window.confirm(
+      "Approvare ora la Costituzione?\n\n" +
+      "Dopo questa operazione il testo diventa immutabile: né questa pagina né gli agenti potranno più modificarlo."
+    );
+    if (!conferma) return;
+    inviaCostituzione(
+      "POST",
+      "/api/constitution/approve",
+      {
+        body: $("#constitution-body").value,
+        expected_sha256: constitutionData?.draft_sha256 || "",
+      },
+      "Approvazione e blocco"
+    );
+  });
+  $("#constitution-body")?.addEventListener("input", () => {
+    messaggioCostituzione("Modifiche non ancora salvate.", "pending");
+  });
 }
 
 /* I testi lunghi (prompt, dichiarazioni, report) vivono in un dialogo: la pagina resta una lista di
@@ -5570,12 +5736,16 @@ initRecap();
 initFinishing();
 initWorklog();
 initRifinitura();
+initCostituzione();
 renderGlossario();
 initTutorial();
 initHeaderHeight();
 preparaScheda();
 loadConfig();
-if (paginaCorrente() === "svolto") {
+if (paginaCorrente() === "costituzione") {
+  mostraPagina();
+  loadConstitution();
+} else if (paginaCorrente() === "svolto") {
   mostraPagina();
   loadWorklog();
 } else {
@@ -5591,6 +5761,10 @@ setInterval(() => {
   const campo = document.activeElement;
   const staScrivendo = campo && ["INPUT", "TEXTAREA"].includes(campo.tagName);
   // Nessun ricarico mentre un dialogo è aperto: né il report, né il tutorial, né una spiegazione.
-  if (staScrivendo || document.querySelector("dialog[open]")) return;
+  if (
+    paginaCorrente() === "costituzione"
+    || staScrivendo
+    || document.querySelector("dialog[open]")
+  ) return;
   load();
 }, INTERVALLO);

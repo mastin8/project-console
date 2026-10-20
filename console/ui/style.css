@@ -355,12 +355,67 @@ body[data-page="svolto"] main [data-page="svolto"],
 body[data-page="tempo"] main [data-page="tempo"],
 body[data-page="testimone"] main [data-page="testimone"],
 body[data-page="prompt"] main [data-page="prompt"],
-body[data-page="percorso"] main [data-page="percorso"]{display:block}
+body[data-page="percorso"] main [data-page="percorso"],
+body[data-page="costituzione"] main [data-page="costituzione"]{display:block}
 /* La scheda chiusa vince sulla regola che accende le sezioni della pagina: senza questa riga
    `display:block` rimetterebbe in pagina i pannelli che la barra delle schede ha appena chiuso
    (l'attributo `hidden` da solo non basta, perche' la regola sopra e' piu' specifica di lui). */
 body[data-page="adesso"] main .scheda-pannello[hidden]{display:none}
-body[data-page="svolto"] .top-bar{display:none}
+body[data-page="svolto"] .top-bar,
+body[data-page="costituzione"] .top-bar{display:none}
+body[data-page="costituzione"] .shell{grid-template-columns:minmax(0,860px);justify-content:center}
+body[data-page="costituzione"] .glossario,
+body[data-page="costituzione"] .indice{display:none}
+
+/* Costituzione: una pagina di lavoro e lettura, non una scheda fra le altre. Il sigillo e' l'unico
+   elemento che sale di tono: deve dire subito che il testo non e' piu' negoziabile. */
+.constitution-intro{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s5);
+  padding-bottom:var(--s4);border-bottom:1px solid var(--line-strong)}
+.constitution-intro h2{font-size:24px;letter-spacing:-.025em}
+.constitution-lead{margin:var(--s2) 0 0;color:var(--ink-2);max-width:68ch;text-wrap:pretty}
+.constitution-status{flex:none;padding:var(--s15) var(--s3);border:1px solid var(--line-strong);
+  border-radius:99px;background:var(--surface);color:var(--ink-2);font-size:12.5px;font-weight:650}
+.constitution-status[data-status="approved"]{border-color:var(--ok);color:var(--ok);background:var(--ok-soft)}
+.constitution-status[data-status="draft"]{border-color:var(--warn);color:var(--warn);background:var(--warn-soft)}
+.constitution-loading{margin:var(--s4) 0;color:var(--ink-3);font-size:13.5px}
+.constitution-missing,.constitution-problem{margin:var(--s4) 0;padding:var(--s4);
+  border:1px solid var(--line-strong);border-radius:var(--r-md);background:var(--surface)}
+.constitution-missing h3{margin:0;font-size:16px}
+.constitution-missing p{margin:var(--s2) 0 0;color:var(--ink-2);max-width:70ch}
+.constitution-problem{border-color:var(--bad);background:var(--bad-soft);color:var(--bad);font-weight:550}
+#constitution-form{margin-top:var(--s4)}
+.constitution-label{display:block;font-size:13px;font-weight:650;color:var(--ink)}
+.constitution-help{margin:var(--s1) 0 var(--s2);color:var(--ink-3);font-size:13px;max-width:75ch}
+.constitution-editor{min-height:58vh;font:13px/1.65 var(--mono);tab-size:2;white-space:pre;
+  overflow:auto;resize:vertical}
+.constitution-savebar{position:sticky;bottom:0;margin-top:var(--s2);padding:var(--s3) 0;
+  background:linear-gradient(to top,var(--bg) 78%,transparent)}
+.constitution-meta{margin:0;color:var(--ink-3);font-size:12.5px}
+.constitution-savebar .row{margin-top:var(--s2)}
+.approval-button{border-color:var(--warn);color:var(--warn)}
+@media (hover:hover) and (pointer:fine){
+  .approval-button:hover:not(:disabled){background:var(--warn-soft);border-color:var(--warn);color:var(--warn)}
+}
+.constitution-seal{margin:var(--s4) 0;padding:var(--s5);border:1px solid var(--accent);
+  border-radius:var(--r-lg);background:var(--accent-soft);color:var(--ink)}
+.constitution-seal strong{display:block;font-size:18px;color:var(--accent);letter-spacing:-.01em}
+.constitution-seal p{margin:var(--s2) 0 var(--s4);max-width:72ch;color:var(--ink-2)}
+.constitution-stamp{display:grid;grid-template-columns:minmax(150px,.55fr) minmax(0,1.45fr);
+  gap:var(--s3);margin:0;padding-top:var(--s3);border-top:1px solid var(--line-strong)}
+.constitution-stamp div{min-width:0}
+.constitution-stamp dt{color:var(--ink-3);font-size:11.5px;font-weight:650;text-transform:uppercase;
+  letter-spacing:.05em}
+.constitution-stamp dd{margin:var(--s1) 0 0;font-size:13px;overflow-wrap:anywhere}
+.constitution-readonly{margin:0;padding:var(--s5);border:1px solid var(--line-strong);
+  border-radius:var(--r-md);background:var(--surface);color:var(--ink);
+  font:13px/1.7 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere;tab-size:2}
+@media (max-width:640px){
+  .constitution-intro{display:block}
+  .constitution-status{display:inline-block;margin-top:var(--s3)}
+  .constitution-editor{min-height:62vh;font-size:12.5px}
+  .constitution-stamp{grid-template-columns:1fr}
+  .constitution-readonly{padding:var(--s4);font-size:12.5px}
+}
 
 /* L'insegna della rifinitura: sta sopra «Cosa fare adesso» e dice, prima di ogni elenco, che
    il lavoro principale è concluso e che quello che segue è la chiusura. */

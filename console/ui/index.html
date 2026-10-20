@@ -36,6 +36,7 @@
           <a href="/testimone" data-nav="testimone">Testimone</a>
           <a href="/prompt" data-nav="prompt">Prompt</a>
           <a href="/percorso" data-nav="percorso">Percorso</a>
+          <a href="/costituzione" data-nav="costituzione">Costituzione</a>
         </nav>
         <button type="button" class="ghost" id="recap-sospesi">Rifiniture</button>
         <button type="button" class="ghost" id="tutorial">Tutorial</button>
@@ -70,6 +71,55 @@
     </aside>
 
   <main id="main">
+    <section id="constitution-section" data-page="costituzione" aria-labelledby="constitution-title">
+      <div class="constitution-intro">
+        <div>
+          <h2 id="constitution-title">La Costituzione del progetto</h2>
+          <p class="constitution-lead">Qui finisce l'onboarding: il piano che avete costruito diventa la
+            regola stabile del progetto. Finché è una bozza puoi correggerla; dopo la tua approvazione
+            non sarà più modificabile, né dalla pagina né dagli agenti.</p>
+        </div>
+        <span class="constitution-status" id="constitution-status" hidden></span>
+      </div>
+
+      <p class="constitution-loading" id="constitution-loading" role="status">Leggo la Costituzione…</p>
+      <div class="constitution-missing" id="constitution-missing" hidden>
+        <h3>La Costituzione non è presente</h3>
+        <p>Questo workspace non contiene ancora <code>constitution.md</code>. Non viene ricreato
+          automaticamente: un progetto nuovo deve partire da <code>scaffold.py</code>.</p>
+      </div>
+      <div class="constitution-problem" id="constitution-problem" role="alert" hidden></div>
+      <span class="msg" id="constitution-message" role="status" aria-live="polite"></span>
+
+      <form id="constitution-form" hidden>
+        <label class="constitution-label" for="constitution-body">Testo della bozza</label>
+        <p class="constitution-help" id="constitution-help">L'agente compila questa bozza con te.
+          Controlla obiettivo, limiti, stack, task, test e regole di stop prima di approvarla.</p>
+        <textarea id="constitution-body" class="constitution-editor" spellcheck="false"
+          aria-describedby="constitution-help"></textarea>
+        <div class="constitution-savebar">
+          <p class="constitution-meta" id="constitution-meta"></p>
+          <div class="row">
+            <button type="submit" id="constitution-save">Salva bozza</button>
+            <button type="button" class="ghost approval-button" id="constitution-approve">Approva e blocca</button>
+          </div>
+        </div>
+      </form>
+
+      <div id="constitution-approved" hidden>
+        <div class="constitution-seal" role="status">
+          <strong>Costituzione approvata — immutabile</strong>
+          <p>Questo è il testo che governa il progetto. Il sigillo SHA-256 viene verificato ogni volta
+            che la pagina lo apre. Se il file cambia fuori dal tool, il contenuto viene rifiutato.</p>
+          <dl class="constitution-stamp">
+            <div><dt>Approvata</dt><dd id="constitution-approved-at"></dd></div>
+            <div><dt>Impronta</dt><dd><code id="constitution-approved-sha"></code></dd></div>
+          </dl>
+        </div>
+        <pre class="constitution-readonly" id="constitution-readonly" tabindex="0"></pre>
+      </div>
+    </section>
+
     <!-- LA CODA DELLE TRANSIZIONI, sopra le schede perché vale per tutte: quando e' piena, il
          registro e' indietro rispetto ai file, e tutto quello che leggi in questa pagina — stato
          delle fasi, respinte, ratifiche — puo' essere vecchio. Il contenuto lo scrive `renderCoda`:
@@ -391,11 +441,13 @@
         pulsante che applica. Non usare <code>--dir</code> mentre altre corsie lavorano: applica
         anche le loro richieste.</p>
 
-      <h4 id="tut-pagine">Le cinque pagine</h4>
+      <h4 id="tut-pagine">Le sette pagine</h4>
       <ul>
         <li><b>Adesso</b>: la coda operativa. Cosa fare, posta in arrivo, cosa aspetta te, cosa è
           in corso, risposte che hai già dato. I numeri rossi sono cose da verificare; quelli verdi
           sono risposte già date.</li>
+        <li><b>Svolto</b>: tutto ciò che i registri dichiarano concluso, con ricerca, filtri e
+          l'elenco completo di unità, fasi, report e tentativi.</li>
         <li><b>Tempo</b>: il gantt con le date <i>misurate</i> e la mappa delle dipendenze, che
           mostra tutte le unità anche quando il filtro sopra dice «Aperte».</li>
         <li><b>Testimone</b>: il campo <code>next</code> dei report, parola per parola: cosa ha
@@ -404,6 +456,8 @@
           respinta.</li>
         <li><b>Percorso</b>: blocco per blocco, unità, fasi, esiti, commit che toccano i path
           dichiarati.</li>
+        <li><b>Costituzione</b>: la bozza del piano si corregge qui durante l'onboarding. Solo tu
+          puoi approvarla; dopo l'approvazione diventa immutabile e il tool ne verifica l'impronta.</li>
       </ul>
 
       <h4 id="tut-ciclo">Il ciclo di una fase</h4>

@@ -1,12 +1,18 @@
-# Constitution del progetto
-
+---
+schema: project-console-constitution/1.0
 status: draft
 project: "__PROJECT__"
 updated_at: ""
+approved_at: ""
+approved_sha256: ""
+---
+
+# Constitution del progetto
 
 > Questa è la scheda che l'agente compila con l'utente **prima** di creare task o scrivere codice.
-> Resta `draft` finché l'utente non conferma il piano. Solo allora diventa `approved` e il lavoro
-> può partire.
+> Resta `draft` finché l'utente non conferma il piano nella pagina **Costituzione** del console.
+> L'agente non approva mai il documento. Dopo l'approvazione il file diventa immutabile e il
+> console verifica la sua impronta SHA-256 a ogni lettura.
 
 ## 1. Obiettivo
 
@@ -73,4 +79,7 @@ updated_at: ""
 - [ ] L'utente ha confermato stack e deliverable.
 - [ ] L'utente ha confermato numero/ampiezza dei task e parallelismo.
 - [ ] L'utente ha confermato test, accettazione, rischi e stop rule.
-- [ ] La constitution può passare a `status: approved`.
+- [ ] L'utente ha controllato la bozza nella pagina Costituzione ed è pronto ad approvarla.
+
+> L'approvazione avviene **solo dal front-end**. Dopo il clic su «Approva e blocca» il documento
+> non è più riformabile: nessun agente e nessuna pagina possono modificarlo.

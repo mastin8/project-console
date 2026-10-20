@@ -41,8 +41,9 @@ consegna all'agente anche l'**Addendum obbligatorio**.
 
 L'agente deve farti domande e compilare `constitution.md` con obiettivo, stack, deliverable,
 numero e ampiezza dei task, skill, flusso normale/rigoroso, parallelismo, test, accettazione,
-rischi e stop rule. Solo dopo la tua conferma la constitution passa a `approved` e si crea la
-mappa del lavoro.
+rischi e stop rule. La bozza si controlla e si approva **solo dalla pagina Costituzione** del
+console. Gli agenti non possono approvarla; dopo il tuo clic il documento diventa immutabile e il
+tool ne verifica il sigillo SHA-256. Solo allora si crea la mappa del lavoro.
 
 ### Passo 1 — la cartella dei registri
 
@@ -59,7 +60,7 @@ disegnare*, *nessun prompt nel quaderno*. Non e' un errore: e' un progetto che n
 scritto niente.
 
 **Fermati qui prima del Passo 2.** Compila `FIRST-PROMPT.md`, fai l'intervista e approva
-`constitution.md`: senza constitution approvata non si creano task.
+`constitution.md` dal front-end: senza Costituzione approvata non si creano task.
 
 ### Passo 2 — la mappa del lavoro: `tasks.yaml`
 
@@ -253,7 +254,7 @@ esiste in due posti.
 
 ## Cosa si vede, e cosa puoi fare
 
-Il contenuto e' diviso in cinque pagine, una per domanda. Il testo lungo (prompt, dichiarazioni,
+Il contenuto e' diviso in sette pagine, una per domanda. Il testo lungo (prompt, dichiarazioni,
 report) non sta mai in pagina: si apre in un dialogo, con **Copia** e **Salva come file** accanto.
 
 - **Adesso** (`/`) — la coda, ed e' la pagina che si guarda tornando. In ordine di leva, tre gruppi:
@@ -276,6 +277,9 @@ report) non sta mai in pagina: si apre in un dialogo, con **Copia** e **Salva co
   tentativi, verdetti, autori e date, raggruppati per blocco. Le rifiniture sono in fondo con
   fasi, claim e prossimo report. Filtri per blocco e testo, "Espandi tutto" e "Chiudi tutto".
   Dati da `/api/svolto` (`project-console-worklog/1.0`), letti dai registri e dai puntatori.
+- **Costituzione** (`/costituzione`) — la bozza del piano si modifica e si salva dall'onboarding.
+  Solo l'utente può approvarla. Dopo il clic il file diventa immutabile; il console verifica il
+  sigillo SHA-256 a ogni lettura e rifiuta modifiche esterne.
 
 «Salva come file» scarica un `.md` col testo esatto del prompt, senza passare dalla clipboard: serve
 a isolare dove si rompe un testo — se il file e' giusto e il testo incollato no, il difetto e' nel

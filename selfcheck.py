@@ -42,6 +42,11 @@ PORTE = {
     "console/refinements.py": [
         "load", "merge", "sync", "update", "stage_map", "next_phase", "latest_report", "main",
     ],
+    "console/constitution.py": [
+        "load", "save_draft", "approve", "ConstitutionLocked", "ConstitutionConflict",
+        "ConstitutionIntegrityError", "ConstitutionInvalid", "ConstitutionMissing",
+    ],
+    "console/test_constitution.py": ["ConstitutionTests"],
     "console/test_refinements.py": ["main"],
     "console/server.py": ["main", "ReviewState"],
 }

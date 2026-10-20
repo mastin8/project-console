@@ -31,10 +31,13 @@ L'agente, prima di creare task o scrivere codice:
 2. fa domande all'utente su obiettivo, fuori perimetro, stack, deliverable, ampiezza dei task,
    skill, flusso normale/rigoroso, parallelismo, test, accettazione, rischi e stop rule;
 3. aggiorna `constitution.md` con le risposte, lasciando aperte le domande senza risposta;
-4. propone il piano finale e aspetta la conferma.
+4. propone il piano finale e chiede all'utente di approvarlo dalla pagina **Costituzione** del
+   console.
 
-Solo dopo la conferma `constitution.md` diventa `approved`; allora si creano `tasks.yaml`, si
-aprono le fasi e si parte. Una risposta mancante non si inventa.
+L'agente non scrive mai `status: approved` e non approva il documento al posto dell'utente. Solo
+dopo che il front-end lo ha approvato si creano `tasks.yaml`, si aprono le fasi e si parte. Da quel
+momento la Costituzione è immutabile: il console verifica il suo SHA-256 e rifiuta le modifiche.
+Una risposta mancante non si inventa.
 
 ## Come si raccontano blocchi e proprietà
 

@@ -132,7 +132,10 @@ def main(argv=None):
     for path in saltati:
         print(f"lasciato  {path}  (esisteva gia')")
     print(f"\nworkspace pronto: {root}")
-    print(f"primo passo: apri {root / 'FIRST-PROMPT.md'} e compila {root / 'constitution.md'} con l'agente")
+    print(
+        f"primo passo: apri {root / 'FIRST-PROMPT.md'}, fai compilare la bozza "
+        f"{root / 'constitution.md'} dall'agente, poi approva la Costituzione dal console"
+    )
     print(f"avvialo con: python3 console/server.py --workspace {root}")
     return 0
 

@@ -9,7 +9,9 @@ coordinatore.
 Ogni progetto parte dal download di questa repository e dal primo prompt con l'addendum di
 `FIRST-PROMPT.md`. Prima di aprire task o dispatchare lavoro, fai completare `constitution.md`
 con l'utente: obiettivo, stack, deliverable, ampiezza dei task, skill, flusso, parallelismo,
-test, accettazione, rischi e stop rule. Nessun task nasce da una constitution `draft`.
+test, accettazione, rischi e stop rule. La bozza viene approvata **solo dall'utente** nella pagina
+Costituzione del console; il coordinatore non scrive `status: approved`. Dopo l'approvazione la
+Costituzione è immutabile. Nessun task nasce da una constitution `draft`.
 
 ## Cosa fai
 

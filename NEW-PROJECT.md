@@ -15,7 +15,9 @@ Ogni progetto, anche un foglio bianco, parte da questa repository.
    iniziare a scrivere codice: deve intervistarti e compilare `constitution.md`.
 5. Controlla la constitution: obiettivo, fuori perimetro, stack, deliverable, numero e ampiezza dei
    task, skill, flusso normale/rigoroso, parallelismo, test, accettazione, rischi e stop rule.
-6. Solo dopo la tua conferma l'agente mette `status: approved`, crea `tasks.yaml`, apre le fasi e
-   comincia il primo task.
+6. Avvia il console, apri **Costituzione**, correggi se serve e premi **Approva e blocca**. Questo
+   è l'unico punto in cui la Costituzione diventa approvata; nessun agente può fare questo passo.
+7. Dopo l'approvazione il documento è immutabile. Solo allora l'agente crea `tasks.yaml`, apre le
+   fasi e comincia il primo task.
 
-Un progetto senza constitution approvata non è pronto per l'implementazione.
+Un progetto senza Costituzione approvata non è pronto per l'implementazione.
