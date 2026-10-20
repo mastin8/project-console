@@ -2,6 +2,9 @@
 
 Ogni progetto, anche un foglio bianco, parte da questa repository.
 
+Se Git, Python e Codex CLI sono già installati, il percorso rapido è il prompt parametrico in
+[`BOOTSTRAP-PROMPT.md`](BOOTSTRAP-PROMPT.md).
+
 1. Scarica/clona `project-console`.
 2. Crea il workspace:
 

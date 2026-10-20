@@ -8,6 +8,10 @@ di lavoro — scrive passando dal lock e dalla validazione dei registri.
 Non conosce nessun progetto: un **workspace** e' una cartella di dati, e il coordinatore ne serve
 quanti vuoi, anche contemporaneamente.
 
+Per preparare automaticamente una nuova macchina e un nuovo progetto da Codex CLI, usa
+**[BOOTSTRAP-PROMPT.md](BOOTSTRAP-PROMPT.md)**: contiene il prompt parametrico con le due conferme
+umane obbligatorie.
+
 Sapere cosa significano i numeri in pagina — e cosa fare quando li vedi — e' in
 **[docs/leggere-la-pagina.md](docs/leggere-la-pagina.md)**: testata, coda dei registri, le cinque
 schede, i pulsanti uno per uno, il vocabolario degli stati, e la tavola «se vedi X, fai Y».
