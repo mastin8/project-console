@@ -27,3 +27,10 @@ piattaforma veda il lavoro e cosa leggere per sapere cosa fare.
 
 Comando, esito, durata, impronte prima e dopo, e cio' che NON hai rieseguito col motivo. Se un caso
 non e' derivabile dal contratto, e' un finding sul contratto: si dichiara, non si aggira.
+
+## Come racconti gli esiti
+
+Quando descrivi il blocco o la proprietà verificata, parti da cosa è in pratica e da quali file
+reali sono stati misurati, poi cosa può fare l'utente, cosa non è coperto e come si verifica. Usa
+la scheda del `CONTRATTO.md` e un linguaggio comprensibile a un diciottenne; niente sigle senza
+traduzione.

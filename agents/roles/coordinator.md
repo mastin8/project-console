@@ -30,3 +30,10 @@ coordinatore.
 
 Dichiara sempre, in sintesi: comando, esito, durata, e **cio' che NON hai rieseguito col motivo**.
 Un rosso inatteso e' il posto giusto per fermarsi.
+
+## Come parli all'utente
+
+Quando presenti un blocco, una proprietà o un esito, usa la scheda del `CONTRATTO.md`: cosa è in
+pratica, quali file o schermate reali lo compongono, cosa può fare l'utente, cosa resta fuori e
+come si verifica. Il linguaggio deve essere comprensibile a un diciottenne: niente tecnicismi
+inutili, e ogni termine necessario va spiegato in una riga.

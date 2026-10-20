@@ -83,6 +83,482 @@ def consegna_misurata(workspace, task_id):
     }
 
 
+_OBLIGATION_SUFFIXES = (
+    "-BEFORE-END01",
+    "-UNREACHABLE-ON-SCREEN",
+    "-UNREACHABLE-BEHIND-BARRIER",
+    "-NOT-IMPLEMENTED",
+    "-SEPARATE-UNIT",
+    "-DOUBLE-LOAD",
+    "-CANDIDATE-DTO-DECLARED",
+    "-NOT-WRITTEN",
+    "-REJECTION-CODES",
+)
+
+
+def _obligation_prefix(identifier):
+    """Il prefisso con cui il registro nomina le fasi collegate a un obbligo."""
+    for suffisso in _OBLIGATION_SUFFIXES:
+        if identifier.endswith(suffisso):
+            return identifier[: -len(suffisso)]
+    return identifier
+
+
+def _latest_obligation_report(workspace, prefix):
+    """L'ultimo report il cui nome comincia col prefisso dell'obbligo."""
+    if workspace is None:
+        return None, None
+    cartella = workspace.root / workspace.deliverable_prefix
+    if not cartella.is_dir():
+        return None, None
+    candidati = []
+    for percorso in cartella.glob(f"{prefix}*"):
+        if percorso.is_dir():
+            candidati.extend(percorso.glob("attempt-*.yaml"))
+        elif percorso.is_file() and percorso.suffix in (".yaml", ".yml"):
+            candidati.append(percorso)
+    if not candidati:
+        return None, None
+
+    def chiave(percorso):
+        try:
+            documento = _carica(percorso.read_text(encoding="utf-8")) or {}
+        except Exception:  # noqa: BLE001 - un report illeggibile non ferma la pagina
+            return (0, percorso.stat().st_mtime_ns, None)
+        return (
+            int(documento.get("attempt") or 0),
+            1 if percorso.name.startswith("attempt-") else 0,
+            percorso.stat().st_mtime_ns,
+            documento,
+        )
+
+    tentativi = [chiave(percorso) for percorso in candidati]
+    _, _, _, documento = max(tentativi, key=lambda voce: (voce[0], voce[1], voce[2]))
+    percorso = max(
+        zip(candidati, tentativi),
+        key=lambda coppia: (coppia[1][0], coppia[1][1], coppia[1][2]),
+    )[0]
+    return documento, percorso
+
+
+def _refinement_stage(item):
+    """Una lettura A/E/T/R dagli atti depositati, dichiarata come derivata.
+
+    Le rifiniture non hanno ancora una unita' nel registro: questa e' la forma che rende
+    leggibile quello che gli atti provano, senza spacciarla per una claim.
+    """
+    verdict = str(item.get("report_verdict") or "").lower()
+    phase = str(item.get("report_phase") or "").upper()
+    closed = bool(item.get("report_closed"))
+    taken = bool(item.get("taken"))
+    report = bool(verdict)
+    stages = {
+        "A": "done" if report or taken else "missing",
+        "E": "missing",
+        "T": "missing",
+        "R": "done" if closed else "missing",
+    }
+    if closed:
+        stages["E"] = "done"
+        stages["T"] = "done"
+        return stages, "R", "report.closed"
+    if phase == "R":
+        stages["E"] = "done"
+        stages["T"] = "done"
+        stages["R"] = "done"
+        return stages, "R", "report.phase"
+    if phase == "T":
+        stages["E"] = "done"
+        stages["T"] = "done"
+        if "fail" in verdict or "needs_changes" in verdict:
+            return stages, "E", "report.phase"
+        return stages, "R", "report.phase"
+    if phase == "A":
+        return stages, "E", "report.phase"
+    if phase in ("GATE_MEASUREMENT", "GATE"):
+        stages["E"] = "partial"
+        return stages, "E", "report.phase"
+    if report:
+        if "needs_changes" in verdict or "fail" in verdict:
+            stages["E"] = "in_progress" if taken else "partial"
+            return stages, "E", "report.verdict"
+        # Un obbligo può restare aperto NON perché manchi un altro E, ma perché le riparazioni
+        # sono di altri proprietari (F1/F2/F3, pin di F4/F5/F6). Misurato il 2026-10-19 su
+        # END01: il report diceva «riparare o riaccettare… e ripinnare…», e la pagina mostrava
+        # ancora «Prossimo: E» perché il verdetto conteneva `obligation_open`.
+        if "obligation_open" in verdict:
+            prossimo = str(item.get("report_next") or "").lower()
+            if any(parola in prossimo for parola in ("ripar", "ripinn", "proprietar", "owner")):
+                stages["E"] = "done"
+                return stages, "OWNERS", "report.next"
+        # `still_open_remeasured` e' una misura E consegnata; la verifica T resta da fare.
+        # `measurement_delivered...` e' una misura parziale: il prossimo atto e' ancora E.
+        if (
+            "remeasure_required" in verdict
+            or "partial" in verdict
+            or "measurement_delivered" in verdict
+            or "obligation_open" in verdict
+        ):
+            stages["E"] = "partial"
+            return stages, "E", "report.verdict"
+        if "still_open" in verdict or "remeasured" in verdict:
+            stages["E"] = "done"
+            return stages, "T", "report.verdict"
+        return stages, "?", "unknown"
+    if taken:
+        stages["E"] = "in_progress"
+        return stages, "E", "claim"
+    return stages, "A", "no_report"
+
+
+def _latest_obligation_note(item):
+    """L'ultima nota datata del registro, quella che contiene i numeri correnti."""
+    chiavi = [
+        chiave
+        for chiave, valore in item.items()
+        if isinstance(valore, str)
+        and re.match(
+            r"^(decision_pass|gate_remeasure|disposition|state_|fix_delivered|"
+            r"verification_independent|second_act|closure_evidence)_",
+            chiave,
+        )
+    ]
+    if not chiavi:
+        return ""
+    def data_chiave(chiave):
+        trovata = re.search(r"(\d{4})_(\d{2})_(\d{2})", chiave)
+        return (trovata.group(0) if trovata else "", chiave)
+
+    nota = " ".join(str(item[max(chiavi, key=data_chiave)]).split())
+    return nota[:700] + ("…" if len(nota) > 700 else "")
+
+
+def _next_report_path(item, workspace=None):
+    """Dove deve finire il prossimo atto, seguendo la convenzione dei report esistenti."""
+    if item.get("next_report"):
+        return str(item["next_report"])
+    percorso = str(item.get("report_path") or "")
+    base = str(item.get("claim_task") or item.get("id") or "rifinitura")
+    numero = 1
+    prossimo = str(item.get("report_next") or "")
+    codici = [
+        codice
+        for codice in re.findall(r"\b[A-Z][A-Z0-9-]{2,}\b", prossimo)
+        if codice not in {str(item.get("id") or ""), "T", "R", "A", "E"}
+    ]
+    if codici and workspace is not None:
+        base = codici[0]
+        cartella = workspace.root / workspace.deliverable_prefix / base
+        tentativi = []
+        if cartella.is_dir():
+            for file in cartella.glob("attempt-*.yaml"):
+                trovato = re.search(r"attempt-(\d+)", file.name)
+                if trovato:
+                    tentativi.append(int(trovato.group(1)))
+        numero = (max(tentativi) + 1) if tentativi else 1
+        return f"{workspace.deliverable_prefix}{base}/attempt-{numero}.yaml"
+    if percorso:
+        pezzo = Path(percorso)
+        if pezzo.name.startswith("attempt-"):
+            base = pezzo.parent.name
+            trovato = re.search(r"attempt-(\d+)", pezzo.name)
+            numero = int(trovato.group(1)) + 1 if trovato else 2
+        elif pezzo.suffix in (".yaml", ".yml"):
+            base = pezzo.stem
+            numero = int(item.get("report_attempt") or 0) + 1
+    if item.get("claim_task") and item.get("claim_task") != base:
+        base = str(item["claim_task"])
+        numero = 1
+    return f"reports/{base}/attempt-{numero}.yaml"
+
+
+def _refinement_prompt(item, workspace=None):
+    stage = item.get("next_stage") or "A"
+    etichette = {
+        "A": "Analisi",
+        "E": "Esecuzione",
+        "T": "Verifica indipendente",
+        "R": "Accettazione",
+        "OWNERS": "Riparazione dei proprietari",
+        "A2": "Design A2",
+    }
+    fase_etichetta = etichette.get(stage, "Fase non determinata")
+    prossimo_report = _next_report_path(item, workspace=workspace)
+    righe = [
+        f"Sei l'agente di rifinitura per l'obbligo {item['id']}.",
+        f"Fase da eseguire: {stage} · {fase_etichetta}.",
+        f"Gate: {'BLOCCA ' + item['required_before'] if item['gate'] else 'non bloccante'}.",
+        f"Prossimo report: {prossimo_report}.",
+        # LEGGE DEL PROJECT-TOOL (2026-10-20): la rifinitura serve a sapere se il tool funziona.
+        # Le due cose vanno in OGNI prompt, perche' e' il prompt che l'agente legge per primo.
+        "Legge della rifinitura: serve a sapere se il tool funziona. (1) Dichiara cosa non "
+        "funziona e riparalo subito sui byte vivi; niente report-fiume. (2) Chiudi con il "
+        "resoconto: cosa e' verde, cosa e' rosso con la causa, e i soli timbri diversi in "
+        "`fingerprint_mismatches` (`label`, `file`, `path`, `declared`, `live`). Non ripinnare a "
+        "mano: la pagina ha un pulsante solo, «Raccorda tutti», che li allinea (da terminale "
+        "`console/pins.py --workspace <progetto> --apply`).",
+    ]
+    if item.get("owners"):
+        righe.append(
+            "Unità proprietarie (non la chat): " + ", ".join(item["owners"]) + "."
+        )
+    if item.get("report_verdict"):
+        righe.append(
+            f"Ultimo atto: {item.get('report_author') or 'autore non dichiarato'} · "
+            f"{item['report_verdict']}"
+            + (f" (attempt {item['report_attempt']})" if item.get("report_attempt") else "")
+            + "."
+        )
+    if item.get("report_phase"):
+        righe.append(f"Fase dell'ultimo atto: {item['report_phase']}.")
+    if item.get("report_next"):
+        righe.append(f"Prossimo atto dichiarato dal report: {item['report_next']}")
+    if (
+        str(item.get("report_phase") or "").upper() == "R"
+        and "needs_changes" in str(item.get("report_verdict") or "").lower()
+    ):
+        righe.append(
+            "L'accettazione R ha respinto: torna a E sui finding del report, poi serve una "
+            "nuova T e una nuova R. Non riaprire R prima di aver chiuso quei finding."
+        )
+    # Il mandato esatto del prossimo atto, quando il report lo scrive in `next_tasks`: senza,
+    # «Design A2» resta un titolo e l'agente non sa quali fermi numerici deve rispettare.
+    tasks = [t for t in item.get("report_next_tasks") or [] if isinstance(t, dict)]
+    base_prossimo = Path(str(item.get("next_report") or "")).parent.name
+    scelti = [t for t in tasks if str(t.get("id")) == base_prossimo] or tasks[:1]
+    for task in scelti:
+        if task.get("action"):
+            righe.append(f"Mandato dichiarato per {task.get('id')}: {task['action']}")
+    if stage == "OWNERS":
+        righe.append(
+            "Prossimo atto: le riparazioni sono dei proprietari indicati nel report; "
+            "non eseguire un altro E su questo obbligo prima che siano chiuse."
+        )
+    if stage == "A2":
+        righe.append(
+            "Prossimo atto: scrivere il design A2 con le fermate numeriche del census; "
+            "non eseguire un altro E prima che il design abbia ridotto il perimetro."
+        )
+    if item.get("report_path"):
+        righe.append(f"Report: {item['report_path']}.")
+    if item.get("sync_warning"):
+        righe.append(f"ATTENZIONE: {item['sync_warning']}")
+    verdict = str(item.get("report_verdict") or "").lower()
+    report_phase = str(item.get("report_phase") or "").upper()
+    nota_superata = report_phase in ("T", "R") and (
+        "pass" in verdict or "accept" in verdict
+    )
+    if item.get("latest_note") and not nota_superata:
+        righe.append(f"Nota del registro: {item['latest_note']}")
+    if (
+        item.get("what")
+        and not item.get("latest_note")
+        and (not item.get("report_path") or stage == "E")
+    ):
+        righe.append(f"Cosa era aperto: {item['what']}")
+    if item.get("taken"):
+        righe.append(
+            f"Presa in carico: {item.get('taken_by') or 'titolare non dichiarato'}"
+            + (f" · {item['claim_task']}" if item.get("claim_task") else "")
+            + "."
+        )
+    else:
+        righe.append(
+            f"Presa: nessuna presa viva. Prendi in carico l'obbligo {item['id']} "
+            "(o la fase collegata) prima di scrivere, con la stessa forma delle fasi; "
+            "se il registro non ha una voce per una rifinitura, depositala come nuova voce "
+            "e dichiara che è una rifinitura."
+        )
+    righe.append("Perimetro: leggi il report e i file citati; scrivi il nuovo report, il puntatore e le transizioni; non riscrivere gli atti pubblicati. Non toccare byte di prodotto in T o R.")
+    if workspace is not None:
+        righe.append(
+            f"Registra fase, claim e report in `{workspace.refinements_path}` con "
+            f"`python3 {ROOT / 'console/refinements.py'} --workspace {workspace.root} "
+            f"--obligation {item['id']} ...`; non creare un secondo registro."
+        )
+    if stage not in ("A", "E", "T", "R"):
+        righe.append(
+            "Fase non determinabile: il report più recente non dichiara `phase: A|E|T|R`. "
+            "Non indovinare: leggi il report, dichiara la fase esplicita e deposita l'atto "
+            "prima di toccare qualunque byte."
+        )
+    elif stage == "E":
+        righe.append(
+            "Completa l'esecuzione: leggi l'ultimo atto, esegui le misure mancanti e deposita "
+            "un nuovo attempt con comando, esito, durata e impronte prima/dopo. Non dichiarare "
+            "chiuso ciò che l'ultimo report lascia aperto."
+        )
+        if "remeasure_required" in (item.get("latest_note") or ""):
+            righe.append(
+                "Le voci `remeasure_required` della tabella sono il lavoro E: per ognuna "
+                "dichiara `remeasured` con nuovo attempt/log oppure `irrelevant` con il "
+                "criterio che la prova sosteneva."
+            )
+        righe.append(
+            "E è done quando il nuovo report e la tabella aggiornata sono pubblicati; T e R "
+            "restano aperti."
+        )
+    elif stage == "T":
+        righe.append(
+            "Esegui la verifica indipendente: deriva i casi dai criteri, non riusare il banco "
+            "dell'autore, misura i byte vivi e deposita l'atto T. Se una parte non è misurabile, "
+            "dichiarala come limite."
+        )
+        righe.append("T è done quando il tester distinto pubblica l'atto; R resta aperta.")
+    elif stage == "R":
+        righe.append(
+            "Esegui l'accettazione: giudica i criteri e l'atto T, poi deposita accept_unit o "
+            "needs_changes con l'evidenza esatta. La R è ciò che chiude l'obbligo."
+        )
+        righe.append(
+            "R è done quando l'accettazione è registrata e l'obbligo passa a closed con "
+            "l'evidenza di chiusura."
+        )
+    else:
+        righe.append(
+            "Apri l'analisi: leggi il registro e gli atti citati, definisci il perimetro e "
+            "deposita l'atto A prima di toccare il prodotto."
+        )
+    righe.append(
+        "Quando pubblichi il report, segna lo stadio `delivered`, non `accepted`: "
+        "l'accettazione la registra l'utente dalla pagina."
+    )
+    righe.append(
+        "Prima di scrivere: verifica che non ci sia un'altra presa viva; dopo, rilasciala. "
+        "Non scrivere `state.yaml` a mano: deposita le transizioni. "
+        "Se un file del perimetro è mosso da una claim viva, pinna la revisione esatta o fermati. "
+        "Chi ha scritto i byte non può firmare la verifica indipendente T (D020). "
+        "Dichiarazione finale obbligatoria: comando, RC, durata, impronte prima/dopo, cosa non "
+        "hai eseguito e perché. Non dichiarare chiuso l'obbligo senza un atto che lo chiuda; "
+        "se qualcosa non è leggibile, dichiaralo invece di inventarlo."
+    )
+    return "\n".join(righe) + "\n"
+
+
+def open_obligations(state, workspace=None):
+    """Gli obblighi aperti del registro, nella forma che la pagina puo' disegnare.
+
+    Perche' esiste: la pagina «Adesso» contava solo le unita' aperte. Con tutte le unita'
+    accettate mostrava «Tutto chiuso» mentre nel registro restavano obblighi con scadenza
+    decorsa: il caso misurato su Binche il 2026-10-19, 9 righe aperte e una pagina che diceva
+    «Nessuna unita' aperta: il progetto e' alla fine del percorso». La pagina non deve dedurre
+    la chiusura dal conteggio delle unita': gli obblighi sono un'altra cosa e si leggono qui.
+
+    Sola lettura. `closure_kind` e' trattato come chiuso perche' le voci storiche lo usano al
+    posto di `status: closed`; `required_before` nullo non e' una scadenza di gate.
+    """
+    claims = {}
+    for claim in state.get("active_claims") or []:
+        if not isinstance(claim, dict):
+            continue
+        if claim.get("status") in LIVE_STATUSES and not claim.get("released_at"):
+            claims[str(claim.get("task_id") or "")] = claim
+    fuori = []
+    for item in state.get("execution_attempts") or []:
+        if not isinstance(item, dict) or not item.get("obligation_id"):
+            continue
+        if str(item.get("status") or "").strip().lower() == "closed" or item.get("closure_kind"):
+            continue
+        scadenza = item.get("required_before")
+        if not scadenza or str(scadenza).strip().lower() in ("none", "null"):
+            scadenza = None
+        identificativo = str(item["obligation_id"])
+        prefisso = _obligation_prefix(identificativo)
+        presa = None
+        for task_id, claim in claims.items():
+            if task_id == identificativo or task_id.startswith(prefisso):
+                presa = claim
+                break
+        report, report_path = _latest_obligation_report(workspace, prefisso)
+        voce = {
+                "id": identificativo,
+                "status": str(item.get("status") or "open"),
+                "required_before": scadenza,
+                "gate": scadenza in GATE_UNITS,
+                "taken": presa is not None,
+                "taken_by": str(
+                    (presa or {}).get("taken_by")
+                    or (presa or {}).get("owner_agent")
+                    or (presa or {}).get("owner")
+                    or ""
+                ),
+                "taken_at": str((presa or {}).get("taken_at") or ""),
+                "claim_task": str((presa or {}).get("task_id") or ""),
+                "report_verdict": str((report or {}).get("verdict") or ""),
+                "report_handoff": str((report or {}).get("handoff") or ""),
+                "report_phase": str((report or {}).get("phase") or ""),
+                "report_role": str((report or {}).get("role") or ""),
+                "report_next": str((report or {}).get("next") or ""),
+                "report_next_tasks": (report or {}).get("next_tasks") or [],
+                "report_attempt": (report or {}).get("attempt"),
+                "report_author": str((report or {}).get("authored_by") or (report or {}).get("agent_id") or ""),
+                "report_path": (
+                    str(report_path.relative_to(workspace.root))
+                    if report_path is not None and workspace is not None
+                    else ""
+                ),
+                "report_closed": bool(
+                    (report or {}).get("closure_condition_met") is True
+                    or str((report or {}).get("obligation_status_after") or "") == "closed"
+                ),
+                "domain": str(item.get("domain") or ""),
+                "owner": str(item.get("owner") or ""),
+                "what": str(item.get("what") or item.get("note") or ""),
+                "note": str(item.get("note") or ""),
+                "origin": str(item.get("origin") or ""),
+        }
+        stages, prossima, fonte_fase = _refinement_stage(voce)
+        voce["stages"] = stages
+        voce["next_stage"] = prossima
+        voce["stage_source"] = fonte_fase
+        voce["stage_known"] = prossima in ("A", "E", "T", "R")
+        voce["latest_note"] = _latest_obligation_note(item)
+        voce["next_prompt"] = _refinement_prompt(voce, workspace=workspace)
+        fuori.append(voce)
+    return fuori
+
+
+def open_independence_debts(state):
+    """Le ratifiche indipendenti mancanti, lette dai task che le dichiarano.
+
+    Perche' esiste: un debito D008 non e' un obbligo `execution_attempts` e non e' una fase
+    aperta (la fase e' `accepted`). Senza questa lettura restava solo dentro il testo `next` di
+    un report, e la pagina mostrava i prompt delle fasi gia' accettate invece dell'atto di
+    ratifica che serve. Il marcatore `d008_debt_declared_*` e' la convenzione del pack; il campo
+    `ratification` assente e' la misura.
+    """
+    debiti = {}
+    for task_id, blocco in ((state.get("tasks") or {})).items():
+        if not isinstance(blocco, dict) or blocco.get("ratification"):
+            continue
+        chiave = next(
+            (k for k in blocco if str(k).startswith("d008_debt_declared_")),
+            None,
+        )
+        if not chiave:
+            continue
+        unita = re.match(r"^[A-Z]+[0-9]+", str(task_id))
+        unita_id = unita.group(0) if unita else str(task_id)
+        voce = debiti.setdefault(
+            unita_id,
+            {
+                "id": f"{unita_id}-INDEPENDENT-RATIFICATION",
+                "unit": unita_id,
+                "tasks": [],
+                "status": "open",
+                "required_before": "END03",
+                "owner": "coordinamento, firma che non ha eseguito quei byte",
+                "what": (
+                    f"Manca la ratifica indipendente di {unita_id}: le fasi sono accettate, "
+                    "ma il registro non ha un atto `ratification` distinto dall'esecutore."
+                ),
+                "note": str(blocco.get(chiave) or ""),
+            },
+        )
+        voce["tasks"].append(str(task_id))
+    return list(debiti.values())
+
+
 #: Il codice del coordinatore (questo repo) e quello dei registri (il workspace) sono due cose:
 #: il primo si importa da qui, il secondo non si importa affatto — si legge.
 sys.path[:0] = [str(ROOT), str(ROOT / "registers"), str(Path(__file__).resolve().parent)]
@@ -91,6 +567,9 @@ sys.path.insert(0, str(ROOT))
 import apply_transitions  # noqa: E402
 import activate  # noqa: E402 - attivare: riserva la fase e deposita l'ordine
 import esiti  # noqa: E402 - gli esiti di un atto in punti: criteri, casi, finding, limiti
+import recap  # noqa: E402 - il recap dei sospesi: registri + esiti, in un prompt
+import refinements  # noqa: E402 - la forma esplicita delle rifiniture: A/E/T/R, claim, report
+import pins  # noqa: E402 - i timbri diversi: resoconto e raccordo unico
 import handoff  # noqa: E402 - cosa c'e' da fare dopo: il testimone lasciato da chi ha finito
 import inbox  # noqa: E402 - la posta in arrivo: i messaggi depositati interi, uno per file
 import mandate  # noqa: E402 - il prompt di una fase: dal quaderno, o composto dal registro
@@ -106,6 +585,7 @@ PACK_DEFAULT = Path(os.environ.get("CONSOLE_WORKSPACE") or Path.cwd()).expanduse
 LIVE_STATUSES = ("active", "taken", "pre_registered", "ready", "active_extension")
 DONE = ("accepted",)
 PHASES = ("A", "E", "T", "R")
+GATE_UNITS = {"END01", "END02", "END03", "A11Y01", "A11Y02", "A11Y03"}
 PHASE_KIND = {
     "analysis": "Analisi",
     "implementation": "Esecuzione",
@@ -191,6 +671,116 @@ class ReviewState:
         # `.get(chiave, default)` NON applica il default in quel caso — e' la forma che il modello
         # di workspace usa proprio perche' ci si possa appendere. Misurato su un progetto nuovo.
         tasks = state.get("tasks") or {}
+        # Gli obblighi aperti non sono unita': se restano fuori dal modello della pagina,
+        # «Tutto chiuso» e' falso anche con 70/70 unita' accettate.
+        obligations = open_obligations(state, workspace=self.workspace)
+        dispatch = {}
+        for voce in inbox.voci(self.workspace, tutte=True):
+            if voce.get("kind") == "prompt-consegnato" and voce.get("phase"):
+                dispatch.setdefault(str(voce["phase"]), []).append(voce)
+        for obligation in obligations:
+            ricevute = dispatch.get(obligation["id"], [])
+            ultima = (
+                max(ricevute, key=lambda voce: voce.get("received_at") or "")
+                if ricevute
+                else None
+            )
+            obligation["dispatched"] = ultima is not None
+            obligation["dispatched_at"] = str(ultima.get("received_at")) if ultima else ""
+            obligation["dispatch_receipt"] = ultima.get("file") if ultima else ""
+        try:
+            rifiniture = refinements.load(self.workspace)
+        except ValueError:
+            rifiniture = {}
+        for obligation in obligations:
+            voce = rifiniture.get(obligation["id"])
+            if voce:
+                proiezione = {
+                    "report_path": obligation.get("report_path"),
+                    "report_attempt": obligation.get("report_attempt"),
+                    "report_phase": obligation.get("report_phase"),
+                    "report_verdict": obligation.get("report_verdict"),
+                }
+                refinements.merge(obligation, voce, workspace=self.workspace)
+                # La rifinitura dichiara le fasi, ma il report può dire che il prossimo atto non è
+                # un altro E: le riparazioni sono di altri proprietari (F1/F2/F3) e i pin di
+                # F4/F5/F6. In quel caso il report vince sulla fase dichiarata.
+                verdetto_obbligo = str(obligation.get("report_verdict") or "").lower()
+                prossimo_obbligo = str(obligation.get("report_next") or "").lower()
+                if "obligation_open" in verdetto_obbligo and any(
+                    parola in prossimo_obbligo
+                    for parola in ("ripar", "ripinn", "proprietar", "owner")
+                ):
+                    obligation["next_stage"] = "OWNERS"
+                    obligation["stage_source"] = "report.next"
+                    obligation["stage_known"] = True
+                    if isinstance(obligation.get("stages"), dict):
+                        obligation["stages"]["E"] = "done"
+                # La fase del prossimo atto la dice `next_report`, non la prosa del `next`: un
+                # testo che dice «Design A2 consegnato» può convivere con un `next_report` che
+                # punta a E attempt 3. Misurato il 2026-10-19 su UPL04Z-SUB300: la pagina restava
+                # su A2 dopo che A2 era stata consegnata.
+                prossimo_report_obbligo = str(obligation.get("next_report") or "")
+                base_prossimo = Path(prossimo_report_obbligo).parent.name.upper()
+                if base_prossimo and base_prossimo != str(obligation.get("id") or "").upper():
+                    for suffisso, fase in (("A2", "A2"), ("E", "E"), ("T", "T"), ("R", "R")):
+                        if base_prossimo.endswith(suffisso):
+                            obligation["next_stage"] = fase
+                            obligation["stage_source"] = "refinements.next_report"
+                            obligation["stage_known"] = True
+                            break
+                if (
+                    int(proiezione.get("report_attempt") or 0)
+                    > int(obligation.get("report_attempt") or 0)
+                ):
+                    obligation["sync_warning"] = (
+                        "Report più recente non registrato in refinements.yaml: "
+                        f"{proiezione.get('report_path')} "
+                        f"(attempt {proiezione.get('report_attempt')}, "
+                        f"fase {proiezione.get('report_phase') or 'non dichiarata'})."
+                    )
+                # La rifinitura che aspetta l'accettazione di una fase DELIVERED: è il passaggio
+                # «accetta A2 e apri E». L'etichetta viene dal report della fase (A2, A3, E…),
+                # non dal numero scritto a mano.
+                pending = None
+                prossimo_rif = str(obligation.get("next_report") or "")
+                for rid, item_rif in rifiniture.items():
+                    fasi_rif = item_rif.get("phases") or {}
+                    for fase_rif in ("A", "E", "T", "R"):
+                        voce_rif = fasi_rif.get(fase_rif) or {}
+                        if str(voce_rif.get("status")) != "delivered":
+                            continue
+                        if prossimo_rif and str(item_rif.get("next_report") or "") != prossimo_rif:
+                            continue
+                        percorso_rif = str(voce_rif.get("report") or "")
+                        base_rif = Path(percorso_rif).parent.name
+                        trovato = re.search(
+                            rf"({re.escape(fase_rif)})(\d*)$", base_rif
+                        )
+                        etichetta = (
+                            f"{trovato.group(1)}{trovato.group(2)}"
+                            if trovato
+                            else fase_rif
+                        )
+                        pending = {
+                            "id": rid,
+                            "phase": fase_rif,
+                            "label": etichetta,
+                            "attempt": voce_rif.get("attempt"),
+                            "report": percorso_rif,
+                            "verdict": voce_rif.get("verdict"),
+                            "author": voce_rif.get("author"),
+                            "next": item_rif.get("next") or "",
+                            "next_report": item_rif.get("next_report") or "",
+                        }
+                        break
+                    if pending:
+                        break
+                obligation["pending_refinement"] = pending
+                obligation["next_prompt"] = _refinement_prompt(
+                    obligation, workspace=self.workspace
+                )
+        independence_debts = open_independence_debts(state)
 
         blocks = {}
         for unit in tasks_doc.get("units") or []:
@@ -408,6 +998,18 @@ class ReviewState:
                 "incoherent": incoherent,
                 "claims": len(claims),
                 "open_questions": len(open_questions),
+                "open_obligations": len(obligations),
+                "open_gate_obligations": sum(1 for item in obligations if item["gate"]),
+                "open_gate_obligations_taken": sum(
+                    1 for item in obligations if item["gate"] and item["taken"]
+                ),
+                "open_gate_obligations_dispatched": sum(
+                    1 for item in obligations if item["gate"] and item["dispatched"]
+                ),
+                "open_gate_obligations_report_closed": sum(
+                    1 for item in obligations if item["gate"] and item["report_closed"]
+                ),
+                "open_independence_debts": len(independence_debts),
             },
             "blocks": [
                 {"domain": domain, "units": units}
@@ -419,6 +1021,15 @@ class ReviewState:
             # sparirebbe dalla pagina invece di finire fra le risposte gia' date.
             "answered": answered + closed_decisions,
             "claims": claims,
+            # Gli obblighi nominati (`execution_attempts`), con scadenza e proprietario: la
+            # scheda «Cosa fare adesso» li disegna accanto alle fasi da mandare. Senza questa
+            # chiave la pagina non poteva saperne nulla, perche' `/api/state` e' il suo unico
+            # modello e `execution_attempts` non ci arrivava.
+            "obligations": obligations,
+            # I timbri diversi dichiarati dai report di rifinitura. La pagina li elenca e li
+            # riallinea TUTTI con un pulsante solo (legge del project-tool, 2026-10-20).
+            "pins": pins.scan(self.workspace),
+            "independence_debts": independence_debts,
             "decisions": open_decisions,
             # I prompt del quaderno con lo stato RICAVATO (registri + file di consegna). Non c'e'
             # un ripiego silenzioso: se questo fallisce la vista esce in errore e lo dice. Una
@@ -468,6 +1079,7 @@ class ReviewState:
                     "codes": voce["codes"],
                 }
                 for voce in dovuto
+                if voce["from_open"]
             ],
             # La posta in arrivo: quello che e' arrivato e non e' ancora finito in un report. E'
             # l'unico posto della pagina che non legge i registri — legge una cartella di
@@ -537,6 +1149,141 @@ class ReviewState:
             decisions_doc=self._load(self.workspace.user_decisions) or {},
             prompt_entries=next_prompts.build(self.pack, state=state),
         )
+
+    def worklog(self):
+        """Tutto il lavoro registrato, in una forma leggibile: unità, fasi, report, rifiniture."""
+        state = self._load(self.workspace.state) or {}
+        tasks_doc = self._load(self.workspace.tasks) or {}
+        registrate = state.get("tasks") or {}
+        ordine = {fase: indice for indice, fase in enumerate(PHASES)}
+        blocchi = {}
+        fasi_totali = 0
+        fasi_accettate = 0
+        unita_accettate = 0
+        report_totali = 0
+        tentativi = 0
+        date = []
+        for unita in tasks_doc.get("units") or []:
+            unit_id = str(unita.get("id") or "")
+            if not unit_id:
+                continue
+            fasi = []
+            for task in tasks_doc.get("tasks") or []:
+                if str(task.get("unit_id")) != unit_id:
+                    continue
+                fasi_totali += 1
+                reg = registrate.get(str(task.get("id"))) or {}
+                if str(reg.get("status")) == "accepted":
+                    fasi_accettate += 1
+                attempt = int(reg.get("attempt") or 0)
+                tentativi += attempt
+                pointer = str(reg.get("report") or task.get("report") or "")
+                meta = {}
+                percorso = self.workspace.path(pointer) if pointer else None
+                if percorso is not None and percorso.is_file():
+                    report_totali += 1
+                    try:
+                        documento = _carica(percorso.read_text(encoding="utf-8")) or {}
+                    except Exception:  # noqa: BLE001 - un pointer illeggibile resta dichiarato
+                        meta = {"verdict": "non leggibile"}
+                    else:
+                        meta = {
+                            "verdict": str(
+                                documento.get("verdict")
+                                or documento.get("recommendation")
+                                or ""
+                            ),
+                            "author": str(
+                                documento.get("authored_by")
+                                or documento.get("agent_id")
+                                or ""
+                            ),
+                            "published_at": str(documento.get("published_at") or ""),
+                            "role": str(documento.get("role") or ""),
+                            "attempt_pointer": documento.get("attempt"),
+                        }
+                        if meta["published_at"]:
+                            date.append(meta["published_at"])
+                fase = str(task.get("id") or "")
+                fasi.append(
+                    {
+                        "id": fase,
+                        "suffix": fase[len(unit_id) :],
+                        "kind": task.get("kind"),
+                        "title": task.get("title"),
+                        "status": reg.get("status", "pending"),
+                        "attempt": attempt,
+                        "report": pointer or None,
+                        "report_attempt": meta.get("attempt_pointer"),
+                        **meta,
+                    }
+                )
+            if not fasi:
+                continue
+            fasi.sort(key=lambda voce: ordine.get(voce["suffix"], 9))
+            accettata = all(voce["status"] == "accepted" for voce in fasi)
+            if accettata:
+                unita_accettate += 1
+            blocchi.setdefault(str(unita.get("domain") or "senza-dominio"), []).append(
+                {
+                    "id": unit_id,
+                    "title": unita.get("title"),
+                    "deliverable": unita.get("deliverable"),
+                    "accepted": accettata,
+                    "phases": fasi,
+                }
+            )
+        for unita in blocchi.values():
+            unita.sort(key=lambda voce: voce["id"])
+        try:
+            rifiniture = refinements.load(self.workspace)
+        except ValueError:
+            rifiniture = {}
+        rifiniture_voci = []
+        for item in rifiniture.values():
+            fasi = refinements.stage_map(item)
+            chiusa = all(stato == "done" for stato in fasi.values())
+            claim = item.get("claim") or {}
+            rifiniture_voci.append(
+                {
+                    "id": item.get("id"),
+                    "title": item.get("title") or "",
+                    "owners": item.get("owners") or [],
+                    "stages": fasi,
+                    "closed": chiusa,
+                    "next": refinements.next_phase(item),
+                    "claim": {
+                        "status": claim.get("status"),
+                        "taken_by": claim.get("taken_by") or claim.get("owner") or "",
+                        "task": claim.get("task") or "",
+                        "taken_at": claim.get("taken_at") or "",
+                    },
+                    "next_report": item.get("next_report") or "",
+                }
+            )
+        rifiniture_voci.sort(key=lambda voce: voce["id"])
+        return {
+            "schema": "project-console-worklog/1.0",
+            "project": self.workspace.project,
+            "generated": datetime.now().strftime("%Y-%m-%d %H:%M"),
+            "summary": {
+                "units": sum(len(voce) for voce in blocchi.values()),
+                "accepted_units": unita_accettate,
+                "phases": fasi_totali,
+                "accepted_phases": fasi_accettate,
+                "reports": report_totali,
+                "attempts": tentativi,
+                "first_published": min(date) if date else "",
+                "last_published": max(date) if date else "",
+                "refinements": len(rifiniture_voci),
+                "closed_refinements": sum(1 for voce in rifiniture_voci if voce["closed"]),
+            },
+            "blocks": [
+                {"domain": dominio, "units": unita}
+                for dominio, unita in sorted(blocchi.items(), key=lambda coppia: coppia[0])
+            ],
+            "refinements": rifiniture_voci,
+        }
 
     def _stall_reason(self, task_id, report_path=None):
         """Perche' la fase e' stata respinta: dal pointer, e se tace dal file del tentativo.
@@ -1042,6 +1789,11 @@ def build_handler(state):
                     return self._json(200, state.snapshot())
                 except Exception as error:  # noqa: BLE001
                     return self._json(500, {"error": str(error)})
+            if route == "/api/svolto":
+                try:
+                    return self._json(200, state.worklog())
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
             if route == "/api/versione":
                 # Due `stat`: la pagina lo chiede spesso e non deve costare una rilettura.
                 try:
@@ -1126,6 +1878,13 @@ def build_handler(state):
                     return self._json(200, esiti.estrai(documento, relativo))
                 except Exception as error:  # noqa: BLE001
                     return self._json(500, {"error": str(error)})
+            if route == "/api/recap":
+                # Il recap si legge a richiesta: compone l'istantanea della pagina con i
+                # finding/limiti dei report delle fasi aperte. Nessuna scrittura, nessun provider.
+                try:
+                    return self._json(200, recap.costruisci(state))
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
             if route == "/file":
                 wanted = (parse_qs(parsed.query).get("path") or [""])[0]
                 target = (state.pack / wanted).resolve()
@@ -1184,6 +1943,54 @@ def build_handler(state):
                 except Exception as error:  # noqa: BLE001
                     return self._json(500, {"error": str(error)})
                 return self._json(200, {"ok": True, **esito})
+            if route == "/api/refinement/accept":
+                # L'accettazione di una fase di rifinitura (A2, A3, E…): aggiorna
+                # `refinements.yaml` con lo stesso strumento della CLI, sotto lock.
+                length = int(self.headers.get("Content-Length") or 0)
+                try:
+                    payload = json.loads(self.rfile.read(length) or b"{}")
+                except json.JSONDecodeError as error:
+                    return self._json(400, {"error": f"JSON non valido: {error}"})
+                obbligo = str(payload.get("obligation") or "").strip()
+                fase = str(payload.get("phase") or "").strip().upper()
+                if not obbligo or fase not in ("A", "E", "T", "R"):
+                    return self._json(400, {"error": "servono obligation e phase (A/E/T/R)"})
+                try:
+                    rifiniture = refinements.load(state.workspace)
+                    voce = ((rifiniture.get(obbligo) or {}).get("phases") or {}).get(fase) or {}
+                    if str(voce.get("status")) != "delivered":
+                        return self._json(
+                            409,
+                            {"error": f"{obbligo} {fase} non è in stato delivered"},
+                        )
+                    comando = [
+                        sys.executable,
+                        str(ROOT / "console" / "refinements.py"),
+                        "--workspace",
+                        str(state.workspace.root),
+                        "--obligation",
+                        obbligo,
+                        "--phase",
+                        fase,
+                        "--status",
+                        "accepted",
+                    ]
+                    for campo in ("attempt", "report", "verdict", "author"):
+                        if payload.get(campo) is not None:
+                            comando += [f"--{campo}", str(payload[campo])]
+                    if payload.get("next"):
+                        comando += ["--next", str(payload["next"])]
+                    if payload.get("next_report"):
+                        comando += ["--next-report", str(payload["next_report"])]
+                    esito = subprocess.run(comando, capture_output=True, text=True, timeout=60)
+                    if esito.returncode != 0:
+                        return self._json(
+                            500,
+                            {"error": (esito.stderr or esito.stdout or "errore").strip()},
+                        )
+                    return self._json(200, {"ok": True, "obligation": obbligo, "phase": fase})
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
             if route == "/api/coda/apply":
                 # Il pulsante che fa il lavoro: la coda si applica in un PROCESSO A PARTE. Perche' non
                 # in un thread: misurato il 2026-10-16, un'applicazione da 90 richieste su un server a
@@ -1225,6 +2032,21 @@ def build_handler(state):
                     )
                 threading.Thread(target=sorveglia, args=(processo,), daemon=True).start()
                 return self._json(200, {"ok": True, "avviata": True})
+            if route == "/api/pins/reconcile":
+                # IL PULSANTE UNICO dei timbri: legge le voci dichiarate dai report di rifinitura
+                # e sostituisce ogni `declared` con il suo `live` dentro il file che lo contiene.
+                # Una copia per file, nessun prompt, nessuna scelta: quello che non si puo'
+                # raccordare resta dichiarato nel resoconto invece di far fallire il resto.
+                try:
+                    with open(lock_file(state.workspace.root), "a+") as maniglia:
+                        fcntl.flock(maniglia, fcntl.LOCK_EX)
+                        try:
+                            voci = pins.apply(state.workspace)
+                        finally:
+                            fcntl.flock(maniglia, fcntl.LOCK_UN)
+                    return self._json(200, pins._riassunto(voci))
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
             if route == "/api/inbox":
                 # Depositare un messaggio nella posta: e' l'unica scrittura della pagina che non
                 # passa dai registri, e per questo non puo' rompere niente. Il testo si salva
@@ -1248,6 +2070,69 @@ def build_handler(state):
                     )
                 except ValueError as error:
                     return self._json(400, {"error": str(error)})
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
+                return self._json(200, {"ok": True, **esito})
+            if route == "/api/refinement":
+                length = int(self.headers.get("Content-Length") or 0)
+                try:
+                    payload = json.loads(self.rfile.read(length) or b"{}")
+                except json.JSONDecodeError as error:
+                    return self._json(400, {"error": f"JSON non valido: {error}"})
+                obligation = str(payload.get("obligation") or "").strip()
+                if not obligation:
+                    return self._json(400, {"error": "serve obligation"})
+                azione = str(payload.get("action") or "update").strip()
+                try:
+                    esito = refinements.update(
+                        state.workspace,
+                        obligation,
+                        add=azione == "add",
+                        title=payload.get("title"),
+                        phase=payload.get("phase") or None,
+                        status=payload.get("status") or None,
+                        attempt=(
+                            int(payload["attempt"])
+                            if payload.get("attempt") not in (None, "")
+                            else None
+                        ),
+                        report=payload.get("report") or None,
+                        verdict=payload.get("verdict") or None,
+                        author=payload.get("author") or None,
+                        claim_by=(
+                            payload.get("claim_by") or "utente"
+                            if azione == "claim" or payload.get("claim_by")
+                            else None
+                        ),
+                        claim_task=payload.get("claim_task") or None,
+                        release=azione == "release" or payload.get("release") is True,
+                        next_text=payload.get("next") or None,
+                        next_report=payload.get("next_report") or None,
+                    )
+                except SystemExit as error:
+                    return self._json(400, {"error": str(error)})
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
+                return self._json(200, {"ok": True, **esito})
+            if route == "/api/inbox/close":
+                # Archiviare una ricevuta dal recap: la scrittura resta nel file della posta e
+                # passa dal lock di `inbox.chiudi`; il testo del messaggio non si tocca.
+                length = int(self.headers.get("Content-Length") or 0)
+                try:
+                    payload = json.loads(self.rfile.read(length) or b"{}")
+                except json.JSONDecodeError as error:
+                    return self._json(400, {"error": f"JSON non valido: {error}"})
+                identificatore = str(payload.get("ricevuta") or "").strip()
+                if not identificatore:
+                    return self._json(400, {"error": "serve ricevuta"})
+                try:
+                    esito = inbox.chiudi(
+                        state.workspace,
+                        identificatore,
+                        payload.get("nota"),
+                    )
+                except ValueError as error:
+                    return self._json(404, {"error": str(error)})
                 except Exception as error:  # noqa: BLE001
                     return self._json(500, {"error": str(error)})
                 return self._json(200, {"ok": True, **esito})

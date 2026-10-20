@@ -49,6 +49,7 @@ class Workspace:
     decisions: str = "decisions.yaml"
     user_decisions: str = "user_decisions.yaml"
     reports: str = "reports"
+    refinements: str = "refinements.yaml"
     queue: str = "PARALLEL-PROMPTS.md"
     transitions: str = "pending-transitions"
     #: La posta in arrivo: i messaggi depositati interi, uno per file. Vedi `registers/inbox.py`.
@@ -76,6 +77,10 @@ class Workspace:
     @property
     def reports_dir(self) -> Path:
         return self.path(self.reports)
+
+    @property
+    def refinements_path(self) -> Path:
+        return self.path(self.refinements)
 
     @property
     def brand_dir(self) -> Path:

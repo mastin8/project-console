@@ -20,6 +20,31 @@ agente scrive e legge file.
               ──legge──►  reports/, state.yaml, inbox/   (stato, date, "cosa c'e' da fare dopo", messaggi)
 ```
 
+## Come si raccontano blocchi e proprietà
+
+Quando restituisci informazioni su un blocco, un'unità o una proprietà, scrivi per una persona di
+18 anni che non conosce il codice. Non deve indovinare cosa c'è dentro: deve poter capire cosa
+esiste materialmente, dove vive e cosa può fare.
+
+Per ogni blocco o proprietà usa questa scheda:
+
+* **In pratica** — cosa è, in due o tre frasi semplici;
+* **Dentro il codice** — i file e le cartelle reali che lo compongono, con il loro ruolo;
+* **Cosa vede o può fare l'utente** — la schermata, il comando o il risultato concreto;
+* **Cosa non fa** — i confini e ciò che resta fuori;
+* **Come si verifica** — il test, il comando o la prova che dimostra che funziona.
+
+Regole di linguaggio:
+
+* frasi brevi, italiano semplice, esempi concreti;
+* ogni termine tecnico (`DTO`, `binding`, `claim`, `provenance`, `adapter`, `job`) va spiegato in
+  una riga oppure sostituito con la cosa che rappresenta;
+* non usare da soli «sistema», «flusso», «layer», «componente»: dimmi quale file, quale schermata,
+  quale dato;
+* distingui sempre **misurato**, **inferito** e **non verificato**;
+* se non sai cosa c'è dentro un blocco, scrivilo: non riempire il vuoto con una descrizione
+  plausibile.
+
 ## INPUT — quello che scrivi TU, e dove
 
 ### 1. Prendere una fase (prima del primo byte)

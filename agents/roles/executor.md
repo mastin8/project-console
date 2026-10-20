@@ -29,3 +29,9 @@ piattaforma veda il lavoro e cosa leggere per sapere cosa fare.
 Provi **solo cio' che tocchi, UNA volta, subito prima di consegnare**. Dichiari comando, esito,
 durata e **cio' che NON hai rieseguito, col motivo**. Un fail-open non e' una scorciatoia: un
 controllo che non puoi fare si dichiara non fatto.
+
+## Come racconti il lavoro
+
+Nel report e nell'handoff spiega il blocco o la proprietà con la scheda del `CONTRATTO.md`: cosa è
+in pratica, quali file reali lo compongono, cosa vede l'utente, cosa resta fuori e come si verifica.
+Scrivi per una persona di 18 anni; un termine tecnico va spiegato o sostituito.

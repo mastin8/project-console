@@ -257,6 +257,10 @@ report) non sta mai in pagina: si apre in un dialogo, con **Copia** e **Salva co
   con consegna respinta. Ognuno col testo da copiare e da salvare come file.
 - **Percorso** (`/percorso`) — una scheda per blocco: unita', risultato atteso, fasi che aprono il
   report, respinte in verifica, e i commit che toccano i path dichiarati dal blocco.
+- **Svolto** (`/svolto`) — tutto il lavoro registrato: 70 unità, 280 fasi A/E/T/R, report,
+  tentativi, verdetti, autori e date, raggruppati per blocco. Le rifiniture sono in fondo con
+  fasi, claim e prossimo report. Filtri per blocco e testo, "Espandi tutto" e "Chiudi tutto".
+  Dati da `/api/svolto` (`project-console-worklog/1.0`), letti dai registri e dai puntatori.
 
 «Salva come file» scarica un `.md` col testo esatto del prompt, senza passare dalla clipboard: serve
 a isolare dove si rompe un testo — se il file e' giusto e il testo incollato no, il difetto e' nel
@@ -265,6 +269,74 @@ posto che lo riceve, non nel prompt.
 Nell'intestazione: il marchio (dal tuo `brand/`, o un monogramma), il nome del progetto, quattro
 tastini coi conteggi — aperte, respinte, in corso, per te — e il filtro condiviso dalle viste.
 Il tastino delle respinte filtra e atterra sulla prima fase `needs_changes`.
+
+## Come gli agenti devono raccontare blocchi e proprietà
+
+Ogni progetto creato dallo scaffolder porta `agents/CONTRATTO.md`. Quando un agente restituisce
+informazioni su un blocco, un'unità o una proprietà, deve spiegare **cosa è in pratica**, **quali
+file o cartelle reali lo compongono**, **cosa vede o può fare l'utente**, **cosa non fa** e **come
+si verifica**. Il linguaggio deve essere comprensibile a una persona di 18 anni: niente sigle o
+termini tecnici senza una spiegazione, niente «sistema» o «flusso» da soli, esempi concreti. Se un
+fatto non è stato verificato, si dichiara.
+
+Quando tutte le unità e le fasi sono accettate, **Adesso** mostra l'insegna **«Rifinitura finale»**:
+dice quante cose bloccano ancora la chiusura, quante sono aperte ma non bloccanti e quante ricevute
+di posta restano da archiviare. Sotto, in **«Rifiniture finali»**, ci sono le voci con **Leggi**,
+**Copia prompt** e **Registro**. Il pulsante **Rifiniture** nell'intestazione porta all'insegna;
+**Copia il prompt delle rifiniture** prepara il testo da incollare in una chat nuova. Il console non
+chiama nessun modello e non dichiara «tutto fatto» se un esito non è leggibile.
+
+### Contratto dei report di rifinitura
+
+Un report di rifinitura deve dichiarare `phase: A|E|T|R`, `verdict`, `next` (con il codice del
+prossimo atto) e, quando chiude, `obligation_status_after: closed` oppure
+`closure_condition_met: true`. Il console usa `phase` per la fase, `next` per il prossimo report e
+gli stessi campi per il prompt. Se `phase` manca, il console **non indovina**: mostra «Fase non
+determinata dal report» e chiede all'agente di dichiararla prima di agire. La matrice dei casi è in
+`console/test_refinements.py`.
+
+### La legge della rifinitura (2026-10-20)
+
+La rifinitura serve a **sapere se il tool funziona**. Due passi, e nient'altro:
+
+1. **Cosa non funziona, e riparazione subito.** L'agente misura i byte vivi, dichiara i rossi e li
+   ripara nello stesso atto. Niente report-fiume: il verdetto è verde/rosso con la causa.
+2. **Resoconto dei timbri e un pulsante solo.** I timbri diversi vanno dichiarati nel report, non
+   ripinnati a mano uno per uno:
+
+   ```yaml
+   fingerprint_mismatches:
+     - {label: F5, file: tenders/tests/x.py, path: tenders/services/y.py,
+        declared: <vecchio sha256>, live: <nuovo sha256>}
+   ```
+
+   `file` è il file che contiene il letterale; `path` è ciò che il timbro descrive. La pagina
+   mostra l'elenco e **un solo** pulsante «Raccorda tutti», che sostituisce ogni `declared` col suo
+   `live`, fa una copia per file e riferisce quello che non è riuscito. Nessuna domanda, nessun
+   pulsante per riga. Da terminale è lo stesso atto: `console/pins.py --workspace <progetto>
+   --apply`.
+
+La T indipendente resta dovuta quando l'agente ha scritto i byte (D020); il raccordo dei timbri non
+è una verifica e non la sostituisce.
+
+### La forma esplicita delle rifiniture
+
+Le rifiniture non sono unità delle 70: hanno un file proprio, `refinements.yaml`, con schema
+`project-console-refinements/1.0`. Ogni voce dichiara `phases` (`A`, `E`, `T`, `R`), `claim`,
+`next` e `next_report`. Il console legge questo file e lo fonde con l'obbligo di `state.yaml`;
+la sorgente mostrata è `refinements.yaml`, non l'euristica. Se un report più recente non è
+registrato, la pagina lo segnala con un avviso.
+
+Per aggiornarlo dagli agenti:
+
+```bash
+python3 console/refinements.py --workspace <progetto> --obligation <id> \
+  --phase T --status accepted --attempt 3 --report reports/.../attempt-3.yaml \
+  --verdict pass_with_declared_limits --author <firma>
+```
+
+Per la presa e il rilascio: `--claim-by <firma> --claim-task <fase>` e `--release`.
+Una rifinitura nuova entra con `--add --title "..."`; se manca, il console non la inventa.
 
 ## Attivare una fase: l'input
 

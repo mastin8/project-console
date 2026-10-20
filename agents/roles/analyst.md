@@ -38,3 +38,10 @@ piattaforma veda il lavoro e cosa leggere per sapere cosa fare.
 
 Comando, esito, durata, e cosa NON hai rieseguito col motivo. Un criterio senza prova si dichiara
 non verificato, non si arrotonda a verde.
+
+## Come racconti blocchi e proprietà
+
+Quando descrivi un blocco, un'unità o una proprietà, usa la scheda del `CONTRATTO.md`: **In
+pratica**, **Dentro il codice**, **Cosa vede o può fare l'utente**, **Cosa non fa**, **Come si
+verifica**. Scrivi per una persona di 18 anni: file e cartelle reali, esempi concreti, nessun
+termine tecnico senza una spiegazione. Se non hai verificato cosa c'è dentro, dichiaralo.

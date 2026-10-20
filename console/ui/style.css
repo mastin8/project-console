@@ -351,6 +351,7 @@ button.linkish{background:none;border:0;padding:0;color:var(--ink-3);font-size:1
    sta guardando) e con il selettore nudo si nascondeva tutto il documento. */
 main [data-page]{display:none}
 body[data-page="adesso"] main [data-page="adesso"],
+body[data-page="svolto"] main [data-page="svolto"],
 body[data-page="tempo"] main [data-page="tempo"],
 body[data-page="testimone"] main [data-page="testimone"],
 body[data-page="prompt"] main [data-page="prompt"],
@@ -359,6 +360,188 @@ body[data-page="percorso"] main [data-page="percorso"]{display:block}
    `display:block` rimetterebbe in pagina i pannelli che la barra delle schede ha appena chiuso
    (l'attributo `hidden` da solo non basta, perche' la regola sopra e' piu' specifica di lui). */
 body[data-page="adesso"] main .scheda-pannello[hidden]{display:none}
+body[data-page="svolto"] .top-bar{display:none}
+
+/* L'insegna della rifinitura: sta sopra «Cosa fare adesso» e dice, prima di ogni elenco, che
+   il lavoro principale è concluso e che quello che segue è la chiusura. */
+.finishing-banner {
+  margin-bottom: var(--s5);
+  padding: var(--s5);
+  border: 1px solid var(--accent);
+  border-left: 6px solid var(--accent);
+  border-radius: var(--r-md);
+  background: var(--accent-soft);
+}
+
+.finishing-kicker {
+  display: inline-block;
+  margin-bottom: var(--s15);
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: .78rem;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.finishing-banner h2 {
+  margin: 0;
+  color: var(--accent);
+  font-size: 1.55rem;
+  line-height: 1.2;
+}
+
+.finishing-banner p {
+  max-width: var(--measure);
+  margin: var(--s2) 0 var(--s4);
+  color: var(--ink-2);
+}
+
+@media (max-width: 640px) {
+  .finishing-banner {
+    padding: var(--s4);
+  }
+
+  .finishing-banner h2 {
+    font-size: 1.3rem;
+  }
+}
+
+/* Lavoro svolto: il registro completo, leggibile per blocco e unità. */
+.worklog-summary {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: var(--s2);
+  margin: var(--s4) 0 var(--s5);
+}
+.worklog-stat {
+  padding: var(--s3) var(--s4);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.worklog-stat b {
+  display: block;
+  color: var(--accent);
+  font-size: 1.45rem;
+  line-height: 1.2;
+}
+.worklog-stat span { color: var(--ink-3); font-size: 12px; }
+.worklog-filters { margin-bottom: var(--s4); }
+.worklog-filters input,
+.worklog-filters select {
+  min-height: 36px;
+  padding: var(--s15) var(--s2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+.worklog-filters input { flex: 1 1 260px; }
+.worklog-check {
+  display: inline-flex;
+  gap: var(--s15);
+  align-items: center;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.worklog-block {
+  margin: var(--s5) 0 var(--s2);
+  color: var(--ink);
+  font-size: 1rem;
+}
+.worklog-unit {
+  margin-bottom: var(--s15);
+  border: 1px solid var(--line);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.worklog-unit > summary {
+  display: flex;
+  gap: var(--s2);
+  justify-content: space-between;
+  padding: var(--s25) var(--s3);
+  cursor: pointer;
+  font-size: 13px;
+}
+.worklog-unit > summary b { font-family: var(--mono); }
+.worklog-unit > summary .count { margin-left: auto; }
+.worklog-unit table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12.5px;
+}
+.worklog-unit th,
+.worklog-unit td {
+  padding: var(--s15) var(--s2);
+  border-top: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+.worklog-unit th {
+  color: var(--ink-3);
+  font-size: 11px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.worklog-unit td code { font-size: 12px; }
+.worklog-unit .worklog-report { color: var(--accent); }
+.worklog-refinement {
+  margin-bottom: var(--s15);
+  padding: var(--s25) var(--s3);
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+}
+.worklog-refinement b { display: block; }
+.worklog-refinement .actstages { margin-top: var(--s15); }
+@media (max-width: 720px) {
+  .worklog-unit { overflow-x: auto; }
+  .worklog-unit table { min-width: 700px; }
+}
+
+/* Pannello di gestione delle rifiniture: i campi sono quelli che il registro accetta. */
+#refinement-dialog { width: min(760px, 94vw); }
+#refinement-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--s2) var(--s3);
+}
+#refinement-form label {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  color: var(--ink-3);
+  font-size: 12px;
+}
+#refinement-form input,
+#refinement-form select {
+  min-height: 34px;
+  padding: var(--s15) var(--s2);
+  border: 1px solid var(--line-strong);
+  border-radius: var(--r-sm);
+  background: var(--surface);
+  color: var(--ink);
+  font: inherit;
+  font-size: 13px;
+}
+#refinement-form .row {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: end;
+}
+#refinement-form .row label { flex: 1 1 220px; }
+.refinement-actions { margin-top: var(--s2); }
+@media (max-width: 640px) {
+  #refinement-form { grid-template-columns: 1fr; }
+}
 
 /* IL GLOSSARIO A SINISTRA. Non è una seconda navigazione: è il vocabolario, e sta accanto perché le
    parole («presa», «ordine», «non rieseguito») servono MENTRE si legge la pagina. Su schermo stretto
@@ -596,6 +779,84 @@ details[open] > .acthead::before{content:"▾ "}
 .actcode{font-family:var(--mono);font-size:12.5px;font-weight:600}
 .actmeta{margin-top:2px;color:var(--ink-3);font-size:12px;font-family:var(--mono);
   overflow-wrap:anywhere}
+.actbadge {
+  display: inline-block;
+  margin-left: var(--s2);
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .03em;
+  vertical-align: middle;
+}
+.actbadge.gate { background: var(--bad-soft); color: var(--bad); }
+.actbadge.normal { background: var(--surface-2); color: var(--ink-2); }
+.actclaim { margin-top: var(--s15); font-size: 13px; font-weight: 600; }
+.actclaim.taken { color: var(--ok); }
+.actclaim.done { color: var(--ok); }
+.actclaim.dispatched { color: var(--warn); }
+.actclaim.report { color: var(--warn); }
+.actclaim.untaken { color: var(--bad); }
+.actprimary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s15);
+  margin: var(--s2) 0 var(--s25);
+  padding: var(--s25) var(--s3);
+  border-left: 3px solid var(--accent);
+  border-radius: var(--r-sm);
+  background: var(--surface-2);
+}
+.actprimary b { color: var(--ink); font-size: 13px; }
+.actprimary p {
+  margin: 0;
+  color: var(--ink-2);
+  font-size: 12.5px;
+  white-space: pre-wrap;
+}
+.actdetails {
+  margin-top: var(--s2);
+  padding-top: var(--s2);
+  border-top: 1px solid var(--line);
+}
+.actdetails summary {
+  color: var(--accent);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 600;
+}
+.actdetails-body > * { margin-top: var(--s15); }
+.actstages {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: var(--s15);
+}
+.stage {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 1px solid var(--line-strong);
+  border-radius: 50%;
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--ink-3);
+  background: var(--surface-2);
+}
+.stage.done { color: var(--ok); background: var(--ok-soft); border-color: var(--ok); }
+.stage.partial { color: var(--warn); background: var(--warn-soft); border-color: var(--warn); }
+.stage.in_progress { color: var(--accent); background: var(--accent-soft); border-color: var(--accent); }
+.stage.missing { color: var(--ink-3); background: var(--surface-2); }
+.stage-next {
+  margin-left: var(--s15);
+  color: var(--ink-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+.stage-next.unknown { color: var(--bad); }
 .actactions{display:flex;gap:var(--s2);flex:none}
 .actbtn{padding:var(--s2) var(--s3);border-radius:var(--r-sm);border:1px solid var(--accent);
   background:var(--accent);color:var(--accent-ink);font:inherit;font-size:12.5px;font-weight:600;

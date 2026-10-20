@@ -88,6 +88,15 @@ async function load() {
 
 function render(data) {
   const s = data.summary;
+  const obblighi = Number(
+    s.open_obligations != null ? s.open_obligations : (data.obligations || []).length
+  );
+  const obblighiGate = Number(s.open_gate_obligations || 0);
+  const debiti = Number(
+    s.open_independence_debts != null
+      ? s.open_independence_debts
+      : (data.independence_debts || []).length
+  );
   $("#generated").textContent = `aggiornato ${data.generated} · dati letti dai registri del progetto`;
 
   const ratio = s.units ? Math.round((s.accepted / s.units) * 100) : 0;
@@ -107,6 +116,26 @@ function render(data) {
               : " voci incoerenti nel registro (fasi respinte su unità già accettate)"
           ),
         ])
+      : null,
+    obblighi
+      ? h("span", { class: "warnnote" }, [
+          document.createTextNode(" · "),
+          h("b", { text: String(obblighi) }),
+          document.createTextNode(
+            obblighi === 1
+              ? " obbligo aperto"
+              : ` obblighi aperti${obblighiGate ? ` (${obblighiGate} bloccano la chiusura)` : ""}`
+          ),
+        ])
+      : null,
+    debiti
+      ? h("span", { class: "warnnote" }, [
+          document.createTextNode(" · "),
+          h("b", { text: String(debiti) }),
+          document.createTextNode(
+            debiti === 1 ? " ratifica mancante" : " ratifiche mancanti"
+          ),
+        ])
       : null
   ].filter(Boolean));
   $("#rail").setAttribute("aria-valuenow", String(ratio));
@@ -124,6 +153,7 @@ function render(data) {
   renderAnswered(data.answered);
   renderBlocks();
   renderTally(data);
+  renderFinishing(data);
   renderIndice(data);
   renderTabs(data);
   renderCoda(data.queue, data.applicazione);
@@ -1068,6 +1098,8 @@ function scegliScheda(chiave, scriviIndirizzo) {
 function numeriSchede(data) {
   const posta = data.inbox || {};
   const coda =
+    (data.obligations || []).length +
+    (data.independence_debts || []).length +
     (data.owed || []).length +
     (data.activatable || []).filter(
       (voce) => !voce.altrove && !(voce.waiting_on || []).length
@@ -1075,7 +1107,7 @@ function numeriSchede(data) {
     (data.activated || []).filter((voce) => ["pre_registered", "ready"].includes(voce.status))
       .length;
   return {
-    oggi: { numero: coda, tono: "bad", cosa: "da mandare" },
+    oggi: { numero: coda, tono: "bad", cosa: "da gestire" },
     posta: { numero: posta.non_lavorate || 0, tono: "bad", cosa: "da lavorare" },
     attesa: { numero: data.summary.open_questions || 0, tono: "bad", cosa: "aspettano te" },
     corso: { numero: (data.claims || []).length, tono: "bad", cosa: "in corso" },
@@ -1272,6 +1304,7 @@ function renderCoda(coda, applicazione) {
    guarda tornando — corta, ordinata per leva, un pulsante per riga; il testo lungo va nel dialogo. */
 const PAGINE = {
   "/": ["adesso", "Adesso"],
+  "/svolto": ["svolto", "Lavoro svolto"],
   "/tempo": ["tempo", "Tempo"],
   "/testimone": ["testimone", "Testimone"],
   "/prompt": ["prompt", "Prompt"],
@@ -1395,6 +1428,10 @@ function renderActivation(data) {
   const box = $("#activation");
   const count = $("#activation-count");
   if (!box || !count) return;
+  const obblighi = data.obligations || [];
+  const obblighiGate = obblighi.filter((voce) => voce.gate).length;
+  const debiti = data.independence_debts || [];
+  const dovuti = data.owed || [];
   // LA SORGENTE E' IL PERCORSO, non le dichiarazioni dei report: quelle nominano anche fasi vecchie o
   // di unità mai iniziate (49 «mandabili» su un progetto, fra cui la R di un'unità ferma alla A).
   // Una riga per unità aperta, nell'ordine del percorso critico.
@@ -1420,6 +1457,13 @@ function renderActivation(data) {
     inCorso.length ? `${inCorso.length} in corso` : null,
     riservate.length ? `${riservate.length} riservate` : null,
     attese.length ? `${attese.length} in attesa` : null,
+    obblighi.length
+      ? `${obblighi.length} obblighi aperti${obblighiGate ? ` (${obblighiGate} di gate)` : ""}`
+      : null,
+    debiti.length
+      ? `${debiti.length} ${debiti.length === 1 ? "ratifica mancante" : "ratifiche mancanti"}`
+      : null,
+    dovuti.length ? `${dovuti.length} direzioni da leggere` : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -1429,7 +1473,11 @@ function renderActivation(data) {
       document.createTextNode(
         pronti.length
           ? "Il percorso è obbligato: una unità alla volta, e si parte solo con i prerequisiti accettati. Una riga, un'azione — premi e incolla il prompt in una chat."
-          : "Niente da mandare adesso: il lavoro è in mano a qualcuno, oppure aspetta che un'altra unità sia accettata (vedi «in attesa»)."
+          : obblighi.length || debiti.length
+            ? "Non ci sono fasi da mandare, ma restano obblighi aperti e ratifiche mancanti. Parti dalle rifiniture marcate GATE."
+            : dovuti.length
+              ? "Non ci sono fasi da mandare, ma restano direzioni dei report da leggere: non eseguirle in serie, solo quelle con «Prompt» sono da rilanciare."
+              : "Niente da mandare adesso: il lavoro è in mano a qualcuno, oppure aspetta che un'altra unità sia accettata (vedi «in attesa»)."
       )
     );
   }
@@ -1548,6 +1596,12 @@ function renderActivation(data) {
       ])
     );
   }
+  if (obblighi.length) parti.unshift(obligationsGroup(obblighi));
+  // I timbri diversi si RACCONDANO qui, con un pulsante solo (legge del project-tool).
+  const timbri = data.pins || [];
+  if (timbri.length) parti.unshift(pinsGroup(timbri));
+  if (debiti.length) parti.unshift(debtsGroup(debiti));
+  if (dovuti.length) parti.push(owedGroup(dovuti));
   if (!parti.length) {
     parti.push(
       h("p", { class: "empty" }, [
@@ -1889,12 +1943,508 @@ function postaGroup(titolo, tono, voci) {
    prossimo passo è il rientro di copy in NAV03E attempt 4», «la palla è di UPL04ZT attempt 2».
    Accanto, il pulsante che compone il prompt di QUELLA fase (anche se è già accettata: l'atto
    dovuto è un tentativo nuovo). È la risposta alla domanda «cosa mando adesso?». */
+/* GLI OBBLIGHI NOMINATI DEL REGISTRO. Non sono unità: restano aperti anche quando tutte le unità
+   sono accettate, e senza questa sezione la pagina poteva dire «Tutto chiuso» mentre il registro
+   aveva nove righe `OBBLIGO` con la scadenza già decorsa. La riga mostra la scadenza e il
+   proprietario; «Leggi» apre il testo intero, senza riscriverlo. */
+/* LE RATIFICHE INDIPENDENTI MANCANTI. Un debito D008 non è un obbligo `execution_attempts` e
+   non è una fase aperta: la fase è `accepted`. Va mostrato come azione, altrimenti l'unica
+   traccia è il testo `next` di un report e la pagina offre i prompt delle fasi già accettate. */
+function debtsGroup(voci) {
+  return h("div", { class: "actbox" }, [
+    h("p", { class: "actgroup warn" }, [
+      h("b", { text: "Ratifiche indipendenti mancanti" }),
+      h("span", { class: "actcount", text: String(voci.length) }),
+    ]),
+    ...voci.map(debtRow),
+  ]);
+}
+
+function debtRow(voce) {
+  const riga = h("div", { class: "actrow" });
+  const testo = h("div", { class: "acttext" });
+  testo.append(h("code", { class: "actcode", text: voce.unit }));
+  testo.append(document.createTextNode(" — ratifica mancante"));
+  testo.append(
+    h("div", {
+      class: "actmeta",
+      text: [
+        voce.tasks.join(", "),
+        voce.status,
+        voce.required_before ? `prima di ${voce.required_before}` : null,
+        voce.owner,
+      ]
+        .filter(Boolean)
+        .join(" · "),
+    })
+  );
+  if (voce.what) testo.append(h("div", { class: "actmeta", text: voce.what }));
+  const istruzioni = [
+    `Ratifica indipendente di ${voce.unit}.`,
+    `Fasi: ${voce.tasks.join(", ")}.`,
+    `Pubblica un atto di ratifica da una firma che non ha eseguito quei byte; giudica i report e registra il campo ratification su ${voce.tasks.join(" e ")}.`,
+    "Per D020 basta che la firma non abbia eseguito quei byte: non serve un canonico diverso da /root.",
+    "Poi esegui independence_audit.py e verifica units_with_independence_debt=0.",
+    "Non rieseguire le batterie delle fasi.",
+  ].join("\n");
+  const azioni = h("div", { class: "actactions" }, [
+    h("button", {
+      type: "button",
+      class: "actbtn",
+      text: "Prompt istruzioni",
+      title: "l'atto di ratifica che manca, pronto da copiare",
+      onclick: () =>
+        apriTesto(`${voce.unit} — ratifica mancante`, istruzioni, {
+          copia: true,
+          file: `ratifica-${voce.unit}.md`,
+        }),
+    }),
+  ]);
+  riga.append(testo, azioni);
+  return riga;
+}
+
+function obligationsGroup(voci) {
+  const ordinate = [...voci].sort(
+    (prima, dopo) => Number(Boolean(dopo.gate)) - Number(Boolean(prima.gate))
+  );
+  const prese = voci.filter((voce) => voce.taken).length;
+  const consegnati = voci.filter((voce) => voce.dispatched).length;
+  const finiti = voci.filter((voce) => voce.report_closed).length;
+  return h("div", { class: "actbox", id: "rifiniture" }, [
+    h("p", { class: "actgroup bad" }, [
+      h("b", { text: "Rifiniture finali" }),
+      h("span", {
+        class: "actcount",
+        text: `${voci.length} · ${prese}/${voci.length} in carico · ${consegnati}/${voci.length} consegnati${
+          finiti ? ` · ${finiti}/${voci.length} finiti da registrare` : ""
+        }`,
+      }),
+    ]),
+    h("button", {
+      type: "button",
+      class: "ghost",
+      text: "Nuova rifinitura",
+      onclick: () => apriRifinitura(null, { add: true }),
+    }),
+    h("p", {
+      class: "actmeta",
+      text:
+        "A analisi · E esecuzione · T verifica indipendente · R accettazione. " +
+        "Verde = fatto, giallo = parziale, blu = in corso, grigio = mancante.",
+    }),
+    ...ordinate.map(obligationRow),
+  ]);
+}
+
+function pinsGroup(timbri) {
+  const daFare = timbri.filter((voce) => voce.status === "da_raccordare");
+  const box = h("div", { class: "actbox", id: "timbri" }, [
+    h("p", { class: "actgroup bad" }, [
+      h("b", { text: "Timbri diversi" }),
+      h("span", { class: "actcount", text: `${daFare.length} da raccordare · ${timbri.length} dichiarati` }),
+    ]),
+    h("p", {
+      class: "actmeta",
+      text:
+        "Sono le impronte che una prova dichiara di misurare e che oggi descrivono un'altra revisione. " +
+        "Il pulsante le riallinea tutte: una copia per file, nessuna domanda.",
+    }),
+  ]);
+  for (const voce of timbri) {
+    box.append(
+      h("div", { class: "actrow" }, [
+        h("div", { class: "acttext" }, [
+          h("code", { class: "actcode", text: voce.label }),
+          document.createTextNode(` ${voce.file}`),
+          h("div", {
+            class: "actmeta",
+            text: `${voce.declared.slice(0, 12)}… → ${voce.live.slice(0, 12)}… · ${voce.status}`,
+          }),
+        ]),
+      ])
+    );
+  }
+  const esito = h("span", { class: "msg", role: "status", "aria-live": "polite" });
+  const avvia = h("button", {
+    type: "button",
+    id: "pins-raccorda",
+    text: daFare.length ? `Raccorda tutti (${daFare.length})` : "Niente da raccordare",
+    disabled: !daFare.length,
+    onclick: async () => {
+      avvia.disabled = true;
+      esito.className = "msg show pending";
+      esito.textContent = "raccordo…";
+      try {
+        const risposta = await fetch("/api/pins/reconcile", { method: "POST" });
+        const payload = await risposta.json();
+        if (!risposta.ok) throw new Error(payload.error || `errore ${risposta.status}`);
+        const aperti = (payload.voci || []).filter(
+          (voce) => voce.status !== "raccordato" && voce.status !== "gia_allineato"
+        );
+        esito.className = aperti.length ? "msg show err" : "msg show ok";
+        esito.textContent = aperti.length
+          ? `raccordati ${payload.raccordati}, restano ${aperti.length} da guardare: ${aperti
+              .map((voce) => `${voce.label} (${voce.status})`)
+              .join(", ")}`
+          : `raccordati ${payload.raccordati} timbri.`;
+        await load();
+      } catch (error) {
+        esito.className = "msg show err";
+        esito.textContent = `non raccordati: ${error.message}`;
+        avvia.disabled = false;
+      }
+    },
+  });
+  box.append(h("div", { class: "actactions" }, [avvia, esito]));
+  return box;
+}
+
+function obligationRow(voce) {
+  const riga = h("div", { class: "actrow" });
+  const testo = h("div", { class: "acttext" });
+  const dettagli = h("details", { class: "actdetails" });
+  dettagli.append(h("summary", { text: "Dettagli tecnici" }));
+  const corpoDettagli = h("div", { class: "actdetails-body" });
+  dettagli.append(corpoDettagli);
+  testo.append(h("code", { class: "actcode", text: voce.id }));
+  testo.append(
+    document.createTextNode(
+      voce.required_before ? ` prima di ${voce.required_before}` : " senza scadenza di gate"
+    )
+  );
+  testo.append(h("span", {
+    class: `actbadge ${voce.gate ? "gate" : "normal"}`,
+    text: voce.gate ? `BLOCCA ${voce.required_before}` : "NON BLOCCA",
+  }));
+  const ultimaPresa = voce.last_claim_task
+    ? ` · ultima presa: ${voce.last_claim_by || "titolare non dichiarato"} · ${voce.last_claim_task}`
+    : "";
+  if (voce.report_closed) {
+    corpoDettagli.append(h("div", {
+      class: "actclaim done",
+      text: `Finito: ${voce.report_verdict || "esito chiuso"}${
+        voce.report_attempt
+          ? ` (attempt ${voce.report_attempt}${voce.report_phase ? `, fase ${voce.report_phase}` : ""})`
+          : ""
+      }${voce.report_author ? ` · ${voce.report_author}` : ""} · chiusura da registrare${ultimaPresa}`,
+    }));
+  } else if (voce.taken) {
+    corpoDettagli.append(h("div", {
+      class: "actclaim taken",
+      text: `Presa in carico: ${voce.taken_by || "titolare non dichiarato"}${
+        voce.taken_at ? ` dal ${voce.taken_at}` : ""
+      }${voce.claim_task ? ` · ${voce.claim_task}` : ""}`,
+    }));
+  } else if (voce.dispatched) {
+    corpoDettagli.append(h("div", {
+      class: "actclaim dispatched",
+      text: `Prompt consegnato${voce.dispatched_at ? ` ${voce.dispatched_at.slice(0, 16).replace("T", " ")}` : ""} · in attesa di presa in carico${
+        voce.report_verdict
+          ? ` · ultimo atto: ${voce.report_author ? `${voce.report_author} · ` : ""}${voce.report_verdict}${
+              voce.report_attempt
+                ? ` (attempt ${voce.report_attempt}${voce.report_phase ? `, fase ${voce.report_phase}` : ""})`
+                : ""
+            }`
+          : ""
+      }${ultimaPresa}`,
+    }));
+  } else if (voce.report_verdict) {
+    corpoDettagli.append(h("div", {
+      class: "actclaim report",
+      text: `Ultimo atto: ${voce.report_author ? `${voce.report_author} · ` : ""}${voce.report_verdict}${
+        voce.report_attempt
+          ? ` (attempt ${voce.report_attempt}${voce.report_phase ? `, fase ${voce.report_phase}` : ""})`
+          : ""
+      } · nessuna presa viva${ultimaPresa}`,
+    }));
+  } else {
+    corpoDettagli.append(h("div", {
+      class: "actclaim untaken",
+      text: "Presa in carico: NO · prompt non consegnato",
+    }));
+  }
+  const stages = voce.stages || {};
+  const stageLabels = {
+    A: "Analisi",
+    E: "Esecuzione",
+    T: "Verifica indipendente",
+    R: "Accettazione",
+    OWNERS: "Riparazione dei proprietari",
+    A2: "Design A2",
+  };
+  const strip = h("div", { class: "actstages", "aria-label": "Fasi della rifinitura" });
+  ["A", "E", "T", "R"].forEach((chiave) => {
+    strip.append(h("span", {
+      class: `stage ${stages[chiave] || "missing"}`,
+      text: chiave,
+      title: `${chiave} · ${stageLabels[chiave]}: ${stages[chiave] || "mancante"}`,
+    }));
+  });
+  if (voce.stage_known === false) {
+    strip.append(h("span", {
+      class: "stage-next unknown",
+      text: "Fase non determinata dal report",
+    }));
+  } else if (voce.next_stage) {
+    strip.append(h("span", {
+      class: "stage-next",
+      text: `Prossimo: ${voce.next_stage} · ${stageLabels[voce.next_stage] || ""}`,
+    }));
+  }
+  corpoDettagli.append(strip);
+  if ((voce.owners || []).length) {
+    corpoDettagli.append(h("div", {
+      class: "actmeta",
+      text: `Unità proprietaria: ${voce.owners.join(", ")}`,
+    }));
+  }
+  if (voce.report_next) {
+    corpoDettagli.append(
+      h("div", { class: "actmeta" }, [
+        h("b", { text: "Prossimo atto dichiarato: " }),
+        document.createTextNode(voce.report_next),
+      ])
+    );
+  }
+  const tasksNext = voce.report_next_tasks || [];
+  const baseNext = String(voce.next_report || "").split("/").slice(-2, -1)[0];
+  const taskNext =
+    tasksNext.find((task) => String(task.id) === baseNext) || tasksNext[0];
+  if (taskNext && taskNext.action) {
+    const azione = String(taskNext.action);
+    corpoDettagli.append(
+      h("div", { class: "actmeta" }, [
+        h("b", { text: `Mandato ${taskNext.id}: ` }),
+        document.createTextNode(azione.length > 320 ? `${azione.slice(0, 319)}…` : azione),
+      ])
+    );
+  }
+  if (voce.sync_warning) {
+    corpoDettagli.append(h("div", { class: "actclaim untaken", text: voce.sync_warning }));
+  }
+  corpoDettagli.append(
+    h("div", {
+      class: "actmeta",
+      text: [voce.status, voce.domain, voce.owner].filter(Boolean).join(" · "),
+    })
+  );
+  const sintesi = String(voce.what || "").trim();
+  if (sintesi) {
+    corpoDettagli.append(
+      h("div", { class: "actmeta" }, [
+        // È il testo che spiega PERCHÉ l'obbligo esiste (spesso una decisione vecchia): senza
+        // etichetta si legge come se fosse l'istruzione di adesso, e sembra contraddire il mandato.
+        h("b", { text: "Perché esiste (storico): " }),
+        document.createTextNode(sintesi.length > 240 ? `${sintesi.slice(0, 239)}…` : sintesi),
+      ])
+    );
+  }
+  const esito = h("span", { class: "msg", role: "status", "aria-live": "polite" });
+  const testoObbligo = () =>
+    [
+      voce.latest_note
+        ? `NOTA CORRENTE DEL REGISTRO\n${voce.latest_note}`
+        : "",
+      voce.what
+        ? `TESTO ORIGINARIO (storico; può essere superato dalla nota corrente)\n${voce.what}`
+        : "",
+      voce.note ? `NOTA STORICA\n${voce.note}` : "",
+      voce.origin ? `ORIGINE\n${voce.origin}` : "",
+    ]
+      .filter(Boolean)
+      .join("\n\n");
+  const promptObbligo = () =>
+    voce.next_prompt ||
+    [
+      `Lavora sull'obbligo ${voce.id}.`,
+      voce.required_before
+        ? `Scadenza di gate: ${voce.required_before}.`
+        : "Nessuna scadenza di gate.",
+      voce.what ? `Cosa dice il registro: ${voce.what}` : "",
+      voce.report_next ? `Prossimo atto dichiarato: ${voce.report_next}` : "",
+      taskNext && taskNext.action
+        ? `Mandato dichiarato per ${taskNext.id}: ${taskNext.action}`
+        : "",
+      "Leggi gli esiti citati e verifica se l'obbligo è ancora aperto.",
+      "Se è chiuso, deposita l'atto di chiusura con l'evidenza esatta (file, attempt, comando, esito).",
+      "Se è aperto, esegui la prossima azione e dichiara cosa hai misurato. Non inventare.",
+    ]
+      .filter(Boolean)
+      .join("\n") + "\n";
+  const copia = h("button", {
+    type: "button",
+    class: "actbtn",
+    text: "Copia prompt",
+    title: "copia un'istruzione mirata per chiudere o verificare questo obbligo",
+  });
+  copia.addEventListener("click", async () => {
+    const testoPrompt = promptObbligo();
+    const copiato = await copiaTesto(testoPrompt);
+    esito.className = `msg show ${copiato.ok ? "ok" : "err"}`;
+    esito.textContent = copiato.ok
+      ? "Prompt copiato."
+      : "Copia non riuscita: apri «Leggi» e seleziona il testo.";
+    if (!copiato.ok) {
+      apriTesto(`${voce.id} — prompt di chiusura`, testoPrompt, {
+        copia: true,
+        seleziona: true,
+        file: `obbligo-${voce.id}.md`,
+      });
+    } else {
+      await annotaPromptConsegnato(voce.id);
+      await load();
+    }
+  });
+  const pending = voce.pending_refinement;
+  let accettaRif = null;
+  if (pending) {
+    const etichetta = pending.label || pending.phase;
+    const prossima = voce.next_stage || "la fase successiva";
+    accettaRif = h("button", {
+      type: "button",
+      class: "actbtn",
+      text: `Accetta ${etichetta} e apri ${prossima}`,
+      title: `segna ${etichetta} accettata e lascia aperta ${prossima}`,
+    });
+    accettaRif.addEventListener("click", async () => {
+      accettaRif.disabled = true;
+      esito.className = "msg show pending";
+      esito.textContent = `accetto ${etichetta}…`;
+      try {
+        const risposta = await fetch("/api/refinement/accept", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            obligation: pending.id,
+            phase: pending.phase,
+            attempt: pending.attempt,
+            report: pending.report,
+            verdict: pending.verdict,
+            author: pending.author,
+            next: pending.next,
+            next_report: pending.next_report,
+          }),
+        });
+        const payload = await risposta.json();
+        if (!risposta.ok) throw new Error(payload.error || `errore ${risposta.status}`);
+        esito.className = "msg show ok";
+        esito.textContent = `${etichetta} accettata. Prossimo atto: ${prossima}.`;
+        setTimeout(load, 1500);
+      } catch (error) {
+        esito.className = "msg show err";
+        esito.textContent = `non accettata: ${error.message}`;
+        accettaRif.disabled = false;
+      }
+    });
+  }
+  const primary = h("div", { class: "actprimary" });
+  const reportLink = voce.report_path
+    ? h("a", {
+        class: "actbtn release",
+        href: `/file?path=${encodeURIComponent(voce.report_path)}`,
+        target: "_blank",
+        rel: "noopener",
+        text: "Vedi report",
+      })
+    : null;
+  if (voce.report_closed) {
+    primary.append(h("b", { text: "Fatto" }), reportLink);
+  } else if (pending && accettaRif) {
+    primary.append(
+      h("b", { text: `Da accettare: ${pending.label}` }),
+      accettaRif,
+      reportLink
+    );
+  } else if (
+    /needs_changes|fail|open/i.test(String(voce.report_verdict || "")) ||
+    Object.values(voce.stages || {}).includes("partial")
+  ) {
+    primary.append(h("b", { text: "Errori" }));
+    const dettaglio = String(voce.report_handoff || voce.report_verdict || "").trim();
+    if (dettaglio) {
+      primary.append(h("p", {
+        text: dettaglio.length > 420 ? `${dettaglio.slice(0, 419)}…` : dettaglio,
+      }));
+    }
+    primary.append(
+      h("button", {
+        type: "button",
+        class: "actbtn",
+        text: `Riprendi da ${voce.next_stage || "E"}`,
+        onclick: () => copia.click(),
+      }),
+      reportLink
+    );
+  } else {
+    primary.append(
+      h("b", { text: `Da fare: ${voce.next_stage || "?"}` }),
+      h("button", {
+        type: "button",
+        class: "actbtn",
+        text: "Copia prompt",
+        onclick: () => copia.click(),
+      })
+    );
+  }
+  testo.prepend(primary);
+  testo.append(dettagli);
+  const azioni = h("div", { class: "actactions" }, [
+    h("button", {
+      type: "button",
+      class: "actbtn",
+      text: "Gestisci",
+      title: "fase, stato, report, presa e prossimo atto",
+      onclick: () =>
+        apriRifinitura(voce, { add: voce.stage_source !== "refinements.yaml" }),
+    }),
+    h("button", {
+      type: "button",
+      class: "actbtn release",
+      text: "Leggi",
+      title: "l'obbligo intero, come sta nel registro",
+      onclick: () =>
+        apriTesto(
+          `${voce.id} — obbligo aperto`,
+          testoObbligo(),
+          { copia: true, file: `obbligo-${voce.id}.md` }
+        ),
+    }),
+    copia,
+    h("a", {
+      class: "actbtn",
+      href: "/file?path=state.yaml",
+      target: "_blank",
+      rel: "noopener",
+      text: "Registro",
+    }),
+    voce.report_path
+      ? h("a", {
+          class: "actbtn",
+          href: `/file?path=${encodeURIComponent(voce.report_path)}`,
+          target: "_blank",
+          rel: "noopener",
+          text: "Ultimo report",
+        })
+      : null,
+    esito,
+  ]);
+  riga.append(testo, azioni);
+  return riga;
+}
+
 function owedGroup(voci) {
   return h("div", { class: "actbox" }, [
     h("p", { class: "actgroup accent" }, [
-      h("b", { text: "Quello che il registro dice che è dovuto" }),
+      h("b", { text: "Direzioni lasciate dai report" }),
       h("span", { class: "actcount", text: String(voci.length) }),
     ]),
+    h("p", {
+      class: "actmeta",
+      text:
+        "Non sono ordini: solo le righe con un pulsante «Prompt» hanno una fase da rilanciare. " +
+        "Le altre sono il testimone di chi ha finito e vanno lette, non eseguite in serie.",
+    }),
     ...voci.map(owedRow),
   ]);
 }
@@ -1902,14 +2452,10 @@ function owedGroup(voci) {
 function owedRow(voce) {
   const riga = h("div", { class: "actrow" });
   const testo = h("div", { class: "acttext" });
-  const codici = (voce.codes || []).slice(0, 3);
+  const codici = voce.codes || [];
   testo.append(h("code", { class: "actcode", text: voce.from_phase }));
   testo.append(
-    document.createTextNode(
-      ` dice che il prossimo atto è ${codici
-        .map((c) => `${c.code} (${c.status}${c.attempt ? `, attempt ${c.attempt}` : ""})`)
-        .join(" e ")}`
-    )
+    document.createTextNode(" — direzione lasciata nel report, non un ordine")
   );
   testo.append(
     h("div", {
@@ -1924,21 +2470,50 @@ function owedRow(voce) {
         .join(" · "),
     })
   );
+  // Il TESTO è la direzione vera. La riga sintetica «il prossimo atto è X» faceva sembrare
+  // un ordine ciò che è solo una frase del report, e i codici citati potevano essere già
+  // accettati. Qui si legge cosa ha scritto chi ha finito; i pulsanti arrivano dopo.
+  const direzione = String(voce.text || "").trim();
+  if (direzione) {
+    testo.append(
+      h("div", {
+        class: "actmeta",
+        text: direzione.length > 420 ? `${direzione.slice(0, 419)}…` : direzione,
+      })
+    );
+  }
+  const azionabili = codici.filter(
+    (codice) => !codice.live && !codice.done && codice.status !== "accepted"
+  );
+  testo.append(
+    h("div", {
+      class: "actmeta",
+      text: azionabili.length
+        ? `Fasi da rilanciare: ${azionabili.map((codice) => codice.code).join(", ")}`
+        : "Nessuna fase da rilanciare: questa riga è una direzione da leggere, non un prompt.",
+    })
+  );
   riga.append(testo);
-  const tracce = codici.map((codice) => rigaConsegna(codice.code, codice.done)).filter(Boolean);
-  tracce.forEach((t) => testo.append(t));
   const azioni = h("div", { class: "actactions" });
   codici.forEach((codice) => {
-    // Una cosa già presa non si manda una seconda volta: al posto del pulsante c'e' la misura —
-    // qualcuno la sta facendo adesso, e la scheda «In corso adesso» lo dice per esteso.
+    // NIENTE PULSANTE PER UNA FASE GIÀ ACCETTATA. Misurato dall'utente il 2026-10-19 su
+    // END03R: la riga nominava END03T, QA06T e QA06R, tutte accepted, e la pagina offriva
+    // tre «Prompt»; il lavoro vero era un atto di ratifica, non tre nuovi tentativi.
+    const etichetta = codice.live
+      ? "in corso"
+      : codice.done
+        ? "consegnata"
+        : codice.status === "accepted"
+          ? "accettata"
+          : codice.status || "da verificare";
     azioni.append(
-      codice.live
-        ? h("span", { class: "actbtn release taken", text: `${codice.code}: in corso` })
-        : codice.done
-          ? h("span", { class: "actbtn release taken", text: `${codice.code}: consegnata` })
-          : owedPromptButton(codice.code)
+      h("span", {
+        class: "actbtn release taken",
+        text: `${codice.code}: ${etichetta}`,
+      })
     );
   });
+  azionabili.forEach((codice) => azioni.append(owedPromptButton(codice.code)));
   azioni.append(
     h("button", {
       type: "button",
@@ -1985,17 +2560,17 @@ function owedPromptButton(code, etichetta) {
    lo mostrava. Qui si deposita una RICEVUTA (un file in `inbox/`, non una scrittura nei registri):
    cosi' la riga puo' dire «consegnato alle 14:52, nessuna presa dichiarata» — e tu sai che c'e' un
    agente da controllare, non un lavoro da rifare. */
-function annotaPromptConsegnato(code) {
-  if (!code) return;
+function annotaPromptConsegnato(code, verbo = "copiato") {
+  if (!code) return Promise.resolve();
   const adesso = new Date().toISOString().slice(11, 16);
-  fetch("/api/inbox", {
+  return fetch("/api/inbox", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       phase: code,
       sender: "utente",
       kind: "prompt-consegnato",
-      text: `Prompt di ${code} copiato dalla pagina alle ${adesso} e consegnato a una chat. Nessuna presa dichiarata nel registro finché chi l'ha ricevuto non la deposita.`,
+      text: `Prompt di ${code} ${verbo} dalla pagina alle ${adesso} e consegnato a una chat. Nessuna presa dichiarata nel registro finché chi l'ha ricevuto non la deposita.`,
     }),
   }).catch(() => {});
 }
@@ -4029,6 +4604,371 @@ function renderGlossario() {
   }
 }
 
+/* La pagina «Recap»: lo stesso elenco del dialogo, ma leggibile e ricaricabile. */
+let recapPayload = null;
+
+async function promptPerVoce(voce) {
+  const titolo = voce.titolo || "";
+  const codice = (titolo.match(/^([A-Z][A-Z0-9-]{2,})\b/) || [])[1];
+  if (codice && !titolo.startsWith("Obbligo ")) {
+    try {
+      const payload = await chiediPrompt(codice);
+      return payload.text || "";
+    } catch (error) {
+      // Un codice che non è una fase (o un registro momentaneamente illeggibile) non deve
+      // lasciare il pulsante muto: si usa l'istruzione mirata costruita qui sotto.
+    }
+  }
+  return [
+    `Lavora su: ${titolo}.`,
+    voce.badge ? `Priorità: ${voce.badge}.` : "",
+    voce.riassunto ? `Problema: ${voce.riassunto}` : "",
+    voce.stato ? `Stato: ${voce.stato}` : "",
+    voce.dettaglio ? `Dettaglio: ${voce.dettaglio}` : "",
+    voce.fonte ? `Fonte: ${voce.fonte}` : "",
+    "Leggi gli esiti citati e verifica se la voce è ancora aperta.",
+    "Se è chiusa, deposita l'atto di chiusura con l'evidenza esatta (file, attempt, comando, esito).",
+    "Se è aperta, esegui la prossima azione e dichiara cosa hai misurato. Non inventare voci o esiti.",
+  ].filter(Boolean).join("\n") + "\n";
+}
+
+function renderRecapPage(payload) {
+  const box = $("#recap-page");
+  if (!box) return;
+  const voci = Object.values(payload.counts || {}).reduce(
+    (totale, numero) => totale + Number(numero || 0),
+    0
+  );
+  const count = $("#recap-count");
+  if (count) {
+    const etichette = {
+      bloccanti: "bloccano la chiusura",
+      altri_aperti: "aperti non bloccanti",
+      in_corso: "in corso",
+      attesa_te: "aspettano te",
+      amministrazione: "amministrazione",
+      da_fare: "da fare",
+      esiti: "esiti",
+    };
+    const parti = Object.entries(payload.counts || {})
+      .filter(([, numero]) => Number(numero) > 0)
+      .map(([chiave, numero]) => `${numero} ${etichette[chiave] || chiave}`);
+    count.textContent = parti.length ? parti.join(" · ") : `${voci} voci`;
+  }
+  const generated = $("#generated");
+  if (generated) {
+    generated.textContent = `recap del ${payload.generated || "adesso"} · registri ed esiti del progetto`;
+  }
+  const parti = [];
+  if (payload.complete) {
+    parti.push(h("p", { class: "hint" }, "Nessuna voce aperta: i registri e gli esiti non mostrano sospesi."));
+  }
+  (payload.groups || []).forEach((gruppo) => {
+    const numero = (gruppo.voci || []).length + Number(gruppo.tagliate || 0);
+    parti.push(h("h3", { class: "recap-gruppo", text: `${gruppo.etichetta} (${numero})` }));
+    const lista = h("div", { class: "recap-lista" });
+    (gruppo.voci || []).forEach((voce) => {
+      const azioni = h("div", { class: "recap-azioni" });
+      const copia = h("button", {
+        type: "button",
+        class: "ghost",
+        text: "Copia prompt",
+        title: "copia un'istruzione mirata per questa voce",
+      });
+      copia.addEventListener("click", async () => {
+        const prompt = await promptPerVoce(voce);
+        const esito = await copiaTesto(prompt);
+        const messaggio = $("#recap-esito");
+        if (messaggio) {
+          messaggio.className = `msg show ${esito.ok ? "ok" : "err"}`;
+          messaggio.textContent = esito.ok
+            ? "Prompt della voce copiato."
+            : "Copia non riuscita: apri «Dettagli» e seleziona il testo.";
+        }
+      });
+      azioni.append(copia);
+      if (voce.fonte === "registro") {
+        azioni.append(h("a", {
+          class: "ghost",
+          href: "/file?path=state.yaml",
+          target: "_blank",
+          rel: "noopener",
+          text: "Apri il registro",
+        }));
+      }
+      if (voce.fonte === "inbox" && voce.ref) {
+        const archivia = h("button", {
+          type: "button",
+          class: "ghost",
+          text: "Archivia",
+          title: "chiude la ricevuta della posta senza toccare il testo del messaggio",
+        });
+        archivia.addEventListener("click", async () => {
+          const nota = window.prompt(
+            "Nota di chiusura",
+            "Messaggio di direzione: nessuna azione richiesta."
+          );
+          if (nota === null) return;
+          archivia.disabled = true;
+          try {
+            const response = await fetch("/api/inbox/close", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ ricevuta: voce.ref, nota }),
+            });
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+            const messaggio = $("#recap-esito");
+            if (messaggio) {
+              messaggio.className = "msg show ok";
+              messaggio.textContent = "Ricevuta archiviata.";
+            }
+            await loadRecapPage();
+          } catch (error) {
+            const messaggio = $("#recap-esito");
+            if (messaggio) {
+              messaggio.className = "msg show err";
+              messaggio.textContent = `Archiviazione non riuscita: ${error.message}`;
+            }
+          } finally {
+            archivia.disabled = false;
+          }
+        });
+        azioni.append(archivia);
+      }
+      if (voce.fonte && /^(reports|docs|inbox|pending-transitions)\//.test(voce.fonte)) {
+        azioni.append(h("a", {
+          class: "ghost",
+          href: `/file?path=${encodeURIComponent(voce.fonte)}`,
+          target: "_blank",
+          rel: "noopener",
+          text: "Apri la fonte",
+        }));
+      }
+      const dettaglio = voce.dettaglio
+        ? voce.dettaglio.length > 180
+          ? h("details", { class: "recap-dettagli" }, [
+              h("summary", { text: "Dettagli" }),
+              h("p", { text: voce.dettaglio }),
+            ])
+          : h("p", { text: voce.dettaglio })
+        : null;
+      lista.append(
+        h("article", { class: "recap-voce" }, [
+          voce.badge ? h("span", { class: "recap-badge", text: voce.badge }) : null,
+          h("b", { text: voce.titolo }),
+          voce.riassunto
+            ? h("p", { class: "recap-riassunto", text: voce.riassunto })
+            : null,
+          voce.stato && voce.stato !== voce.riassunto
+            && /(APERTO|MANCA|RESTA|FIX|ACCETTATO|CHIUS|DOVUT)/i.test(voce.stato)
+            ? h("p", { class: "recap-stato", text: `Stato: ${voce.stato}` })
+            : null,
+          dettaglio,
+          voce.fonte ? h("small", { text: `Fonte: ${voce.fonte}` }) : null,
+          azioni,
+        ].filter(Boolean))
+      );
+    });
+    if (gruppo.tagliate) {
+      lista.append(h("p", { class: "hint", text: `… e altre ${gruppo.tagliate} voci non elencate.` }));
+    }
+    parti.push(lista);
+  });
+  box.setAttribute("aria-busy", "false");
+  box.replaceChildren(...parti);
+}
+
+async function loadRecapPage() {
+  const box = $("#recap-page");
+  if (!box) return;
+  box.setAttribute("aria-busy", "true");
+  box.replaceChildren(h("p", { class: "hint", text: "Leggo i registri e gli esiti…" }));
+  try {
+    const response = await fetch("/api/recap");
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+    recapPayload = payload;
+    renderRecapPage(payload);
+  } catch (error) {
+    box.setAttribute("aria-busy", "false");
+    box.replaceChildren(h("p", { class: "hint", text: `Recap non disponibile: ${error.message}` }));
+  }
+}
+
+function initRecapPage() {
+  const copia = $("#recap-copia");
+  const ricarica = $("#recap-ricarica");
+  if (copia) {
+    copia.addEventListener("click", async () => {
+      if (!recapPayload) await loadRecapPage();
+      if (!recapPayload) return;
+      const esito = await copiaTesto(recapPayload.prompt || "");
+      const messaggio = $("#recap-esito");
+      if (messaggio) {
+        messaggio.className = `msg show ${esito.ok ? "ok" : "err"}`;
+        messaggio.textContent = esito.ok
+          ? "Prompt copiato: incollalo come primo messaggio di una chat nuova."
+          : "Copia non riuscita: apri il recap dal pulsante in alto e seleziona il testo.";
+      }
+    });
+  }
+  if (ricarica) ricarica.addEventListener("click", () => loadRecapPage());
+}
+
+/* La rifinitura finale: un'insegna in «Adesso», non una pagina separata. */
+function renderFinishing(data) {
+  const banner = $("#finishing-banner");
+  if (!banner) return;
+  const s = data.summary || {};
+  const gate = Number(s.open_gate_obligations || 0);
+  const altri = Math.max(0, Number(s.open_obligations || 0) - gate);
+  const ratifiche = Number(s.open_independence_debts || 0);
+  const posta = Number((data.inbox || {}).non_lavorate || 0);
+  const rifiniture = gate + altri + ratifiche + posta;
+  const concluso = Number(s.open_units || 0) === 0;
+  const items = data.obligations || [];
+  const prese = items.filter((voce) => voce.taken).length;
+  const consegnati = items.filter((voce) => voce.dispatched).length;
+  const finiti = items.filter((voce) => voce.report_closed).length;
+  banner.hidden = !concluso;
+  const headerButton = $("#recap-sospesi");
+  if (headerButton) headerButton.hidden = !concluso;
+  if (!concluso) return;
+  const kicker = banner.querySelector(".finishing-kicker");
+  const title = $("#finishing-title");
+  const summary = $("#finishing-summary");
+  if (kicker) kicker.textContent = rifiniture ? "Rifinitura finale" : "Lavoro concluso";
+  if (title) title.textContent = rifiniture ? "Lavoro principale concluso" : "Lavoro concluso";
+  if (summary) {
+    const parti = [];
+    if (gate) {
+      parti.push(`${gate} ${gate === 1 ? "punto blocca" : "punti bloccano"} la chiusura`);
+    }
+    if (altri) {
+      parti.push(`${altri} ${altri === 1 ? "punto aperto" : "punti aperti"} non bloccanti`);
+    }
+    if (ratifiche) {
+      parti.push(`${ratifiche} ${ratifiche === 1 ? "ratifica mancante" : "ratifiche mancanti"}`);
+    }
+    if (posta) {
+      parti.push(`${posta} ${posta === 1 ? "ricevuta" : "ricevute"} da archiviare`);
+    }
+    const presa = items.length
+      ? ` Prese in carico: ${prese} di ${items.length}; prompt consegnati: ${consegnati} di ${items.length}${
+          finiti ? `; finiti da registrare: ${finiti} di ${items.length}` : ""
+        }.`
+      : "";
+    summary.textContent = (parti.length
+      ? `Tutte le ${s.units || 0} unità e le fasi sono accettate. Restano ${parti.join(", ")}.`
+      : `Tutte le ${s.units || 0} unità e le fasi sono accettate; non risultano rifiniture aperte.`) + presa;
+  }
+}
+
+function initFinishing() {
+  const prompt = $("#finishing-prompt");
+  const scroll = $("#finishing-scroll");
+  if (prompt) {
+    prompt.addEventListener("click", async () => {
+      prompt.disabled = true;
+      const esito = $("#finishing-esito");
+      if (esito) {
+        esito.className = "msg show pending";
+        esito.textContent = "preparo…";
+      }
+      try {
+        const response = await fetch("/api/state");
+        const payload = await response.json();
+        if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+        const rifiniture = payload.obligations || [];
+        const testo = [
+          "Rifiniture finali del workspace. Ogni voce ha la sua fase A/E/T/R e il suo prossimo atto.",
+          ...rifiniture.map((voce) => `## ${voce.id}\n${voce.next_prompt || ""}`.trim()),
+        ].join("\n\n") + "\n";
+        const copiato = await copiaTesto(testo);
+        if (esito) {
+          esito.className = `msg show ${copiato.ok ? "ok" : "err"}`;
+          esito.textContent = copiato.ok
+            ? "Prompt delle rifiniture copiato."
+            : "Copia non riuscita: apri il testo e selezionalo.";
+        }
+        if (!copiato.ok) {
+          apriTesto("Rifiniture finali — prompt", testo, {
+            copia: true,
+            seleziona: true,
+            file: "rifiniture-finali.md",
+          });
+        } else {
+          const daSegnare = ((snapshot && snapshot.obligations) || []).filter(
+            (voce) => voce.gate && !voce.taken
+          );
+          await Promise.all(daSegnare.map((voce) => annotaPromptConsegnato(voce.id)));
+          await load();
+        }
+      } catch (error) {
+        if (esito) {
+          esito.className = "msg show err";
+          esito.textContent = `Prompt non disponibile: ${error.message}`;
+        }
+      } finally {
+        prompt.disabled = false;
+      }
+    });
+  }
+  if (scroll) {
+    scroll.addEventListener("click", () => {
+      $("#rifiniture")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  }
+  const markSent = $("#finishing-mark-sent");
+  if (markSent) {
+    markSent.addEventListener("click", async () => {
+      const daSegnare = ((snapshot && snapshot.obligations) || []).filter(
+        (voce) => !voce.taken && !voce.dispatched
+      );
+      const esito = $("#finishing-esito");
+      if (!daSegnare.length) {
+        if (esito) {
+          esito.className = "msg show ok";
+          esito.textContent = "Tutte le rifiniture risultano già consegnate o prese in carico.";
+        }
+        return;
+      }
+      markSent.disabled = true;
+      try {
+        await Promise.all(
+          daSegnare.map((voce) =>
+            annotaPromptConsegnato(voce.id, "segnato come consegnato")
+          )
+        );
+        if (esito) {
+          esito.className = "msg show ok";
+          esito.textContent = `${daSegnare.length} rifiniture segnate come consegnate.`;
+        }
+        await load();
+      } finally {
+        markSent.disabled = false;
+      }
+    });
+  }
+}
+
+/* «Rifiniture»: porta all'insegna in «Adesso»; non apre una pagina separata. */
+function initRecap() {
+  const button = $("#recap-sospesi");
+  if (!button) return;
+  button.addEventListener("click", () => {
+    if (paginaCorrente() !== "adesso") {
+      window.location.href = "/";
+      return;
+    }
+    const banner = $("#finishing-banner");
+    if (!banner || banner.hidden) return;
+    banner.scrollIntoView({ behavior: "smooth", block: "start" });
+    $("#finishing-title")?.focus({ preventScroll: true });
+  });
+}
+
 /* Il tutorial: un solo pannello, con l'indice che porta alle sezioni. Si apre sopra la pagina e non
    la sostituisce, perche' le parole del tutorial servono mentre si guarda la pagina. */
 function initTutorial() {
@@ -4122,13 +5062,362 @@ function spiegaFase(phase) {
   spiega(`${phase.id} — ${phase.title || phase.kind || "fase"}`, [...base, stato]);
 }
 
+let worklogData = null;
+const WORKLOG_KIND = {
+  analysis: "Analisi",
+  implementation: "Esecuzione",
+  independent_verification: "Verifica",
+  functional_acceptance: "Accettazione",
+};
+const WORKLOG_STATUS = {
+  accepted: "accettata",
+  pending: "da fare",
+  ready: "pronta",
+  taken: "in corso",
+  running: "in corso",
+  needs_changes: "respinta",
+  failed: "fallita",
+  blocked_dependency: "bloccata",
+  blocked_verification: "bloccata",
+  waiting_on_user: "in attesa",
+};
+
+function worklogStrip(stages, nextStage) {
+  const strip = h("div", { class: "actstages" });
+  ["A", "E", "T", "R"].forEach((chiave) => {
+    strip.append(h("span", {
+      class: `stage ${stages[chiave] || "missing"}`,
+      text: chiave,
+    }));
+  });
+  if (nextStage) {
+    strip.append(h("span", { class: "stage-next", text: `Prossimo: ${nextStage}` }));
+  }
+  return strip;
+}
+
+function worklogMatches(testo, query) {
+  return !query || String(testo || "").toLowerCase().includes(query);
+}
+
+function renderWorklogSummary() {
+  const s = worklogData.summary || {};
+  const box = $("#worklog-summary");
+  if (box) {
+    const stats = [
+      [`${s.accepted_units}/${s.units}`, "Unità accettate"],
+      [`${s.accepted_phases}/${s.phases}`, "Fasi accettate"],
+      [s.reports, "Report"],
+      [s.attempts, "Tentativi registrati"],
+      [`${s.closed_refinements}/${s.refinements}`, "Rifiniture chiuse"],
+      [s.first_published ? String(s.first_published).slice(0, 10) : "—", "Primo report"],
+      [s.last_published ? String(s.last_published).slice(0, 10) : "—", "Ultimo report"],
+    ];
+    box.replaceChildren(
+      ...stats.map(([valore, etichetta]) =>
+        h("div", { class: "worklog-stat" }, [
+          h("b", { text: String(valore) }),
+          h("span", { text: etichetta }),
+        ])
+      )
+    );
+  }
+  const count = $("#worklog-count");
+  if (count) {
+    count.textContent = `${s.accepted_units}/${s.units} unità · ${s.accepted_phases}/${s.phases} fasi`;
+  }
+}
+
+function renderWorklog() {
+  const box = $("#worklog");
+  if (!box || !worklogData) return;
+  const query = String($("#worklog-search")?.value || "").trim().toLowerCase();
+  const dominio = String($("#worklog-domain")?.value || "");
+  const mostraAperti = Boolean($("#worklog-open")?.checked);
+  const parti = [];
+  for (const blocco of worklogData.blocks || []) {
+    if (dominio && blocco.domain !== dominio) continue;
+    const unita = [];
+    for (const unit of blocco.units || []) {
+      const fasi = (unit.phases || []).filter((fase) => {
+        if (!mostraAperti && fase.status !== "accepted") return false;
+        return worklogMatches(
+          [
+            unit.id,
+            unit.title,
+            fase.id,
+            fase.kind,
+            fase.verdict,
+            fase.author,
+            fase.report,
+          ].join(" "),
+          query
+        );
+      });
+      if (fasi.length) unita.push({ unit, fasi });
+    }
+    if (!unita.length) continue;
+    parti.push(h("h3", { class: "worklog-block", text: blocco.domain }));
+    for (const { unit, fasi } of unita) {
+      const details = h("details", { class: "worklog-unit" });
+      details.append(
+        h("summary", {}, [
+          h("b", { text: unit.id }),
+          h("span", { text: ` — ${unit.title || ""}` }),
+          h("span", {
+            class: "count",
+            text: `${fasi.length}/${(unit.phases || []).length} fasi`,
+          }),
+        ])
+      );
+      const table = h("table", {}, [
+        h("thead", {}, [
+          h("tr", {}, ["Fase", "Tipo", "Attempt", "Verdetto", "Autore", "Data", "Report"].map((testo) =>
+            h("th", { text: testo })
+          )),
+        ]),
+      ]);
+      const corpo = h("tbody");
+      for (const fase of fasi) {
+        const link = fase.report
+          ? h("a", {
+              class: "worklog-report",
+              href: `/file?path=${encodeURIComponent(fase.report)}`,
+              target: "_blank",
+              rel: "noopener",
+              text: "Apri",
+            })
+          : document.createTextNode("—");
+        corpo.append(
+          h("tr", {}, [
+            h("td", {}, [h("code", { text: fase.id })]),
+            h("td", { text: WORKLOG_KIND[fase.kind] || fase.kind || "" }),
+            h("td", { text: fase.attempt || fase.report_attempt || "" }),
+            h("td", { text: fase.verdict || WORKLOG_STATUS[fase.status] || fase.status || "" }),
+            h("td", { text: fase.author || "" }),
+            h("td", { text: String(fase.published_at || "").slice(0, 16).replace("T", " ") }),
+            h("td", {}, [link]),
+          ])
+        );
+      }
+      table.append(corpo);
+      details.append(table);
+      parti.push(details);
+    }
+  }
+  if ((worklogData.refinements || []).length) {
+    parti.push(h("h3", { class: "worklog-block", text: "Rifiniture" }));
+    for (const voce of worklogData.refinements) {
+      const card = h("article", { class: "worklog-refinement" });
+      card.append(h("b", { text: `${voce.id}${voce.closed ? " · chiusa" : ""}` }));
+      if (voce.title) card.append(h("p", { class: "hint", text: voce.title }));
+      if ((voce.owners || []).length) {
+        card.append(h("small", {
+          text: `Unità proprietaria: ${voce.owners.join(", ")}`,
+        }));
+      }
+      card.append(worklogStrip(voce.stages || {}, voce.next));
+      if (voce.claim && voce.claim.taken_by) {
+        card.append(
+          h("small", {
+            text: `Presa: ${voce.claim.taken_by} · ${voce.claim.task || ""} · ${voce.claim.status || ""}`,
+          })
+        );
+      }
+      if (voce.next_report) {
+        card.append(
+          h("a", {
+            class: "worklog-report",
+            href: `/file?path=${encodeURIComponent(voce.next_report)}`,
+            target: "_blank",
+            rel: "noopener",
+            text: "Prossimo report",
+          })
+        );
+      }
+      card.append(
+        h("button", {
+          type: "button",
+          class: "ghost",
+          text: "Gestisci",
+          onclick: () =>
+            apriRifinitura({
+              id: voce.id,
+              title: voce.title,
+              next_stage: voce.next,
+              stages: voce.stages,
+              last_claim_by: voce.claim?.taken_by,
+              last_claim_task: voce.claim?.task,
+              next_report: voce.next_report,
+            }),
+        })
+      );
+      parti.push(card);
+    }
+  }
+  if (!parti.length) {
+    parti.push(h("p", { class: "hint", text: "Nessun lavoro corrisponde ai filtri." }));
+  }
+  box.setAttribute("aria-busy", "false");
+  box.replaceChildren(...parti);
+}
+
+async function loadWorklog() {
+  const box = $("#worklog");
+  if (!box) return;
+  box.setAttribute("aria-busy", "true");
+  box.replaceChildren(h("p", { class: "hint", text: "Leggo i registri…" }));
+  try {
+    const response = await fetch("/api/svolto");
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+    worklogData = payload;
+    const generated = $("#generated");
+    if (generated) {
+      generated.textContent = `lavoro svolto del ${payload.generated} · dati letti dai registri`;
+    }
+    const select = $("#worklog-domain");
+    if (select) {
+      const corrente = select.value;
+      select.replaceChildren(h("option", { value: "", text: "Tutti i blocchi" }));
+      (payload.blocks || []).forEach((blocco) => {
+        select.append(h("option", { value: blocco.domain, text: blocco.domain }));
+      });
+      select.value = corrente;
+    }
+    renderWorklogSummary();
+    renderWorklog();
+  } catch (error) {
+    box.setAttribute("aria-busy", "false");
+    box.replaceChildren(h("p", { class: "hint", text: `Lavoro svolto non disponibile: ${error.message}` }));
+  }
+}
+
+function initWorklog() {
+  $("#worklog-search")?.addEventListener("input", renderWorklog);
+  $("#worklog-domain")?.addEventListener("change", renderWorklog);
+  $("#worklog-open")?.addEventListener("change", renderWorklog);
+  $("#worklog-expand")?.addEventListener("click", () => {
+    document.querySelectorAll(".worklog-unit").forEach((node) => (node.open = true));
+  });
+  $("#worklog-collapse")?.addEventListener("click", () => {
+    document.querySelectorAll(".worklog-unit").forEach((node) => (node.open = false));
+  });
+}
+
+let refinementCorrente = null;
+
+function refinementReload() {
+  if (paginaCorrente() === "svolto") loadWorklog();
+  else load();
+}
+
+function apriRifinitura(voce, { add = false } = {}) {
+  const dialog = $("#refinement-dialog");
+  if (!dialog) return;
+  refinementCorrente = voce || null;
+  $("#ref-action").value = add ? "add" : "update";
+  $("#ref-obligation").value = voce?.id || "";
+  $("#ref-title").value = voce?.title || "";
+  const fase = voce?.next_stage || (add ? "A" : "");
+  $("#ref-phase").value = ["A", "E", "T", "R"].includes(fase) ? fase : "";
+  const statoFase = voce?.stages?.[fase];
+  $("#ref-status").value =
+    statoFase === "done" ? "accepted" : statoFase === "partial" ? "partial" : statoFase === "in_progress" ? "in_progress" : "";
+  $("#ref-attempt").value = voce?.report_attempt || "";
+  $("#ref-report").value = voce?.report_path || "";
+  $("#ref-verdict").value = voce?.report_verdict || "";
+  $("#ref-author").value = voce?.report_author || "";
+  $("#ref-next").value = voce?.report_next || "";
+  $("#ref-next-report").value = voce?.next_report || "";
+  $("#ref-claim-by").value = voce?.last_claim_by || "";
+  $("#ref-claim-task").value = voce?.last_claim_task || "";
+  $("#ref-esito").textContent = "";
+  dialog.showModal();
+  $("#ref-obligation").focus({ preventScroll: true });
+}
+
+async function inviaRifinitura(action) {
+  const obligation = $("#ref-obligation").value.trim();
+  const esito = $("#ref-esito");
+  if (!obligation) {
+    esito.className = "msg show err";
+    esito.textContent = "serve l'obbligo";
+    return;
+  }
+  const payload = {
+    action,
+    obligation,
+    title: $("#ref-title").value.trim() || null,
+    phase: $("#ref-phase").value || null,
+    status: $("#ref-status").value || null,
+    attempt: $("#ref-attempt").value || null,
+    report: $("#ref-report").value.trim() || null,
+    verdict: $("#ref-verdict").value.trim() || null,
+    author: $("#ref-author").value.trim() || null,
+    claim_by: $("#ref-claim-by").value.trim() || null,
+    claim_task: $("#ref-claim-task").value.trim() || null,
+    next: $("#ref-next").value.trim() || null,
+    next_report: $("#ref-next-report").value.trim() || null,
+  };
+  if (action === "claim" && !payload.claim_by) {
+    esito.className = "msg show err";
+    esito.textContent = "scrivi chi prende in carico";
+    return;
+  }
+  const pulsante = $("#refinement-form button[type=submit]");
+  if (pulsante) pulsante.disabled = true;
+  try {
+    const response = await fetch("/api/refinement", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    const risposta = await response.json();
+    if (!response.ok) throw new Error(risposta.error || `HTTP ${response.status}`);
+    $("#refinement-dialog").close();
+    refinementReload();
+  } catch (error) {
+    esito.className = "msg show err";
+    esito.textContent = `Non salvato: ${error.message}`;
+  } finally {
+    if (pulsante) pulsante.disabled = false;
+  }
+}
+
+function initRifinitura() {
+  $("#refinement-form")?.addEventListener("submit", (event) => {
+    event.preventDefault();
+    inviaRifinitura($("#ref-action").value || "update");
+  });
+  $("#ref-claim")?.addEventListener("click", () => inviaRifinitura("claim"));
+  $("#ref-release")?.addEventListener("click", () => inviaRifinitura("release"));
+  $("#ref-add")?.addEventListener("click", () => {
+    $("#ref-action").value = "add";
+    $("#ref-obligation").value = "";
+    $("#ref-title").value = "";
+    $("#ref-phase").value = "A";
+    $("#ref-status").value = "pending";
+    $("#ref-obligation").focus();
+  });
+}
+
 initLogo();
+initRecap();
+initFinishing();
+initWorklog();
+initRifinitura();
 renderGlossario();
 initTutorial();
 initHeaderHeight();
 preparaScheda();
 loadConfig();
-load();
+if (paginaCorrente() === "svolto") {
+  mostraPagina();
+  loadWorklog();
+} else {
+  load();
+}
 
 /* Il registro viene letto a OGNI richiesta (il server lo rilegge quando cambia il tempo di
    modifica), ma questa pagina e' un'istantanea: senza ricaricarla, i numeri restano quelli del

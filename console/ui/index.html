@@ -31,11 +31,13 @@
       <div class="top-actions">
         <nav class="pagenav" aria-label="Pagine">
           <a href="/" data-nav="adesso">Adesso</a>
+          <a href="/svolto" data-nav="svolto">Svolto</a>
           <a href="/tempo" data-nav="tempo">Tempo</a>
           <a href="/testimone" data-nav="testimone">Testimone</a>
           <a href="/prompt" data-nav="prompt">Prompt</a>
           <a href="/percorso" data-nav="percorso">Percorso</a>
         </nav>
+        <button type="button" class="ghost" id="recap-sospesi">Rifiniture</button>
         <button type="button" class="ghost" id="tutorial">Tutorial</button>
         <button type="button" class="ghost update" id="nuovo-registro" hidden>Registro cambiato · Aggiorna</button>
       </div>
@@ -103,6 +105,17 @@
     <!-- LA CODA: una riga per cosa, un pulsante per riga, in ordine di leva. E' la pagina che si
          guarda tornando: cosa posso far partire, cosa sta andando, cosa e' tornato indietro. -->
     <section id="activation-section" class="scheda-pannello" data-scheda="oggi" role="tabpanel" aria-labelledby="activation-head" data-page="adesso">
+      <div id="finishing-banner" class="finishing-banner" role="region" aria-labelledby="finishing-title" hidden>
+        <span class="finishing-kicker">Rifinitura finale</span>
+        <h2 id="finishing-title" tabindex="-1">Lavoro principale concluso</h2>
+        <p id="finishing-summary"></p>
+        <div class="row">
+          <button type="button" class="ghost" id="finishing-prompt">Copia il prompt delle rifiniture</button>
+          <button type="button" class="ghost" id="finishing-mark-sent">Segna come consegnati</button>
+          <button type="button" class="ghost" id="finishing-scroll">Vai alle rifiniture</button>
+          <span class="msg" id="finishing-esito" role="status" aria-live="polite"></span>
+        </div>
+      </div>
       <div class="sec-head">
         <h2 id="activation-head">Cosa fare adesso</h2>
         <span class="count" id="activation-count"></span>
@@ -224,6 +237,26 @@
       <div id="blocks"></div>
     </section>
 
+    <section id="worklog-section" data-page="svolto" aria-labelledby="worklog-head">
+      <div class="sec-head">
+        <h2 id="worklog-head">Lavoro svolto</h2>
+        <span class="count" id="worklog-count"></span>
+      </div>
+      <p class="hint">Tutto quello che i registri dichiarano concluso: unità, fasi A/E/T/R, report,
+        tentativi, verdetti e autori. Le rifiniture sono in fondo, con il loro stato esplicito.</p>
+      <div id="worklog-summary" class="worklog-summary"></div>
+      <div class="row worklog-filters">
+        <input id="worklog-search" type="search" placeholder="Cerca unità, fase, verdetto, autore…">
+        <select id="worklog-domain"><option value="">Tutti i blocchi</option></select>
+        <label class="worklog-check"><input type="checkbox" id="worklog-open"> Mostra fasi aperte</label>
+        <button type="button" class="ghost" id="worklog-expand">Espandi tutto</button>
+        <button type="button" class="ghost" id="worklog-collapse">Chiudi tutto</button>
+      </div>
+      <div id="worklog" aria-busy="true">
+        <p class="hint">Leggo i registri…</p>
+      </div>
+    </section>
+
     <section id="now-section" class="scheda-pannello" data-scheda="corso" role="tabpanel" aria-labelledby="now-head" data-page="adesso">
       <div class="sec-head"><h2 id="now-head">In corso adesso</h2></div>
       <div id="claims"></div>
@@ -252,6 +285,46 @@
     <button type="button" class="ghost close" id="spiega-chiudi">Chiudi</button>
     <h3 id="spiega-title"></h3>
     <div id="spiega-body"></div>
+  </dialog>
+
+  <dialog id="refinement-dialog" aria-labelledby="refinement-title">
+    <form method="dialog"><button type="submit" class="ghost close">Chiudi</button></form>
+    <h3 id="refinement-title">Gestisci rifinitura</h3>
+    <form id="refinement-form">
+      <input type="hidden" id="ref-action" value="update">
+      <label>Obbligo <input id="ref-obligation" required autocomplete="off"></label>
+      <label>Titolo <input id="ref-title" autocomplete="off"></label>
+      <label>Fase
+        <select id="ref-phase">
+          <option value="">—</option><option>A</option><option>E</option><option>T</option><option>R</option>
+        </select>
+      </label>
+      <label>Stato
+        <select id="ref-status">
+          <option value="">—</option>
+          <option>pending</option><option>ready</option><option>taken</option>
+          <option>in_progress</option><option>delivered</option><option>partial</option>
+          <option>accepted</option><option>rejected</option><option>needs_changes</option><option>failed</option>
+        </select>
+      </label>
+      <label>Attempt <input id="ref-attempt" type="number" min="0"></label>
+      <label>Report <input id="ref-report" autocomplete="off"></label>
+      <label>Verdetto <input id="ref-verdict" autocomplete="off"></label>
+      <label>Autore <input id="ref-author" autocomplete="off"></label>
+      <label>Prossimo <input id="ref-next" autocomplete="off"></label>
+      <label>Prossimo report <input id="ref-next-report" autocomplete="off"></label>
+      <div class="row">
+        <label>Presa da <input id="ref-claim-by" autocomplete="off"></label>
+        <label>Fase della presa <input id="ref-claim-task" autocomplete="off"></label>
+      </div>
+      <div class="row refinement-actions">
+        <button type="submit" class="actbtn">Salva</button>
+        <button type="button" class="ghost" id="ref-claim">Prendi in carico</button>
+        <button type="button" class="ghost" id="ref-release">Rilascia</button>
+        <button type="button" class="ghost" id="ref-add">Nuova</button>
+        <span id="ref-esito" class="msg" role="status" aria-live="polite"></span>
+      </div>
+    </form>
   </dialog>
 
   <dialog id="report-dialog" aria-labelledby="report-title">
@@ -355,6 +428,9 @@
         un'analisi non si rifà per i suoi bloccanti: si accetta A e si manda avanti E. «Rifai
         (prompt)» compare solo se il cancello rifiuta l'accettazione — revisione mossa, puntatore
         indietro — perché in quel caso l'atto va ripreso sui byte vivi.</p>
+      <p>Le <b>rifiniture</b> hanno un registro a parte (<code>refinements.yaml</code>): quando una
+        fase come A2 o A3 è consegnata, la riga dell'obbligo offre «Accetta A2 e apri E». Non è
+        l'accettazione di una fase di unità: è il passaggio della rifinitura alla fase successiva.</p>
 
       <h4 id="tut-problemi">Se qualcosa non torna</h4>
       <ul>
@@ -365,6 +441,8 @@
         <li><b>Una fase resta lì</b>: controlla il <code>next</code> del suo report; se è una
           verifica rossa, il lavoro torna a E anche se il <code>next</code> non lo nomina; il
           prompt di E porta con sé i difetti da correggere.</li>
+        <li><b>Un obbligo resta aperto</b>: leggi «Prossimo atto dichiarato». Se dice riparare o
+          ripinnare, il lavoro è dei proprietari indicati, non un altro E su questo obbligo.</li>
         <li><b>I test sembrano troppi</b>: la regola è provare solo ciò che si tocca, una volta, e
           dichiarare cosa non si è rieseguito.</li>
       </ul>

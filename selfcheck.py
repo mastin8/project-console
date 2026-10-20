@@ -38,6 +38,9 @@ PORTE = {
     "registers/static_view.py": ["render", "main"],
     "registers/sync_phases.py": ["inserisci", "main"],
     "console/timeline.py": ["build", "configure", "repository_facts", "main"],
+    "console/recap.py": ["costruisci", "main"],
+    "console/refinements.py": ["load", "merge", "stage_map", "next_phase", "latest_report", "main"],
+    "console/test_refinements.py": ["main"],
     "console/server.py": ["main", "ReviewState"],
 }
 
