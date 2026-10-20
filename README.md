@@ -290,6 +290,16 @@ completo, le fasi A/E/T/R, owner, claim e verifica indipendente. Le modifiche ch
 migrazioni, modelli/dati, sicurezza, release o file condivisi entrano automaticamente in
 rigorosa e devono dichiarare `strict`/`risk` nel registro.
 
+### Sincronizzazione, Git e stop rule
+
+- **Sincronizza dai report** riallinea `delivered`/`needs_changes`/`accepted`, test e finding dai
+  report pubblicati; non inventa l'accettazione umana.
+- Il pannello mostra **ramo vivo**, worktree e file cambiati fuori dal perimetro dichiarato.
+- Dopo **due tentativi falliti** il task va in **«Serve una decisione»**: il tool non rilancia
+  automaticamente un terzo tentativo.
+- Una consegna `delivered` richiede report, verdetto, comando test, exit e durata; una consegna
+  `needs_changes` richiede anche i finding. La stessa scheda viene verificata prima di Accetta.
+
 Quando tutte le unità e le fasi sono accettate, **Adesso** mostra l'insegna **«Rifinitura finale»**:
 dice quante cose bloccano ancora la chiusura, quante sono aperte ma non bloccanti e quante ricevute
 di posta restano da archiviare. Sotto, in **«Rifiniture finali»**, ci sono le voci con **Leggi**,

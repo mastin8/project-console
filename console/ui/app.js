@@ -2028,6 +2028,22 @@ function obligationsGroup(voci) {
       text: "Nuova rifinitura",
       onclick: () => apriRifinitura(null, { add: true }),
     }),
+    h("button", {
+      type: "button",
+      class: "ghost",
+      text: "Sincronizza dai report",
+      onclick: async () => {
+        try {
+          const response = await fetch("/api/refinement/sync", { method: "POST" });
+          const payload = await response.json();
+          if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+          $("#status-line").textContent = `Sincronizzate ${payload.updated.length} voci dai report.`;
+          await load();
+        } catch (error) {
+          $("#status-line").textContent = `Sincronizzazione non riuscita: ${error.message}`;
+        }
+      },
+    }),
     h("label", { class: "strict-toggle" }, [
       h("input", {
         type: "checkbox",
@@ -2219,6 +2235,20 @@ function obligationRow(voce) {
     corpoDettagli.append(h("div", {
       class: "actmeta",
       text: `Ramo: ${voce.branch} · worktree: ${voce.worktree || "—"}`,
+    }));
+  }
+  if (voce.git_branch) {
+    corpoDettagli.append(h("div", {
+      class: "actmeta",
+      text: `Ramo vivo: ${voce.git_branch} · atteso: ${voce.branch || "—"}${
+        voce.branch_ready ? "" : " · non ancora allineato"
+      }`,
+    }));
+  }
+  if ((voce.path_drift || []).length) {
+    corpoDettagli.append(h("div", {
+      class: "actclaim untaken",
+      text: `File fuori perimetro: ${voce.path_drift.join(", ")}`,
     }));
   }
   if (voce.report_next) {
@@ -2424,6 +2454,18 @@ function obligationRow(voce) {
       h("b", { text: `Da accettare: ${pending.label}` }),
       accettaRif,
       testText ? h("p", { text: testText }) : null,
+      reportLink
+    );
+  } else if (voce.stop_required) {
+    primary.append(
+      h("b", { text: "Serve una decisione" }),
+      h("p", { text: voce.stop_reason || "Troppi tentativi falliti." }),
+      h("button", {
+        type: "button",
+        class: "actbtn",
+        text: "Apri Gestisci",
+        onclick: () => apriRifinitura(voce),
+      }),
       reportLink
     );
   } else if (

@@ -472,10 +472,26 @@ def _vibe_prompt(item):
         )
     if item.get("branch"):
         righe.append(f"Ramo: {item['branch']}; worktree: {item.get('worktree') or '—'}.")
+    if item.get("git_branch"):
+        righe.append(
+            f"Ramo vivo: {item['git_branch']}; atteso: {item.get('branch') or '—'}"
+            + ("" if item.get("branch_ready") else " (non ancora allineato)")
+            + "."
+        )
+    if item.get("path_drift"):
+        righe.append(
+            "Attenzione: file cambiati fuori dal perimetro dichiarato: "
+            + ", ".join(item["path_drift"][:8]) + "."
+        )
     if item.get("strict_required"):
         righe.append(
             "Questa modifica è rigorosa: usa il mandato completo, con verifica indipendente "
             "e accettazione esplicita."
+        )
+    if item.get("stop_required"):
+        righe.append(
+            "STOP: " + str(item.get("stop_reason") or "serve una decisione umana.") +
+            " Non eseguire un altro tentativo automatico."
         )
     if item.get("conflicts"):
         righe.append(
@@ -517,9 +533,39 @@ def _risk_flags(item):
             flags.append("security")
         if "release" in basso:
             flags.append("release")
-        if basso.endswith(("api.py", "worker.py", "workspace.html", "tender-workspace.js")):
-            flags.append("shared_files")
     return sorted({flag for flag in flags if flag})
+
+
+def _git_state(workspace):
+    """Ramo, worktree e file tracciati cambiati rispetto a HEAD."""
+    try:
+        top = subprocess.run(
+            ["git", "-C", str(workspace.root), "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, timeout=5,
+        )
+        if top.returncode != 0:
+            return {"available": False, "branch": "", "toplevel": "", "changed": []}
+        radice = top.stdout.strip()
+        branch = subprocess.run(
+            ["git", "-C", radice, "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+        )
+        changed = subprocess.run(
+            ["git", "-C", radice, "diff", "--name-only", "HEAD"],
+            capture_output=True, text=True, timeout=10,
+        )
+        return {
+            "available": True,
+            "branch": branch.stdout.strip() if branch.returncode == 0 else "",
+            "toplevel": radice,
+            "changed": [
+                riga.strip()
+                for riga in changed.stdout.splitlines()
+                if riga.strip()
+            ] if changed.returncode == 0 else [],
+        }
+    except (OSError, subprocess.SubprocessError):
+        return {"available": False, "branch": "", "toplevel": "", "changed": []}
 
 
 def open_obligations(state, workspace=None):
@@ -869,6 +915,7 @@ class ReviewState:
                     obligation, workspace=self.workspace
                 )
                 obligation["vibe_prompt"] = _vibe_prompt(obligation)
+        git_state = _git_state(self.workspace)
         for obligation in obligations:
             percorsi = set(obligation.get("paths") or [])
             owners = set(obligation.get("owners") or [])
@@ -891,6 +938,35 @@ class ReviewState:
             flags = _risk_flags(obligation)
             obligation["risk_flags"] = flags
             obligation["strict_required"] = bool(flags)
+            verdetto = str(obligation.get("report_verdict") or "").lower()
+            tentativo = int(obligation.get("report_attempt") or 0)
+            bloccato = (
+                ("needs_changes" in verdetto or "fail" in verdetto)
+                and tentativo >= 2
+            )
+            obligation["stop_required"] = bloccato
+            obligation["stop_reason"] = (
+                f"{tentativo} tentativi falliti: serve una decisione umana, "
+                "non un altro tentativo automatico."
+                if bloccato
+                else ""
+            )
+            obligation["git_branch"] = git_state["branch"]
+            obligation["git_worktree"] = git_state["toplevel"]
+            obligation["branch_ready"] = bool(
+                git_state["branch"]
+                and obligation.get("branch")
+                and git_state["branch"] == obligation.get("branch")
+            )
+            obligation["path_drift"] = (
+                [
+                    percorso
+                    for percorso in git_state["changed"]
+                    if percorso not in percorsi
+                ]
+                if percorsi
+                else []
+            )
             obligation["vibe_prompt"] = _vibe_prompt(obligation)
         independence_debts = open_independence_debts(state)
 
@@ -2075,6 +2151,21 @@ def build_handler(state):
                             409,
                             {"error": f"{obbligo} {fase} non è in stato delivered"},
                         )
+                    test = voce.get("test") or {}
+                    if not test.get("not_applicable") and (
+                        not test.get("command")
+                        or test.get("exit") in (None, "")
+                        or not test.get("duration")
+                    ):
+                        return self._json(
+                            409,
+                            {
+                                "error": (
+                                    f"{obbligo} {fase}: scheda test incompleta "
+                                    "(command, exit, duration)"
+                                )
+                            },
+                        )
                     comando = [
                         sys.executable,
                         str(ROOT / "console" / "refinements.py"),
@@ -2239,6 +2330,14 @@ def build_handler(state):
                     )
                 except SystemExit as error:
                     return self._json(400, {"error": str(error)})
+                except ValueError as error:
+                    return self._json(400, {"error": str(error)})
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
+                return self._json(200, {"ok": True, **esito})
+            if route == "/api/refinement/sync":
+                try:
+                    esito = refinements.sync(state.workspace)
                 except Exception as error:  # noqa: BLE001
                     return self._json(500, {"error": str(error)})
                 return self._json(200, {"ok": True, **esito})

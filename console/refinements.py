@@ -191,6 +191,65 @@ def merge(obligation, item, workspace=None):
     return obligation
 
 
+def sync(workspace):
+    """Riallinea le fasi dai report pubblicati, senza inventare l'accettazione umana."""
+    percorso = workspace.refinements_path
+    documento = _carica(percorso) or {"schema": SCHEMA, "items": []}
+    cambi = []
+    for item in documento.get("items") or []:
+        for fase in PHASES:
+            voce = (item.get("phases") or {}).get(fase) or {}
+            report_path = voce.get("report")
+            if not report_path:
+                continue
+            report = _report_state(workspace, report_path)
+            if not report:
+                continue
+            tentativo = int(report.get("attempt") or 0)
+            corrente = int(voce.get("attempt") or 0)
+            if tentativo and corrente and tentativo < corrente:
+                continue
+            verdict = str(report.get("verdict") or "").lower()
+            chiusa = bool(
+                report.get("closure_condition_met") is True
+                or str(report.get("obligation_status_after") or "") == "closed"
+                or "accept_unit" in verdict
+            )
+            if chiusa:
+                stato = "accepted"
+            elif "needs_changes" in verdict or "fail" in verdict:
+                stato = "needs_changes"
+            else:
+                stato = "delivered"
+            if voce.get("status") != stato:
+                voce["status"] = stato
+                cambi.append(f"{item.get('id')}.{fase}.status")
+            test = report.get("test")
+            if isinstance(test, dict) and test:
+                voce["test"] = test
+                cambi.append(f"{item.get('id')}.{fase}.test")
+            errori = report.get("findings") or report.get("errors")
+            if errori:
+                voce["errors"] = errori
+                cambi.append(f"{item.get('id')}.{fase}.errors")
+            if report.get("next"):
+                item["next"] = str(report["next"])
+                cambi.append(f"{item.get('id')}.next")
+            if report.get("next_report"):
+                item["next_report"] = str(report["next_report"])
+                cambi.append(f"{item.get('id')}.next_report")
+    if not cambi:
+        return {"updated": [], "file": str(percorso)}
+    with open(lock_file(workspace.root), "a+") as maniglia:
+        fcntl.flock(maniglia, fcntl.LOCK_EX)
+        percorso.write_text(
+            yaml.safe_dump(documento, sort_keys=False, allow_unicode=True),
+            encoding="utf-8",
+        )
+        fcntl.flock(maniglia, fcntl.LOCK_UN)
+    return {"updated": sorted(set(cambi)), "file": str(percorso)}
+
+
 def update(
     workspace,
     obligation,
@@ -286,6 +345,25 @@ def update(
                 errors = [voce.strip() for voce in errors.split(";") if voce.strip()]
             fase["errors"] = list(errors)
             cambi.append(f"phases.{phase}.errors")
+        if status in ("delivered", "needs_changes"):
+            test = fase.get("test") or {}
+            mancanti = []
+            if not fase.get("report"):
+                mancanti.append("report")
+            if not fase.get("verdict"):
+                mancanti.append("verdict")
+            if not test.get("command") and not test.get("not_applicable"):
+                mancanti.append("test.command")
+            if test.get("exit") in (None, "") and not test.get("not_applicable"):
+                mancanti.append("test.exit")
+            if not test.get("duration") and not test.get("not_applicable"):
+                mancanti.append("test.duration")
+            if status == "needs_changes" and not fase.get("errors"):
+                mancanti.append("errors")
+            if mancanti:
+                raise ValueError(
+                    "consegna non valida: mancano " + ", ".join(mancanti)
+                )
     if claim_by:
         item["claim"] = {
             "status": "taken",
@@ -320,7 +398,8 @@ def update(
 def main(argv=None):
     parser = argparse.ArgumentParser(description="Fasi, claim e report delle rifiniture")
     parser.add_argument("--workspace", required=True)
-    parser.add_argument("--obligation", required=True)
+    parser.add_argument("--obligation")
+    parser.add_argument("--sync-all", action="store_true")
     parser.add_argument("--add", action="store_true")
     parser.add_argument("--title")
     parser.add_argument("--phase", choices=PHASES)
@@ -344,31 +423,43 @@ def main(argv=None):
     parser.add_argument("--next-report")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
-    esito = update(
-        Workspace.load(args.workspace),
-        args.obligation,
-        add=args.add,
-        title=args.title,
-        phase=args.phase,
-        status=args.status,
-        attempt=args.attempt,
-        report=args.report,
-        verdict=args.verdict,
-        author=args.author,
-        test_command=args.test_command,
-        test_exit=args.test_exit,
-        test_duration=args.test_duration,
-        errors=args.errors,
-        branch=args.branch,
-        worktree=args.worktree,
-        strict=args.strict,
-        risk=args.risk,
-        claim_by=args.claim_by,
-        claim_task=args.claim_task,
-        release=args.release,
-        next_text=args.next,
-        next_report=args.next_report,
-    )
+    if args.sync_all:
+        esito = sync(Workspace.load(args.workspace))
+        if args.json:
+            print(json.dumps(esito, ensure_ascii=False))
+        else:
+            print(f"sincronizzate {len(esito['updated'])} voci")
+        return 0
+    if not args.obligation:
+        raise SystemExit("serve --obligation, oppure --sync-all")
+    try:
+        esito = update(
+            Workspace.load(args.workspace),
+            args.obligation,
+            add=args.add,
+            title=args.title,
+            phase=args.phase,
+            status=args.status,
+            attempt=args.attempt,
+            report=args.report,
+            verdict=args.verdict,
+            author=args.author,
+            test_command=args.test_command,
+            test_exit=args.test_exit,
+            test_duration=args.test_duration,
+            errors=args.errors,
+            branch=args.branch,
+            worktree=args.worktree,
+            strict=args.strict,
+            risk=args.risk,
+            claim_by=args.claim_by,
+            claim_task=args.claim_task,
+            release=args.release,
+            next_text=args.next,
+            next_report=args.next_report,
+        )
+    except ValueError as error:
+        raise SystemExit(str(error))
     if args.json:
         print(json.dumps(esito, ensure_ascii=False))
     else:
