@@ -45,6 +45,19 @@ Regole di linguaggio:
 * se non sai cosa c'è dentro un blocco, scrivilo: non riempire il vuoto con una descrizione
   plausibile.
 
+### Scheda risultato obbligatoria
+
+Una consegna `delivered` o `needs_changes` deve portare con sé:
+
+* il percorso del report e il verdetto;
+* `test: {command, exit, duration}` — oppure `not_applicable` con il motivo;
+* `errors`/finding quando la consegna è `needs_changes`;
+* `branch` e `worktree` usati;
+* il prossimo atto (`next`/`next_report`).
+
+Senza questi campi la consegna non è accettabile: il console la rifiuta. Un test non eseguito si
+dichiara, non si sostituisce con «verde».
+
 ## INPUT — quello che scrivi TU, e dove
 
 ### 1. Prendere una fase (prima del primo byte)
