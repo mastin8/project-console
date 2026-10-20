@@ -958,13 +958,16 @@ class ReviewState:
                 and obligation.get("branch")
                 and git_state["branch"] == obligation.get("branch")
             )
+            controlla_percorso = bool(
+                obligation.get("branch_ready") or obligation.get("taken")
+            )
             obligation["path_drift"] = (
                 [
                     percorso
                     for percorso in git_state["changed"]
                     if percorso not in percorsi
                 ]
-                if percorsi
+                if percorsi and controlla_percorso
                 else []
             )
             obligation["vibe_prompt"] = _vibe_prompt(obligation)
