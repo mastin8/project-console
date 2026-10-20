@@ -435,6 +435,68 @@ def _refinement_prompt(item, workspace=None):
     return "\n".join(righe) + "\n"
 
 
+def _vibe_short(value, limit=260):
+    testo = " ".join(str(value or "").split())
+    return testo if len(testo) <= limit else testo[: limit - 1].rstrip() + "…"
+
+
+def _vibe_prompt(item):
+    """Il prompt breve del flusso normale: obiettivo, punto di partenza, vincoli, test, esito."""
+    fase = item.get("next_stage") or "E"
+    azione = {
+        "A": "Chiarisci il perimetro e cosa va costruito.",
+        "E": "Completa l'esecuzione.",
+        "T": "Fai la verifica indipendente.",
+        "R": "Fai l'accettazione finale.",
+        "OWNERS": "Chiudi gli errori dei proprietari indicati nel report.",
+        "A2": "Scrivi il design A2 con le fermate numeriche.",
+    }.get(fase, "Leggi il report e dichiara la fase prima di agire.")
+    problemi = (
+        item.get("report_handoff")
+        or item.get("latest_note")
+        or item.get("report_verdict")
+        or item.get("what")
+        or ""
+    )
+    righe = [
+        f"Obiettivo: {_vibe_short(item.get('title') or item.get('what') or item.get('id'), 220)}",
+        f"Cosa devi fare: {azione}",
+    ]
+    if item.get("report_path"):
+        righe.append(f"Parti da: {item['report_path']}.")
+    if problemi:
+        righe.append(f"Problema da chiudere: {_vibe_short(problemi, 320)}")
+    if item.get("owners"):
+        righe.append(
+            "Le parti coinvolte sono: " + ", ".join(item["owners"]) + "."
+        )
+    if item.get("branch"):
+        righe.append(f"Ramo: {item['branch']}; worktree: {item.get('worktree') or '—'}.")
+    if item.get("conflicts"):
+        righe.append(
+            "Non partire in parallelo con " + ", ".join(item["conflicts"]) +
+            ": condividete file o blocchi."
+        )
+    elif item.get("parallel_with"):
+        righe.append(
+            "Puoi lavorare in parallelo con " + ", ".join(item["parallel_with"]) +
+            "; non toccare i loro file."
+        )
+    righe.extend(
+        [
+            "Vincoli: tocca solo i file necessari; non riscrivere report pubblicati; "
+            "prendi la presa e rilasciala alla fine.",
+            "Pubblica il report e metti lo stato `delivered`, non `accepted`: "
+            "l'accettazione la fa l'utente dalla pagina.",
+            "Test: esegui solo il modulo toccato, una volta, e riporta comando, esito e durata.",
+            "Se qualcosa non torna, scrivi `needs_changes` e i finding: il tool ti riporta "
+            "all'esecuzione.",
+            "Non inventare: se un file o un test non è leggibile, dichiaralo.",
+        ]
+    )
+    return "\n".join(righe) + "\n"
+
+
 def open_obligations(state, workspace=None):
     """Gli obblighi aperti del registro, nella forma che la pagina puo' disegnare.
 
@@ -514,6 +576,7 @@ def open_obligations(state, workspace=None):
         voce["stage_known"] = prossima in ("A", "E", "T", "R")
         voce["latest_note"] = _latest_obligation_note(item)
         voce["next_prompt"] = _refinement_prompt(voce, workspace=workspace)
+        voce["vibe_prompt"] = _vibe_prompt(voce)
         fuori.append(voce)
     return fuori
 
@@ -780,6 +843,27 @@ class ReviewState:
                 obligation["next_prompt"] = _refinement_prompt(
                     obligation, workspace=self.workspace
                 )
+                obligation["vibe_prompt"] = _vibe_prompt(obligation)
+        for obligation in obligations:
+            percorsi = set(obligation.get("paths") or [])
+            owners = set(obligation.get("owners") or [])
+            conflitti = []
+            paralleli = []
+            for altro in obligations:
+                if altro is obligation:
+                    continue
+                altri_percorsi = set(altro.get("paths") or [])
+                altri_owners = set(altro.get("owners") or [])
+                sovrapposto = bool(percorsi & altri_percorsi)
+                if not percorsi and not altri_percorsi:
+                    sovrapposto = bool(owners & altri_owners)
+                if sovrapposto:
+                    conflitti.append(altro["id"])
+                else:
+                    paralleli.append(altro["id"])
+            obligation["conflicts"] = conflitti
+            obligation["parallel_with"] = paralleli
+            obligation["vibe_prompt"] = _vibe_prompt(obligation)
         independence_debts = open_independence_debts(state)
 
         blocks = {}
@@ -2099,6 +2183,16 @@ def build_handler(state):
                         report=payload.get("report") or None,
                         verdict=payload.get("verdict") or None,
                         author=payload.get("author") or None,
+                        test_command=payload.get("test_command") or None,
+                        test_exit=(
+                            payload.get("test_exit")
+                            if payload.get("test_exit") not in (None, "")
+                            else None
+                        ),
+                        test_duration=payload.get("test_duration") or None,
+                        errors=payload.get("errors"),
+                        branch=payload.get("branch") or None,
+                        worktree=payload.get("worktree") or None,
                         claim_by=(
                             payload.get("claim_by") or "utente"
                             if azione == "claim" or payload.get("claim_by")

@@ -153,13 +153,21 @@ def merge(obligation, item, workspace=None):
     claim = item.get("claim") or {}
     presa = str(claim.get("status") or "").lower() in LIVE_CLAIMS
     report = latest_report(item) or {}
+    fase_corrente = str(report.get("phase") or prossima)
+    voce_fase = (item.get("phases") or {}).get(fase_corrente) or {}
     obligation.update(
         {
             "stages": fasi,
             "next_stage": prossima,
             "stage_known": True,
             "stage_source": "refinements.yaml",
+            "title": str(item.get("title") or ""),
             "owners": [str(voce) for voce in item.get("owners") or []],
+            "paths": [str(percorso) for percorso in item.get("paths") or []],
+            "branch": str(item.get("branch") or f"task/{obligation['id']}"),
+            "worktree": str(item.get("worktree") or f".worktrees/{obligation['id']}"),
+            "test": voce_fase.get("test") or {},
+            "errors": voce_fase.get("errors") or [],
             "taken": presa,
             "taken_by": str(claim.get("taken_by") or claim.get("owner") or ""),
             "taken_at": str(claim.get("taken_at") or ""),
@@ -193,6 +201,12 @@ def update(
     report=None,
     verdict=None,
     author=None,
+    test_command=None,
+    test_exit=None,
+    test_duration=None,
+    errors=None,
+    branch=None,
+    worktree=None,
     claim_by=None,
     claim_task=None,
     release=False,
@@ -226,6 +240,12 @@ def update(
     if title is not None:
         item["title"] = title
         cambi.append("title")
+    if branch is not None:
+        item["branch"] = branch
+        cambi.append("branch")
+    if worktree is not None:
+        item["worktree"] = worktree
+        cambi.append("worktree")
     if phase:
         fase = item.setdefault("phases", {}).setdefault(phase, {})
         for campo in ("status", "attempt", "report", "verdict", "author"):
@@ -239,6 +259,21 @@ def update(
             if valore is not None:
                 fase[campo] = valore
                 cambi.append(f"phases.{phase}.{campo}")
+        if any(valore is not None for valore in (test_command, test_exit, test_duration)):
+            test = fase.setdefault("test", {})
+            for campo, valore in (
+                ("command", test_command),
+                ("exit", test_exit),
+                ("duration", test_duration),
+            ):
+                if valore is not None:
+                    test[campo] = valore
+                    cambi.append(f"phases.{phase}.test.{campo}")
+        if errors is not None:
+            if isinstance(errors, str):
+                errors = [voce.strip() for voce in errors.split(";") if voce.strip()]
+            fase["errors"] = list(errors)
+            cambi.append(f"phases.{phase}.errors")
     if claim_by:
         item["claim"] = {
             "status": "taken",
@@ -282,6 +317,12 @@ def main(argv=None):
     parser.add_argument("--report")
     parser.add_argument("--verdict")
     parser.add_argument("--author")
+    parser.add_argument("--test-command")
+    parser.add_argument("--test-exit")
+    parser.add_argument("--test-duration")
+    parser.add_argument("--errors")
+    parser.add_argument("--branch")
+    parser.add_argument("--worktree")
     parser.add_argument("--claim-by")
     parser.add_argument("--claim-task")
     parser.add_argument("--release", action="store_true")
@@ -300,6 +341,12 @@ def main(argv=None):
         report=args.report,
         verdict=args.verdict,
         author=args.author,
+        test_command=args.test_command,
+        test_exit=args.test_exit,
+        test_duration=args.test_duration,
+        errors=args.errors,
+        branch=args.branch,
+        worktree=args.worktree,
         claim_by=args.claim_by,
         claim_task=args.claim_task,
         release=args.release,

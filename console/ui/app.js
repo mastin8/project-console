@@ -2027,12 +2027,15 @@ function obligationsGroup(voci) {
       text: "Nuova rifinitura",
       onclick: () => apriRifinitura(null, { add: true }),
     }),
-    h("p", {
-      class: "actmeta",
-      text:
-        "A analisi · E esecuzione · T verifica indipendente · R accettazione. " +
-        "Verde = fatto, giallo = parziale, blu = in corso, grigio = mancante.",
-    }),
+    h("details", { class: "actdetails" }, [
+      h("summary", { text: "Come funziona il ciclo" }),
+      h("p", {
+        class: "actmeta",
+        text:
+          "A analisi · E esecuzione · T verifica indipendente · R accettazione. " +
+          "Verde = fatto, giallo = parziale, blu = in corso, grigio = mancante.",
+      }),
+    ]),
     ...ordinate.map(obligationRow),
   ]);
 }
@@ -2199,6 +2202,12 @@ function obligationRow(voce) {
       text: `Unità proprietaria: ${voce.owners.join(", ")}`,
     }));
   }
+  if (voce.branch) {
+    corpoDettagli.append(h("div", {
+      class: "actmeta",
+      text: `Ramo: ${voce.branch} · worktree: ${voce.worktree || "—"}`,
+    }));
+  }
   if (voce.report_next) {
     corpoDettagli.append(
       h("div", { class: "actmeta" }, [
@@ -2255,6 +2264,7 @@ function obligationRow(voce) {
       .filter(Boolean)
       .join("\n\n");
   const promptObbligo = () =>
+    voce.vibe_prompt ||
     voce.next_prompt ||
     [
       `Lavora sull'obbligo ${voce.id}.`,
@@ -2339,6 +2349,30 @@ function obligationRow(voce) {
     });
   }
   const primary = h("div", { class: "actprimary" });
+  if ((voce.conflicts || []).length) {
+    primary.append(h("p", {
+      class: "actparallel",
+      text: `In attesa: condivide file con ${voce.conflicts.join(", ")}.`,
+    }));
+  } else if ((voce.parallel_with || []).length) {
+    primary.append(h("p", {
+      class: "actparallel",
+      text: `In parallelo con ${voce.parallel_with.join(", ")}; non toccare i loro file.`,
+    }));
+  }
+  const testText =
+    voce.test && (voce.test.command || voce.test.exit != null)
+      ? `Test: ${voce.test.command || "—"} · RC=${voce.test.exit ?? "—"} · ${
+          voce.test.duration || "—"
+        }`
+      : "";
+  const errorText =
+    String(voce.report_handoff || "").trim() ||
+    (Array.isArray(voce.errors)
+      ? voce.errors
+          .map((errore) => errore.what || errore.text || errore.id || String(errore))
+          .join(" · ")
+      : "");
   const reportLink = voce.report_path
     ? h("a", {
         class: "actbtn release",
@@ -2354,6 +2388,7 @@ function obligationRow(voce) {
     primary.append(
       h("b", { text: `Da accettare: ${pending.label}` }),
       accettaRif,
+      testText ? h("p", { text: testText }) : null,
       reportLink
     );
   } else if (
@@ -2361,13 +2396,14 @@ function obligationRow(voce) {
     Object.values(voce.stages || {}).includes("partial")
   ) {
     primary.append(h("b", { text: "Errori" }));
-    const dettaglio = String(voce.report_handoff || voce.report_verdict || "").trim();
+    const dettaglio = String(errorText || voce.report_verdict || "").trim();
     if (dettaglio) {
       primary.append(h("p", {
         text: dettaglio.length > 420 ? `${dettaglio.slice(0, 419)}…` : dettaglio,
       }));
     }
     primary.append(
+      testText ? h("p", { text: testText }) : null,
       h("button", {
         type: "button",
         class: "actbtn",
@@ -4883,7 +4919,9 @@ function initFinishing() {
         const rifiniture = payload.obligations || [];
         const testo = [
           "Rifiniture finali del workspace. Ogni voce ha la sua fase A/E/T/R e il suo prossimo atto.",
-          ...rifiniture.map((voce) => `## ${voce.id}\n${voce.next_prompt || ""}`.trim()),
+          ...rifiniture.map(
+            (voce) => `## ${voce.id}\n${voce.vibe_prompt || voce.next_prompt || ""}`.trim()
+          ),
         ].join("\n\n") + "\n";
         const copiato = await copiaTesto(testo);
         if (esito) {
@@ -5330,6 +5368,12 @@ function apriRifinitura(voce, { add = false } = {}) {
   $("#ref-author").value = voce?.report_author || "";
   $("#ref-next").value = voce?.report_next || "";
   $("#ref-next-report").value = voce?.next_report || "";
+  $("#ref-test-command").value = voce?.test?.command || "";
+  $("#ref-test-exit").value = voce?.test?.exit || "";
+  $("#ref-test-duration").value = voce?.test?.duration || "";
+  $("#ref-branch").value = voce?.branch || "";
+  $("#ref-worktree").value = voce?.worktree || "";
+  $("#ref-errors").value = Array.isArray(voce?.errors) ? voce.errors.join("; ") : "";
   $("#ref-claim-by").value = voce?.last_claim_by || "";
   $("#ref-claim-task").value = voce?.last_claim_task || "";
   $("#ref-esito").textContent = "";
@@ -5355,6 +5399,12 @@ async function inviaRifinitura(action) {
     report: $("#ref-report").value.trim() || null,
     verdict: $("#ref-verdict").value.trim() || null,
     author: $("#ref-author").value.trim() || null,
+    test_command: $("#ref-test-command").value.trim() || null,
+    test_exit: $("#ref-test-exit").value.trim() || null,
+    test_duration: $("#ref-test-duration").value.trim() || null,
+    errors: $("#ref-errors").value.trim() || null,
+    branch: $("#ref-branch").value.trim() || null,
+    worktree: $("#ref-worktree").value.trim() || null,
     claim_by: $("#ref-claim-by").value.trim() || null,
     claim_task: $("#ref-claim-task").value.trim() || null,
     next: $("#ref-next").value.trim() || null,
@@ -5398,6 +5448,12 @@ function initRifinitura() {
     $("#ref-title").value = "";
     $("#ref-phase").value = "A";
     $("#ref-status").value = "pending";
+    $("#ref-test-command").value = "";
+    $("#ref-test-exit").value = "";
+    $("#ref-test-duration").value = "";
+    $("#ref-branch").value = "";
+    $("#ref-worktree").value = "";
+    $("#ref-errors").value = "";
     $("#ref-obligation").focus();
   });
 }

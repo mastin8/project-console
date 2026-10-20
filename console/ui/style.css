@@ -520,7 +520,8 @@ body[data-page="svolto"] .top-bar{display:none}
   font-size: 12px;
 }
 #refinement-form input,
-#refinement-form select {
+#refinement-form select,
+#refinement-form textarea {
   min-height: 34px;
   padding: var(--s15) var(--s2);
   border: 1px solid var(--line-strong);
@@ -808,6 +809,7 @@ details[open] > .acthead::before{content:"▾ "}
   background: var(--surface-2);
 }
 .actprimary b { color: var(--ink); font-size: 13px; }
+.actparallel { color: var(--ink-2) !important; font-size: 12px !important; }
 .actprimary p {
   margin: 0;
   color: var(--ink-2);
