@@ -78,7 +78,8 @@ def _parse(path: Path, project: str) -> dict:
         text = path.read_text(encoding="utf-8")
     except FileNotFoundError as error:
         raise ConstitutionMissing(
-            f"{path} non esiste: crea il progetto con scaffold.py prima di aprire la Costituzione"
+            f"{path} non esiste: usa «Crea la bozza» nella pagina Costituzione, "
+            "oppure scaffold.py per un progetto nuovo"
         ) from error
 
     # I workspace creati prima del frontmatter restano leggibili. La prima scrittura aggiunge la
