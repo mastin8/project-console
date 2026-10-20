@@ -904,6 +904,7 @@ class ReviewState:
                             "report": percorso_rif,
                             "verdict": voce_rif.get("verdict"),
                             "author": voce_rif.get("author"),
+                            "test": voce_rif.get("test") or {},
                             "next": item_rif.get("next") or "",
                             "next_report": item_rif.get("next_report") or "",
                         }

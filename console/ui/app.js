@@ -2352,15 +2352,28 @@ function obligationRow(voce) {
   });
   const pending = voce.pending_refinement;
   let accettaRif = null;
+  let pendingTestOk = true;
   if (pending) {
     const etichetta = pending.label || pending.phase;
     const prossima = voce.next_stage || "la fase successiva";
+    const testPending = pending.test || {};
+    const testOk = Boolean(
+      testPending.not_applicable ||
+      (testPending.command &&
+        testPending.exit !== undefined &&
+        testPending.exit !== null &&
+        testPending.exit !== "" &&
+        testPending.duration)
+    );
+    pendingTestOk = testOk;
     accettaRif = h("button", {
       type: "button",
       class: "actbtn",
       text: `Accetta ${etichetta} e apri ${prossima}`,
       title: `segna ${etichetta} accettata e lascia aperta ${prossima}`,
     });
+    accettaRif.disabled = !testOk;
+    if (!testOk) accettaRif.title = "scheda test incompleta: accettazione bloccata";
     accettaRif.addEventListener("click", async () => {
       accettaRif.disabled = true;
       esito.className = "msg show pending";
@@ -2453,6 +2466,9 @@ function obligationRow(voce) {
     primary.append(
       h("b", { text: `Da accettare: ${pending.label}` }),
       accettaRif,
+      pendingTestOk
+        ? null
+        : h("p", { text: "Manca la scheda test: l'accettazione è bloccata." }),
       testText ? h("p", { text: testText }) : null,
       reportLink
     );
@@ -2460,6 +2476,8 @@ function obligationRow(voce) {
     primary.append(
       h("b", { text: "Serve una decisione" }),
       h("p", { text: voce.stop_reason || "Troppi tentativi falliti." }),
+      errorText ? h("p", { text: errorText }) : null,
+      testText ? h("p", { text: testText }) : null,
       h("button", {
         type: "button",
         class: "actbtn",
