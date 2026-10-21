@@ -14,8 +14,9 @@ Se Git, Python e Codex CLI sono già installati, il percorso rapido è il prompt
 
 3. Lo scaffold produce `onboarding-findings.yaml`: è l'audit statico di ciò che esiste già, dei
    rischi di partenza e delle decisioni mancanti. Produce anche `onboarding-questions.md`, il
-   catalogo di circa 90 domande in 15 aree. La sezione 0 della Costituzione mostra fatti e domande
-   ancora aperte. Non contiene valori segreti e non legge il contenuto di `.env`.
+   catalogo iniziale di 90 domande in 15 aree; l'agente può aggiungerne altre senza limite. La
+   sezione 0 della Costituzione mostra fatti e domande ancora aperte. Non contiene valori segreti
+   e non legge il contenuto di `.env`.
 4. Apri `FIRST-PROMPT.md`. Nella parte **Prompt dell'utente** scrivi cosa vuoi ottenere, senza
    tradurlo in task tecnici.
 5. Consegna all'agente il primo prompt con il suo **Addendum obbligatorio**. L'agente non deve

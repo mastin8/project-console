@@ -109,6 +109,26 @@ class OnboardingFindingsTests(unittest.TestCase):
         self.assertEqual(conservata["status"], "answered")
         self.assertEqual(conservata["answer"], domanda["answer"])
 
+    def test_agent_can_append_questions_without_a_cap_and_rescan_preserves_them(self):
+        self._constitution()
+        document = onboarding_findings.scan(self.repo, self.workspace_dir)
+        onboarding_findings.save(self.workspace_dir, document)
+
+        for indice in range(1, 4):
+            document = onboarding_findings.ask(
+                self.workspace_dir,
+                f"Approfondimento dinamico numero {indice}?",
+                area="Rami emersi durante l'intervista",
+            )
+        extra = [item for item in document["questions"] if item["id"].startswith("EXT")]
+        self.assertEqual([item["id"] for item in extra], ["EXT01", "EXT02", "EXT03"])
+        self.assertEqual(len(document["questions"]), 93)
+
+        riscansione = onboarding_findings.scan(self.repo, self.workspace_dir)
+        ids = {item["id"] for item in riscansione["questions"]}
+        self.assertTrue({"EXT01", "EXT02", "EXT03"} <= ids)
+        self.assertEqual(len(riscansione["questions"]), 93)
+
     def test_dirty_worktree_and_existing_code_become_visible_gaps(self):
         self._write("app.py", "print('ciao')\n")
         document = onboarding_findings.scan(self.repo, self.workspace_dir)
@@ -146,6 +166,12 @@ class OnboardingFindingsTests(unittest.TestCase):
         constitution_path = self._constitution()
         document = onboarding_findings.scan(self.repo, self.workspace_dir)
         onboarding_findings.save(self.workspace_dir, document)
+        document = onboarding_findings.ask(
+            self.workspace_dir,
+            "Quale prova dimostra che il percorso straordinario non duplica dati?",
+            area="Approfondimento emerso",
+        )
+        self.assertEqual(document["questions"][-1]["id"], "EXT01")
         workspace = Workspace.load(self.workspace_dir)
         gate = constitution.gate(workspace)
         self.assertEqual(gate["status"], "draft")
@@ -161,9 +187,19 @@ class OnboardingFindingsTests(unittest.TestCase):
             gap["status"] = "not_applicable"
             gap["resolution"] = "Gap di prova chiuso dopo una decisione esplicita."
         for domanda in document["questions"]:
-            domanda["status"] = "not_applicable"
-            domanda["answer"] = "Domanda di prova non pertinente, con motivazione esplicita."
+            if domanda["id"] != "EXT01":
+                domanda["status"] = "not_applicable"
+                domanda["answer"] = "Domanda di prova non pertinente, con motivazione esplicita."
         onboarding_findings.save(self.workspace_dir, document)
+        with self.assertRaises(constitution.ConstitutionInvalid) as dinamica:
+            constitution.approve(workspace)
+        self.assertIn("EXT01", str(dinamica.exception))
+        onboarding_findings.resolve(
+            self.workspace_dir,
+            "EXT01",
+            "answered",
+            "La prova è un test di idempotenza con due richieste identiche.",
+        )
         approvata = constitution.approve(workspace)
         self.assertEqual(approvata["status"], "approved")
         self.assertTrue(constitution_path.is_file())

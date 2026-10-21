@@ -10,7 +10,8 @@ from datetime import datetime
 from pathlib import Path
 
 import yaml
-from onboarding_questions import CLOSED, initial_questions, merge as merge_questions
+from onboarding_questions import CLOSED, add_question, initial_questions
+from onboarding_questions import merge as merge_questions
 from onboarding_questions import open_required, render_markdown, summary
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -435,18 +436,49 @@ def resolve(workspace, identifier, status, note):
     return document
 
 
+def ask(workspace, question, area="Approfondimenti", identifier=None, blocking=True):
+    workspace = Path(workspace).resolve()
+    path = workspace / "onboarding-findings.yaml"
+    document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    try:
+        document["questions"] = add_question(
+            document.get("questions") or [],
+            area,
+            question,
+            identifier=identifier,
+            blocking=blocking,
+        )
+    except ValueError as error:
+        raise SystemExit(str(error)) from error
+    save(workspace, document)
+    return document
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--workspace", required=True)
     parser.add_argument("--repository")
-    parser.add_argument("--resolve")
+    azione = parser.add_mutually_exclusive_group()
+    azione.add_argument("--resolve")
+    azione.add_argument("--ask-question")
     parser.add_argument("--status", default="resolved")
     parser.add_argument("--note")
+    parser.add_argument("--area", default="Approfondimenti")
+    parser.add_argument("--question-id")
+    parser.add_argument("--optional", action="store_true")
     parser.add_argument("--json", action="store_true")
     args = parser.parse_args(argv)
     workspace = Path(args.workspace).expanduser().resolve()
     if args.resolve:
         document = resolve(workspace, args.resolve, args.status, args.note)
+    elif args.ask_question:
+        document = ask(
+            workspace,
+            args.ask_question,
+            area=args.area,
+            identifier=args.question_id,
+            blocking=not args.optional,
+        )
     else:
         repository = (
             Path(args.repository).expanduser().resolve()

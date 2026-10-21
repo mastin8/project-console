@@ -2,10 +2,12 @@
 """Catalogo dell'intervista iniziale: domande raggruppate, adattive e tracciabili."""
 from __future__ import annotations
 
+import re
 from collections import OrderedDict
 
 SCHEMA = "project-console-onboarding-interview/1.0"
 CLOSED = {"answered", "not_applicable", "accepted_risk", "deferred"}
+ID_PATTERN = re.compile(r"^[A-Z][A-Z0-9-]{1,31}$")
 
 
 def _area(prefix, title, prompts):
@@ -224,7 +226,56 @@ def merge(existing):
             domanda["status"] = prima["status"]
         domanda["answer"] = str(prima.get("answer") or "")
         fuse.append(domanda)
+    catalogo = {domanda["id"] for domanda in fuse}
+    for identifier, prima in precedenti.items():
+        if identifier in catalogo:
+            continue
+        extra = dict(prima)
+        extra["status"] = (
+            prima.get("status")
+            if prima.get("status") in CLOSED | {"open"}
+            else "open"
+        )
+        extra["answer"] = str(prima.get("answer") or "")
+        extra["id"] = identifier
+        extra["area"] = str(prima.get("area") or "Approfondimenti")
+        extra["question"] = str(prima.get("question") or "Domanda senza testo")
+        extra["blocking"] = prima.get("blocking") is not False
+        fuse.append(extra)
     return fuse
+
+
+def add_question(questions, area, question, identifier=None, blocking=True):
+    """Aggiunge un approfondimento senza imporre un numero massimo di domande."""
+    voci = [dict(item) for item in questions or []]
+    testo = str(question or "").strip()
+    if not testo:
+        raise ValueError("la nuova domanda non può essere vuota")
+    if any(str(item.get("question") or "").strip() == testo for item in voci):
+        raise ValueError("la stessa domanda è già presente")
+    esistenti = {str(item.get("id")) for item in voci}
+    if identifier:
+        nuovo_id = str(identifier).strip().upper()
+        if not ID_PATTERN.match(nuovo_id):
+            raise ValueError("l'id deve iniziare con una lettera e usare solo A-Z, 0-9 e -")
+        if nuovo_id in esistenti:
+            raise ValueError(f"esiste già una domanda con id {nuovo_id}")
+    else:
+        numero = 1
+        while f"EXT{numero:02d}" in esistenti:
+            numero += 1
+        nuovo_id = f"EXT{numero:02d}"
+    voci.append(
+        {
+            "id": nuovo_id,
+            "area": str(area or "Approfondimenti").strip() or "Approfondimenti",
+            "question": testo,
+            "blocking": bool(blocking),
+            "status": "open",
+            "answer": "",
+        }
+    )
+    return voci
 
 
 def open_required(questions):
@@ -248,7 +299,8 @@ def render_markdown(questions):
         "",
         "> Generata dal catalogo di project-console. L'agente pone le domande in gruppi di una o",
         "> due, saltando soltanto ciò che è già dimostrato dalla repository. Ogni domanda deve",
-        "> essere chiusa con una risposta o con un motivo esplicito.",
+        "> essere chiusa con una risposta o con un motivo esplicito. Le 90 voci iniziali non sono",
+        "> un tetto: ogni nuovo ramo viene aggiunto con `--ask-question`.",
         "",
         f"**Stato:** {dati['closed']} chiuse su {dati['total']} · {dati['open']} ancora aperte.",
         "",

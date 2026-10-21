@@ -29,9 +29,10 @@ L'agente, prima di creare task o scrivere codice:
 
 1. legge `FIRST-PROMPT.md`, questa carta e `constitution.md`;
 2. legge `onboarding-findings.yaml` e `onboarding-questions.md`: il primo contiene i fatti
-   misurati e i gap tecnici, il secondo il catalogo di 90 decisioni in 15 aree;
+   misurati e i gap tecnici, il secondo il catalogo iniziale di 90 decisioni in 15 aree;
 3. fa domande all'utente una o due per volta, partendo dai gap bloccanti e dai rami che cambiano
-   architettura, perimetro o rischio;
+   architettura, perimetro o rischio; ogni nuovo ramo diventa una domanda aggiuntiva con
+   `onboarding_findings.py --ask-question`;
 4. chiude ogni voce con `onboarding_findings.py --resolve`, una nota e uno stato esplicito;
 5. aggiorna `constitution.md` con le risposte, lasciando aperte le domande senza risposta;
 6. propone il piano finale e chiede all'utente di approvarlo dalla pagina **Costituzione** del

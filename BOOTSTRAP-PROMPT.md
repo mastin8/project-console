@@ -109,6 +109,8 @@ FASE 5 — INTERVISTA
 - Esegui l'Addendum obbligatorio.
 - Parti dai gap `BLOCCANTE`, dalle contraddizioni e da ciò che la repository contiene già.
 - Fai domande all'utente una o due per volta, senza chiedere ciò che l'audit ha già misurato.
+- Ogni risposta che apre un nuovo ramo produce una nuova domanda con `--ask-question`; non esiste
+  un numero massimo di domande.
 - Chiudi ogni gap con
   `{{PROJECT_CONSOLE_PATH}}/onboarding_findings.py --resolve`, stato e nota; rigenera la sezione 0.
 - Compila `constitution.md` mantenendo `status: draft`.

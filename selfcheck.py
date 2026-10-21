@@ -26,9 +26,10 @@ PORTE = {
     "workspace.py": ["Workspace", "lock_file"],
     "onboarding_findings.py": [
         "scan", "save", "render_section", "apply_to_constitution", "open_blocking", "resolve", "main",
+        "ask",
     ],
     "onboarding_questions.py": [
-        "initial_questions", "merge", "open_required", "summary", "render_markdown",
+        "initial_questions", "merge", "add_question", "open_required", "summary", "render_markdown",
     ],
     "registers/apply_transitions.py": ["apply_request", "read_transition", "main"],
     "registers/validate_registries.py": ["main"],

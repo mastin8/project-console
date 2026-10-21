@@ -20,10 +20,20 @@ codice.
    domanda.
 5. Aggiorna `constitution.md` con le risposte. Le domande aperte restano scritte come aperte;
    non riempirle con ipotesi.
-6. Il catalogo contiene circa 90 domande in 15 aree. Sono un massimo adattivo, non un questionario
-   da scaricare tutto insieme: chiedi prima le risposte che cambiano architettura, perimetro o
-   rischio; approfondisci i rami pertinenti; chiudi come `not_applicable` soltanto ciò che davvero
-   non riguarda il progetto. Non eliminare domande dal file.
+6. Il catalogo contiene 90 domande iniziali in 15 aree e non ha un numero massimo. Chiedi una o
+   due domande per volta, partendo da quelle che cambiano architettura, perimetro o rischio.
+   Quando una risposta apre un ramo nuovo, aggiungi una domanda con:
+
+   ```bash
+   python3 /percorso/project-console/onboarding_findings.py \
+     --workspace /percorso/progetto/.coord \
+     --ask-question "Quale prova dimostra che due richieste identiche non duplicano il dato?" \
+     --area "Approvvigionamenti e concorrenza"
+   ```
+
+   Ogni approfondimento riceve un ID stabile (`EXT01`, `EXT02`, ...) e nasce bloccante. Chiudi
+   come `not_applicable` soltanto ciò che davvero non riguarda il progetto. Non eliminare domande
+   dal file.
 7. Prima di proporre l'approvazione, chiudi ogni voce bloccante, tecnica o di intervista, con una
    decisione esplicita:
 
@@ -37,23 +47,26 @@ codice.
    Per i gap tecnici usa `resolved`; per le domande usa `answered`. Usa `not_applicable` quando
    la voce non riguarda il progetto, `deferred` quando l'utente sceglie consapevolmente di
    rimandarla e `accepted_risk` solo quando accetta il rischio. Una nota vuota non è una decisione.
-8. Dopo ogni chiusura, verifica che `onboarding-findings.yaml`, `onboarding-questions.md` e la
-   sezione 0 di `constitution.md` siano stati rigenerati. Il console rifiuta l'approvazione se
-   resta anche una sola voce bloccante aperta.
-9. Quando la constitution è completa, proponi all'utente il piano finale: task, stack, skill,
+8. Dopo ogni aggiunta o chiusura, verifica che `onboarding-findings.yaml`,
+   `onboarding-questions.md` e la sezione 0 di `constitution.md` siano stati rigenerati. Il
+   console rifiuta l'approvazione se resta anche una sola voce bloccante aperta.
+9. L'intervista è finita quando ogni risposta non apre più domande necessarie, ogni ramo ha una
+   prova o un motivo di esclusione, e tutte le voci registrate sono chiuse. Non è finita quando è
+   terminato il catalogo iniziale.
+10. Quando la constitution è completa, proponi all'utente il piano finale: task, stack, skill,
    parallelismo, test e modalità. Lascia la constitution in `status: draft` e chiedi all'utente di
    controllarla e approvarla dalla pagina **Costituzione** del console.
-10. Non scrivere mai `status: approved` e non approvare il documento al posto dell'utente. Solo
+11. Non scrivere mai `status: approved` e non approvare il documento al posto dell'utente. Solo
    dopo che la Costituzione risulta approvata dal front-end crea `tasks.yaml`, apri le fasi e
    inizia il primo task.
-11. Il tool applica il cancello: prima dell'approvazione non può attivare task né comporre prompt.
+12. Il tool applica il cancello: prima dell'approvazione non può attivare task né comporre prompt.
    Non aggirarlo scrivendo direttamente i registri o un ordine.
-12. Prima del primo task verifica di essere dentro un repository Git. Se non esiste, inizializzalo e
+13. Prima del primo task verifica di essere dentro un repository Git. Se non esiste, inizializzalo e
    crea un commit iniziale. Ogni consegna futura dichiarerà branch, worktree, commit iniziale,
    commit finale e path modificati.
-13. Ogni report dichiara `usage`: token misurati se il runtime li espone, altrimenti
+14. Ogni report dichiara `usage`: token misurati se il runtime li espone, altrimenti
    `availability: unavailable` con il motivo. Non si scrive mai zero al posto di “non misurato”.
-14. Dopo aver creato `tasks.yaml`, fermati: l'utente controlla la mappa in **Percorso** e la
+15. Dopo aver creato `tasks.yaml`, fermati: l'utente controlla la mappa in **Percorso** e la
     approva da **Adesso**. Non aprire le fasi e non attivare task prima di quella conferma; se il
     piano cambia, chiedi una nuova approvazione.
 
@@ -77,7 +90,8 @@ codice.
 
 Il testo completo, con gli identificatori da usare in `--resolve`, è in
 `onboarding-questions.md`. Se una risposta apre un nuovo ramo, fai le relative domande di
-approfondimento e riportale in sezione 12: il catalogo è il minimo, non un tetto.
+approfondimento con `--ask-question` e riportale in sezione 12: il catalogo è il punto di partenza,
+non un tetto.
 
 ### Regola per l'agente
 
