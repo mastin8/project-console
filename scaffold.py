@@ -19,6 +19,8 @@ import argparse
 from datetime import datetime
 from pathlib import Path
 
+import onboarding_findings
+
 ROOT = Path(__file__).resolve().parent
 MODELLI = ROOT / "templates" / "workspace"
 
@@ -85,6 +87,16 @@ def scafold(root: Path, project: str, esempio: bool = False) -> tuple:
         _scrivi(root / "agents" / "roles" / ruolo.name, ruolo.read_text(encoding="utf-8"), creati, saltati)
     _scrivi(root / "reports" / ".gitkeep", "", creati, saltati)
 
+    constitution_path = str(root / "constitution.md")
+    if constitution_path in creati:
+        findings = onboarding_findings.scan(root.parent, root)
+        onboarding_findings.save(root, findings)
+        creati.extend(
+            str(path)
+            for path in (root / "onboarding-findings.yaml", root / "constitution.md")
+            if str(path) not in creati
+        )
+
     if esempio:
         oggi = datetime.now().strftime("%Y-%m-%dT%H:%M:%S%z")
         _scrivi(root / "reports" / "ES01A" / "attempt-1.yaml", CONSEGNA_ESEMPIO.format(oggi=oggi), creati, saltati)
@@ -137,6 +149,7 @@ def main(argv=None):
         f"primo passo: apri {root / 'FIRST-PROMPT.md'}, fai compilare la bozza "
         f"{root / 'constitution.md'} dall'agente, poi approva la Costituzione dal console"
     )
+    print(f"audit iniziale: {root / 'onboarding-findings.yaml'}")
     print(f"avvialo con: python3 console/server.py --workspace {root}")
     return 0
 

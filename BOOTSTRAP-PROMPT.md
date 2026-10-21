@@ -71,6 +71,8 @@ FASE 3 — PROGETTO
     --project "{{PROJECT_NAME}}"
 
 - Non usare `--esempio`.
+- Verifica che lo scaffold abbia creato `.coord/onboarding-findings.yaml` e che la sezione 0 di
+  `constitution.md` contenga ciò che è stato rilevato e le decisioni mancanti.
 - Apri {{PROJECT_PATH}}/.coord/FIRST-PROMPT.md.
 - Compila soltanto la sezione “Prompt dell'utente” con l'idea fornita sopra.
 - Conserva integralmente l'Addendum obbligatorio già presente.
@@ -100,15 +102,21 @@ FASE 5 — INTERVISTA
 - Leggi integralmente:
   - {{PROJECT_PATH}}/.coord/agents/CONTRATTO.md;
   - {{PROJECT_PATH}}/.coord/constitution.md;
+  - {{PROJECT_PATH}}/.coord/onboarding-findings.yaml;
   - {{PROJECT_PATH}}/.coord/FIRST-PROMPT.md.
 - Esegui l'Addendum obbligatorio.
-- Fai domande all'utente una o due per volta.
+- Parti dai gap `BLOCCANTE`, dalle contraddizioni e da ciò che la repository contiene già.
+- Fai domande all'utente una o due per volta, senza chiedere ciò che l'audit ha già misurato.
+- Chiudi ogni gap con
+  `{{PROJECT_CONSOLE_PATH}}/onboarding_findings.py --resolve`, stato e nota; rigenera la sezione 0.
 - Compila `constitution.md` mantenendo `status: draft`.
 - Non approvare la Costituzione.
 - Non creare `tasks.yaml`.
 - Non scrivere codice di prodotto.
 - Quando la bozza è completa, fermati e chiedi all'utente di controllarla e approvarla dalla
   pagina “Costituzione” del front-end.
+- Se restano gap bloccanti aperti, il console deve rifiutare l'approvazione: non aggirare il
+  controllo modificando direttamente il file o lo stato.
 
 FASE 6 — DOPO L'APPROVAZIONE DELLA COSTITUZIONE
 Esegui questa fase solo quando l'utente dichiara che il front-end mostra la Costituzione approvata.

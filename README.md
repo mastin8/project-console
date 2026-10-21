@@ -51,6 +51,12 @@ tool ne verifica il sigillo SHA-256. Il cancello è tecnico: attivazione, apertu
 composizione dei prompt sono bloccate finché la Costituzione resta in bozza o manca. Solo dopo
 l'approvazione si crea la mappa del lavoro.
 
+Lo scaffold esegue anche un audit statico della repository e scrive
+`onboarding-findings.yaml`. La sezione 0 della Costituzione mostra stack rilevato, codice
+preesistente, worktree sporco, file sensibili o tecnici tracciati e contraddizioni da chiarire.
+Finché una voce `BLOCCANTE` resta aperta, l'approvazione viene rifiutata. L'audit non legge il
+contenuto di `.env`: controlla soltanto se il file è tracciato da Git.
+
 Quando `tasks.yaml` è pronto, l'utente lo controlla in **Percorso** e lo approva da **Adesso**. Il
 tool salva l'impronta del piano: ogni modifica successiva al file blocca le nuove attivazioni
 finché il piano non viene riconfermato.
@@ -61,9 +67,9 @@ finché il piano non viene riconfermato.
 python3 scaffold.py /percorso/mio-progetto --project "Nome del progetto"
 ```
 
-Crea i registri vuoti, i quattro ruoli degli agenti e il quaderno. Mettila **dentro il repository
-del progetto** (per esempio `.coord/`): cosi' la riga dei commit funziona e mostra quali commit
-toccano i path che dichiari.
+Crea i registri vuoti, i quattro ruoli degli agenti, il quaderno e l'audit iniziale. Mettila
+**dentro il repository del progetto** (per esempio `.coord/`): cosi' la riga dei commit funziona e
+mostra quali commit toccano i path che dichiari.
 
 Accendendo subito la vista vedi il vuoto detto bene: *0 di 0 unita' accettate*, *nessuna data da
 disegnare*, *nessun prompt nel quaderno*. Non e' un errore: e' un progetto che non ha ancora

@@ -739,6 +739,8 @@ class ReviewState:
         return {
             "state_mtime_ns": mtime(self.workspace.state_path),
             "tasks_mtime_ns": mtime(self.workspace.path(self.workspace.tasks)),
+            "constitution_mtime_ns": mtime(self.workspace.constitution_path),
+            "onboarding_findings_mtime_ns": mtime(self.workspace.onboarding_findings_path),
         }
 
     def _queue(self):

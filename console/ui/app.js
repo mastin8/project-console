@@ -174,21 +174,28 @@ function renderConstitutionGate(gate) {
   if (approvata) return;
   const mancante = gate && gate.status === "missing";
   const invalida = gate && gate.status === "invalid";
+  const bloccanti = Array.isArray(gate?.blocking_findings) ? gate.blocking_findings : [];
   $("#constitution-gate-title").textContent = invalida
     ? "La Costituzione non è verificabile"
     : mancante
       ? "La Costituzione non esiste ancora"
-      : "La Costituzione è ancora una bozza";
+      : bloccanti.length
+        ? `Mancano ${bloccanti.length} decisioni prima di approvare`
+        : "La Costituzione è ancora una bozza";
   $("#constitution-gate-copy").textContent = invalida
     ? "Il file o il sigillo sono incoerenti. Apri la pagina, leggi l'errore e non avviare lavoro finché non è risolto."
     : mancante
       ? "Crea la bozza dal modello e compilala: finché non è approvata, nessun task o prompt può partire."
-      : "Nessun task o prompt può partire finché non premi «Approva e blocca» nella pagina Costituzione.";
+      : bloccanti.length
+        ? `${bloccanti[0].question || bloccanti[0].id}${bloccanti.length > 1 ? ` E altre ${bloccanti.length - 1} voci nella sezione 0.` : ""}`
+        : "Nessun task o prompt può partire finché non premi «Approva e blocca» nella pagina Costituzione.";
   $("#constitution-gate-link").textContent = invalida
     ? "Controlla l'errore"
     : mancante
       ? "Crea la bozza"
-      : "Controlla e approva";
+      : bloccanti.length
+        ? "Risolvi le decisioni"
+        : "Controlla e approva";
 }
 
 function constitutionReady() {
@@ -832,7 +839,9 @@ async function controllaVersione() {
     const nuova = await risposta.json();
     if (
       nuova.state_mtime_ns !== versioneVista.state_mtime_ns ||
-      nuova.tasks_mtime_ns !== versioneVista.tasks_mtime_ns
+      nuova.tasks_mtime_ns !== versioneVista.tasks_mtime_ns ||
+      nuova.constitution_mtime_ns !== versioneVista.constitution_mtime_ns ||
+      nuova.onboarding_findings_mtime_ns !== versioneVista.onboarding_findings_mtime_ns
     ) {
       const avviso = $("#nuovo-registro");
       if (avviso) avviso.hidden = false;
@@ -1448,6 +1457,30 @@ function renderCostituzione(data) {
   const stato = $("#constitution-status");
   stato.hidden = false;
   stato.dataset.status = data.status;
+  const bloccanti = Array.isArray(data.blocking_findings) ? data.blocking_findings : [];
+  const pannello = $("#constitution-findings");
+  if (pannello) {
+    pannello.hidden = data.status === "approved" || (!bloccanti.length && !data.findings_error);
+    if (data.findings_error) {
+      $("#constitution-findings-title").textContent = "Audit iniziale illeggibile";
+      $("#constitution-findings-copy").textContent = data.findings_error;
+      $("#constitution-findings-list").replaceChildren();
+    } else {
+      $("#constitution-findings-title").textContent = `${bloccanti.length} decisioni bloccanti da chiudere`;
+      $("#constitution-findings-copy").textContent =
+        "Sono informazioni misurate nella repository. L'agente deve chiederti una decisione e registrarla con una nota prima che la Costituzione possa essere approvata.";
+      const lista = $("#constitution-findings-list");
+      lista.replaceChildren();
+      for (const gap of bloccanti) {
+        const voce = document.createElement("li");
+        const identificatore = document.createElement("code");
+        identificatore.textContent = gap.id || "SENZA-ID";
+        voce.append(identificatore, document.createTextNode(` — ${gap.question || "decisione mancante"}`));
+        if (gap.reason) voce.append(document.createTextNode(` (${gap.reason})`));
+        lista.append(voce);
+      }
+    }
+  }
 
   if (data.status === "approved") {
     $("#constitution-form").hidden = true;

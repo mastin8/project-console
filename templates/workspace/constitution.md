@@ -14,6 +14,12 @@ approved_sha256: ""
 > L'agente non approva mai il documento. Dopo l'approvazione il file diventa immutabile e il
 > console verifica la sua impronta SHA-256 a ogni lettura.
 
+<!-- ONBOARDING_FINDINGS_START -->
+## 0. Stato di partenza e decisioni mancanti
+
+L'audit statico della repository non è ancora stato eseguito.
+<!-- ONBOARDING_FINDINGS_END -->
+
 ## 1. Obiettivo
 
 <!-- In due o tre frasi: cosa deve esistere alla fine e per chi. -->
@@ -86,3 +92,6 @@ approved_sha256: ""
 
 > L'approvazione avviene **solo dal front-end**. Dopo il clic su «Approva e blocca» il documento
 > non è più riformabile: nessun agente e nessuna pagina possono modificarlo.
+>
+> La sezione 0 non è decorativa: finché contiene una voce `BLOCCANTE` ancora aperta, il console
+> rifiuta l'approvazione. Ogni voce si chiude con una decisione scritta e una nota verificabile.

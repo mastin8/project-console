@@ -24,6 +24,9 @@ ROOT = Path(__file__).resolve().parent
 #: Per ogni modulo, le porte che DEBBONO esserci: sono quelle che la pagina e le corsie chiamano.
 PORTE = {
     "workspace.py": ["Workspace", "lock_file"],
+    "onboarding_findings.py": [
+        "scan", "save", "render_section", "apply_to_constitution", "open_blocking", "resolve", "main",
+    ],
     "registers/apply_transitions.py": ["apply_request", "read_transition", "main"],
     "registers/validate_registries.py": ["main"],
     "registers/next_prompts.py": ["build", "configure", "render_html", "main"],
@@ -60,6 +63,7 @@ PORTE = {
         "ConstitutionNotApproved",
     ],
     "console/test_constitution.py": ["ConstitutionTests"],
+    "console/test_onboarding_findings.py": ["OnboardingFindingsTests"],
     "console/test_next_action.py": ["NextActionTests"],
     "console/test_metrics.py": ["MetricsTests"],
     "console/test_plan.py": ["PlanTests"],
@@ -71,6 +75,7 @@ PORTE = {
 #: Le righe di comando che devono rispondere (senza workspace: solo `--help`).
 COMANDI = (
     [sys.executable, "scaffold.py", "--help"],
+    [sys.executable, "onboarding_findings.py", "--help"],
     [sys.executable, "registers/activate.py", "--help"],
     [sys.executable, "registers/handoff.py", "--help"],
     [sys.executable, "registers/inbox.py", "--help"],

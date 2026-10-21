@@ -404,6 +404,13 @@ body[data-page="costituzione"] .indice{display:none}
 .constitution-missing h3{margin:0;font-size:16px}
 .constitution-missing p{margin:var(--s2) 0 0;color:var(--ink-2);max-width:70ch}
 .constitution-problem{border-color:var(--bad);background:var(--bad-soft);color:var(--bad);font-weight:550}
+.constitution-findings{margin:0 0 var(--s4);padding:var(--s4);border:1px solid var(--warn);
+  border-radius:var(--r-md);background:var(--warn-soft)}
+.constitution-findings[hidden]{display:none}
+.constitution-findings strong{display:block;font-size:15px;color:var(--warn)}
+.constitution-findings p{margin:var(--s2) 0 0;color:var(--ink-2);max-width:76ch}
+.constitution-findings ul{margin:var(--s3) 0 0;padding-left:1.25rem;color:var(--ink)}
+.constitution-findings li+li{margin-top:var(--s2)}
 #constitution-form{margin-top:var(--s4)}
 .constitution-label{display:block;font-size:13px;font-weight:650;color:var(--ink)}
 .constitution-help{margin:var(--s1) 0 var(--s2);color:var(--ink-3);font-size:13px;max-width:75ch}

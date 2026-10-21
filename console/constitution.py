@@ -18,6 +18,7 @@ from pathlib import Path
 
 import yaml
 
+import onboarding_findings
 from workspace import lock_file
 
 SCHEMA = "project-console-constitution/1.0"
@@ -192,9 +193,18 @@ def _payload(document: dict) -> dict:
     }
 
 
+def _findings_state(workspace):
+    try:
+        return {"blocking_findings": onboarding_findings.open_blocking(workspace.root)}
+    except ValueError as error:
+        return {"blocking_findings": [], "findings_error": str(error)}
+
+
 def load(workspace) -> dict:
     """Legge la Costituzione e verifica il sigillo se e' gia' approvata."""
-    return _payload(_parse(workspace.constitution_path, workspace.project))
+    payload = _payload(_parse(workspace.constitution_path, workspace.project))
+    payload.update(_findings_state(workspace))
+    return payload
 
 
 def gate(workspace) -> dict:
@@ -208,16 +218,23 @@ def gate(workspace) -> dict:
             "code": error.code,
             "message": str(error),
         }
+    blockers = _findings_state(workspace)
+    aperte = len(blockers["blocking_findings"])
+    message = "la Costituzione è ancora una bozza: approvazione richiesta"
+    if aperte:
+        message = (
+            f"la Costituzione è ancora una bozza e {aperte} decisioni di partenza "
+            "bloccano l'approvazione"
+        )
+    if blockers.get("findings_error"):
+        message = "l'audit iniziale è illeggibile: l'approvazione resta bloccata"
     return {
         "approved": documento["status"] == APPROVED,
         "status": documento["status"],
         "code": "" if documento["status"] == APPROVED else ConstitutionNotApproved.code,
-        "message": (
-            ""
-            if documento["status"] == APPROVED
-            else "la Costituzione è ancora una bozza: approvazione richiesta"
-        ),
+        "message": "" if documento["status"] == APPROVED else message,
         "sha256": documento["draft_sha256"],
+        **blockers,
     }
 
 
@@ -349,6 +366,16 @@ def approve(
         nuovo_corpo = _normalize_body(document["body"] if body is None else body)
         if not nuovo_corpo.strip():
             raise ConstitutionInvalid("la Costituzione non puo' essere approvata vuota")
+        try:
+            aperti = onboarding_findings.open_blocking(workspace.root)
+        except ValueError as error:
+            raise ConstitutionInvalid(str(error)) from error
+        if aperti:
+            identificatori = ", ".join(str(gap.get("id") or "SENZA-ID") for gap in aperti)
+            raise ConstitutionInvalid(
+                "la Costituzione contiene decisioni bloccanti ancora aperte: "
+                f"{identificatori}. Chiudile con onboarding_findings.py --resolve e una nota."
+            )
         adesso = _now()
         metadata["status"] = APPROVED
         metadata["updated_at"] = adesso
