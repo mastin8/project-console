@@ -71,8 +71,9 @@ FASE 3 — PROGETTO
     --project "{{PROJECT_NAME}}"
 
 - Non usare `--esempio`.
-- Verifica che lo scaffold abbia creato `.coord/onboarding-findings.yaml` e che la sezione 0 di
-  `constitution.md` contenga ciò che è stato rilevato e le decisioni mancanti.
+- Verifica che lo scaffold abbia creato `.coord/onboarding-findings.yaml`,
+  `.coord/onboarding-questions.md` e che la sezione 0 di `constitution.md` contenga ciò che è
+  stato rilevato e le decisioni mancanti.
 - Apri {{PROJECT_PATH}}/.coord/FIRST-PROMPT.md.
 - Compila soltanto la sezione “Prompt dell'utente” con l'idea fornita sopra.
 - Conserva integralmente l'Addendum obbligatorio già presente.
@@ -103,6 +104,7 @@ FASE 5 — INTERVISTA
   - {{PROJECT_PATH}}/.coord/agents/CONTRATTO.md;
   - {{PROJECT_PATH}}/.coord/constitution.md;
   - {{PROJECT_PATH}}/.coord/onboarding-findings.yaml;
+  - {{PROJECT_PATH}}/.coord/onboarding-questions.md;
   - {{PROJECT_PATH}}/.coord/FIRST-PROMPT.md.
 - Esegui l'Addendum obbligatorio.
 - Parti dai gap `BLOCCANTE`, dalle contraddizioni e da ciò che la repository contiene già.

@@ -841,7 +841,8 @@ async function controllaVersione() {
       nuova.state_mtime_ns !== versioneVista.state_mtime_ns ||
       nuova.tasks_mtime_ns !== versioneVista.tasks_mtime_ns ||
       nuova.constitution_mtime_ns !== versioneVista.constitution_mtime_ns ||
-      nuova.onboarding_findings_mtime_ns !== versioneVista.onboarding_findings_mtime_ns
+      nuova.onboarding_findings_mtime_ns !== versioneVista.onboarding_findings_mtime_ns ||
+      nuova.onboarding_questions_mtime_ns !== versioneVista.onboarding_questions_mtime_ns
     ) {
       const avviso = $("#nuovo-registro");
       if (avviso) avviso.hidden = false;
@@ -1468,7 +1469,7 @@ function renderCostituzione(data) {
     } else {
       $("#constitution-findings-title").textContent = `${bloccanti.length} decisioni bloccanti da chiudere`;
       $("#constitution-findings-copy").textContent =
-        "Sono informazioni misurate nella repository. L'agente deve chiederti una decisione e registrarla con una nota prima che la Costituzione possa essere approvata.";
+        "Sono fatti misurati nella repository e domande dell'intervista. L'agente deve chiederti una decisione e registrarla con una nota prima che la Costituzione possa essere approvata.";
       const lista = $("#constitution-findings-list");
       lista.replaceChildren();
       for (const gap of bloccanti) {

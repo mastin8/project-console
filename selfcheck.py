@@ -27,6 +27,9 @@ PORTE = {
     "onboarding_findings.py": [
         "scan", "save", "render_section", "apply_to_constitution", "open_blocking", "resolve", "main",
     ],
+    "onboarding_questions.py": [
+        "initial_questions", "merge", "open_required", "summary", "render_markdown",
+    ],
     "registers/apply_transitions.py": ["apply_request", "read_transition", "main"],
     "registers/validate_registries.py": ["main"],
     "registers/next_prompts.py": ["build", "configure", "render_html", "main"],

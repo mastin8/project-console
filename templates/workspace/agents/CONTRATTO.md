@@ -28,10 +28,13 @@ dell'utente contiene anche l'**Addendum obbligatorio** di `FIRST-PROMPT.md`.
 L'agente, prima di creare task o scrivere codice:
 
 1. legge `FIRST-PROMPT.md`, questa carta e `constitution.md`;
-2. fa domande all'utente su obiettivo, fuori perimetro, stack, deliverable, ampiezza dei task,
-   skill, flusso normale/rigoroso, parallelismo, test, accettazione, rischi e stop rule;
-3. aggiorna `constitution.md` con le risposte, lasciando aperte le domande senza risposta;
-4. propone il piano finale e chiede all'utente di approvarlo dalla pagina **Costituzione** del
+2. legge `onboarding-findings.yaml` e `onboarding-questions.md`: il primo contiene i fatti
+   misurati e i gap tecnici, il secondo il catalogo di 90 decisioni in 15 aree;
+3. fa domande all'utente una o due per volta, partendo dai gap bloccanti e dai rami che cambiano
+   architettura, perimetro o rischio;
+4. chiude ogni voce con `onboarding_findings.py --resolve`, una nota e uno stato esplicito;
+5. aggiorna `constitution.md` con le risposte, lasciando aperte le domande senza risposta;
+6. propone il piano finale e chiede all'utente di approvarlo dalla pagina **Costituzione** del
    console.
 
 L'agente non scrive mai `status: approved` e non approva il documento al posto dell'utente. Solo

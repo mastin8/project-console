@@ -48,6 +48,7 @@ class Workspace:
     constitution: str = "constitution.md"
     first_prompt: str = "FIRST-PROMPT.md"
     onboarding_findings: str = "onboarding-findings.yaml"
+    onboarding_questions: str = "onboarding-questions.md"
     questions: str = "questions.yaml"
     decisions: str = "decisions.yaml"
     user_decisions: str = "user_decisions.yaml"
@@ -105,6 +106,10 @@ class Workspace:
     @property
     def onboarding_findings_path(self) -> Path:
         return self.path(self.onboarding_findings)
+
+    @property
+    def onboarding_questions_path(self) -> Path:
+        return self.path(self.onboarding_questions)
 
     @property
     def brand_dir(self) -> Path:

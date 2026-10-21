@@ -14,6 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import constitution  # noqa: E402
 import onboarding_findings  # noqa: E402
+import onboarding_questions  # noqa: E402
 from workspace import Workspace  # noqa: E402
 
 
@@ -84,6 +85,30 @@ class OnboardingFindingsTests(unittest.TestCase):
         self.assertNotIn("TOKEN_CHE_NON_DEVE_COMPARIRE", serializzato)
         self.assertTrue(sentinel.exists())
 
+    def test_interview_has_ninety_traceable_questions_and_preserves_answers(self):
+        domande = onboarding_questions.initial_questions()
+        self.assertEqual(len(domande), 90)
+        self.assertEqual(len({item["id"] for item in domande}), 90)
+        self.assertEqual(len({item["area"] for item in domande}), 15)
+
+        self._constitution()
+        document = onboarding_findings.scan(self.repo, self.workspace_dir)
+        onboarding_findings.save(self.workspace_dir, document)
+        aggiornato = onboarding_findings.resolve(
+            self.workspace_dir,
+            "PROD01",
+            "answered",
+            "Il risultato è un gestionale locale usabile da operatori reali.",
+        )
+        domanda = next(item for item in aggiornato["questions"] if item["id"] == "PROD01")
+        self.assertEqual(domanda["answer"], "Il risultato è un gestionale locale usabile da operatori reali.")
+        self.assertIn("PROD01", (self.workspace_dir / "onboarding-questions.md").read_text(encoding="utf-8"))
+
+        riscansione = onboarding_findings.scan(self.repo, self.workspace_dir)
+        conservata = next(item for item in riscansione["questions"] if item["id"] == "PROD01")
+        self.assertEqual(conservata["status"], "answered")
+        self.assertEqual(conservata["answer"], domanda["answer"])
+
     def test_dirty_worktree_and_existing_code_become_visible_gaps(self):
         self._write("app.py", "print('ciao')\n")
         document = onboarding_findings.scan(self.repo, self.workspace_dir)
@@ -132,13 +157,13 @@ class OnboardingFindingsTests(unittest.TestCase):
         self.assertIn("BOOT-CODE-BASE", str(errore.exception))
         self.assertEqual(constitution.load(workspace)["status"], "draft")
 
-        for gap in list(document["gaps"]):
-            onboarding_findings.resolve(
-                self.workspace_dir,
-                gap["id"],
-                "not_applicable",
-                "Voce di prova chiusa dopo una decisione esplicita.",
-            )
+        for gap in document["gaps"]:
+            gap["status"] = "not_applicable"
+            gap["resolution"] = "Gap di prova chiuso dopo una decisione esplicita."
+        for domanda in document["questions"]:
+            domanda["status"] = "not_applicable"
+            domanda["answer"] = "Domanda di prova non pertinente, con motivazione esplicita."
+        onboarding_findings.save(self.workspace_dir, document)
         approvata = constitution.approve(workspace)
         self.assertEqual(approvata["status"], "approved")
         self.assertTrue(constitution_path.is_file())

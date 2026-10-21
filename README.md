@@ -52,10 +52,12 @@ composizione dei prompt sono bloccate finché la Costituzione resta in bozza o m
 l'approvazione si crea la mappa del lavoro.
 
 Lo scaffold esegue anche un audit statico della repository e scrive
-`onboarding-findings.yaml`. La sezione 0 della Costituzione mostra stack rilevato, codice
-preesistente, worktree sporco, file sensibili o tecnici tracciati e contraddizioni da chiarire.
-Finché una voce `BLOCCANTE` resta aperta, l'approvazione viene rifiutata. L'audit non legge il
-contenuto di `.env`: controlla soltanto se il file è tracciato da Git.
+`onboarding-findings.yaml`. Genera inoltre `onboarding-questions.md`: un'intervista di circa 90
+decisioni in 15 aree, dal problema iniziale a dati, permessi, errori, integrazioni, test,
+pubblicazione e governo degli agenti. La sezione 0 della Costituzione mostra sia i fatti misurati
+sia le domande ancora aperte. Finché una voce `BLOCCANTE` resta aperta, l'approvazione viene
+rifiutata. L'audit non legge il contenuto di `.env`: controlla soltanto se il file è tracciato da
+Git.
 
 Quando `tasks.yaml` è pronto, l'utente lo controlla in **Percorso** e lo approva da **Adesso**. Il
 tool salva l'impronta del piano: ogni modifica successiva al file blocca le nuove attivazioni

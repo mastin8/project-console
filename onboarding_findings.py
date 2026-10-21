@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Audit statico per la bozza di Costituzione: fatti misurati e decisioni mancanti."""
+"""Audit per la bozza di Costituzione: fatti misurati e intervista iniziale tracciabile."""
 from __future__ import annotations
 
 import argparse
@@ -10,10 +10,12 @@ from datetime import datetime
 from pathlib import Path
 
 import yaml
+from onboarding_questions import CLOSED, initial_questions, merge as merge_questions
+from onboarding_questions import open_required, render_markdown, summary
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-SCHEMA = "project-console-onboarding-findings/1.0"
+SCHEMA = "project-console-onboarding-findings/1.1"
 START = "<!-- ONBOARDING_FINDINGS_START -->"
 END = "<!-- ONBOARDING_FINDINGS_END -->"
 
@@ -80,18 +82,35 @@ def open_blocking(workspace):
         raise ValueError(f"{path}: audit iniziale illeggibile: {error}") from error
     if not isinstance(document, dict):
         raise ValueError(f"{path}: l'audit iniziale deve contenere una mappa YAML")
-    return [
+    gaps = [
         gap
         for gap in document.get("gaps") or []
         if isinstance(gap, dict)
         and gap.get("status") == "open"
         and gap.get("blocking") is True
     ]
+    questions = [
+        {**question, "kind": "question", "reason": question.get("area") or ""}
+        for question in open_required(document.get("questions") or [])
+    ]
+    return gaps + questions
+
+
+def _previous_document(workspace):
+    path = workspace / "onboarding-findings.yaml"
+    if not path.is_file():
+        return {}
+    try:
+        document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return {}
+    return document if isinstance(document, dict) else {}
 
 
 def scan(repository, workspace):
     root = Path(repository).resolve()
     workspace = Path(workspace).resolve()
+    previous = _previous_document(workspace)
     facts, gaps = [], []
 
     package, package_path = _package(root)
@@ -270,6 +289,17 @@ def scan(repository, workspace):
             )
         )
 
+    precedenti = {
+        str(gap.get("id")): gap
+        for gap in previous.get("gaps") or []
+        if isinstance(gap, dict)
+    }
+    for gap in gaps:
+        prima = precedenti.get(gap["id"], {})
+        if prima.get("status") in {"open", "resolved", "not_applicable", "accepted_risk"}:
+            gap["status"] = prima["status"]
+        gap["resolution"] = str(prima.get("resolution") or "")
+
     return {
         "schema": SCHEMA,
         "generated_at": datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -277,6 +307,7 @@ def scan(repository, workspace):
         "workspace": str(workspace),
         "facts": facts,
         "gaps": gaps,
+        "questions": merge_questions(previous.get("questions") or initial_questions()),
     }
 
 
@@ -297,7 +328,7 @@ def render_section(document):
     aperti = [gap for gap in document.get("gaps") or [] if gap.get("status") == "open"]
     righe += ["", "### Decisioni mancanti", ""]
     if not aperti:
-        righe.append("Nessuna decisione bloccante rilevata dall'audit statico.")
+        righe.append("Nessun gap tecnico aperto rilevato dall'audit statico.")
     for gap in aperti:
         peso = "BLOCCANTE" if gap.get("blocking") else "non bloccante"
         nota = f" — {gap['reason']}" if gap.get("reason") else ""
@@ -309,6 +340,33 @@ def render_section(document):
             righe.append(
                 f"- [x] `{gap['id']}` — {gap.get('status')}: {gap.get('resolution') or 'chiusa'}"
             )
+    domande = document.get("questions") or []
+    dati = summary(domande)
+    righe += [
+        "",
+        "### Intervista di progetto",
+        "",
+        f"{dati['closed']} decisioni chiuse su {dati['total']} · {dati['open']} ancora aperte.",
+        "Le domande sono adattive: una voce non pertinente si chiude con `not_applicable` e il motivo.",
+        "",
+    ]
+    aree = {}
+    for domanda in domande:
+        aree.setdefault(domanda.get("area") or "Altre decisioni", []).append(domanda)
+    for area, voci in aree.items():
+        righe += [f"#### {area}", ""]
+        for domanda in voci:
+            chiusa = domanda.get("status") in CLOSED
+            segno = "x" if chiusa else " "
+            stato = (
+                ""
+                if domanda.get("status") == "open"
+                else f" — **{domanda.get('status')}:** {domanda.get('answer') or 'senza nota'}"
+            )
+            righe.append(
+                f"- [{segno}] `{domanda.get('id')}` {domanda.get('question')}{stato}"
+            )
+        righe.append("")
     righe += ["", END]
     return "\n".join(righe)
 
@@ -332,6 +390,10 @@ def save(workspace, document):
         yaml.safe_dump(document, sort_keys=False, allow_unicode=True),
         encoding="utf-8",
     )
+    (workspace / "onboarding-questions.md").write_text(
+        render_markdown(document.get("questions") or []),
+        encoding="utf-8",
+    )
     constitution = workspace / "constitution.md"
     if constitution.is_file():
         apply_to_constitution(constitution, render_section(document))
@@ -346,14 +408,29 @@ def resolve(workspace, identifier, status, note):
         (gap for gap in document.get("gaps") or [] if str(gap.get("id")) == identifier),
         None,
     )
+    question = found is None
+    if question:
+        found = next(
+            (
+                item
+                for item in document.get("questions") or []
+                if str(item.get("id")) == identifier
+            ),
+            None,
+        )
     if found is None:
         raise SystemExit(f"decisione non trovata: {identifier}")
-    if status not in ("open", "resolved", "not_applicable", "accepted_risk"):
+    ammessi = (
+        {"open", "answered", "not_applicable", "accepted_risk", "deferred"}
+        if question
+        else {"open", "resolved", "not_applicable", "accepted_risk"}
+    )
+    if status not in ammessi:
         raise SystemExit(f"stato non valido: {status}")
     if status != "open" and not str(note or "").strip():
         raise SystemExit("una decisione chiusa richiede --note")
     found["status"] = status
-    found["resolution"] = str(note or "").strip()
+    found["answer" if question else "resolution"] = str(note or "").strip()
     save(workspace, document)
     return document
 
@@ -381,12 +458,16 @@ def main(argv=None):
     if args.json:
         print(json.dumps(document, ensure_ascii=False, indent=2))
     else:
-        aperti = sum(
+        aperti_gap = sum(
             1
             for gap in document.get("gaps") or []
             if gap.get("status") == "open" and gap.get("blocking")
         )
-        print(f"onboarding-findings.yaml aggiornato · decisioni bloccanti aperte: {aperti}")
+        aperti_domande = len(open_required(document.get("questions") or []))
+        print(
+            "onboarding-findings.yaml aggiornato · "
+            f"gap bloccanti aperti: {aperti_gap} · domande aperte: {aperti_domande}"
+        )
     return 0
 
 

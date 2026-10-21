@@ -371,10 +371,19 @@ def approve(
         except ValueError as error:
             raise ConstitutionInvalid(str(error)) from error
         if aperti:
-            identificatori = ", ".join(str(gap.get("id") or "SENZA-ID") for gap in aperti)
+            identificatori = [
+                str(gap.get("id") or "SENZA-ID")
+                for gap in aperti
+            ]
+            anteprima = ", ".join(identificatori[:8])
+            altre = (
+                f" e altre {len(identificatori) - 8} voci"
+                if len(identificatori) > 8
+                else ""
+            )
             raise ConstitutionInvalid(
                 "la Costituzione contiene decisioni bloccanti ancora aperte: "
-                f"{identificatori}. Chiudile con onboarding_findings.py --resolve e una nota."
+                f"{anteprima}{altre}. Chiudile con onboarding_findings.py --resolve e una nota."
             )
         adesso = _now()
         metadata["status"] = APPROVED

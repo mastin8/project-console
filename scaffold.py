@@ -93,7 +93,11 @@ def scafold(root: Path, project: str, esempio: bool = False) -> tuple:
         onboarding_findings.save(root, findings)
         creati.extend(
             str(path)
-            for path in (root / "onboarding-findings.yaml", root / "constitution.md")
+            for path in (
+                root / "onboarding-findings.yaml",
+                root / "onboarding-questions.md",
+                root / "constitution.md",
+            )
             if str(path) not in creati
         )
 
@@ -150,6 +154,7 @@ def main(argv=None):
         f"{root / 'constitution.md'} dall'agente, poi approva la Costituzione dal console"
     )
     print(f"audit iniziale: {root / 'onboarding-findings.yaml'}")
+    print(f"intervista iniziale: {root / 'onboarding-questions.md'}")
     print(f"avvialo con: python3 console/server.py --workspace {root}")
     return 0
 
