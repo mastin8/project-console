@@ -238,9 +238,11 @@ task può essere attivato e nessun prompt può essere composto. I progetti nati 
 regola possono creare la bozza dal modello dentro la pagina Costituzione; l'approvazione resta
 sempre un atto separato dell'utente.
 
-Nei progetti nuovi c’è un secondo cancello: dopo che l’agente ha creato `tasks.yaml`, l’utente
-controlla la mappa in **Percorso** e la approva da **Adesso**. Il tool salva l’impronta del file;
-se il piano cambia, le nuove attivazioni si fermano finché non viene riconfermato.
+Nei progetti nuovi c’è un secondo cancello. Appena la Costituzione è approvata, il front-end mostra
+**Prossimo passo: crea il piano dei task** con il pulsante **Copia prompt per creare tasks.yaml**.
+Si dà quel prompt a un agente; quando `tasks.yaml` è pronto, l’utente controlla la mappa in
+**Percorso** e la approva da **Adesso**. Il tool salva l’impronta del file; se il piano cambia, le
+nuove attivazioni si fermano finché non viene riconfermato.
 
 Ogni report dei progetti nuovi dichiara anche `usage` e provenienza Git. Se il runtime non espone i
 token, il report deve dichiararli `unavailable` con il motivo; non può usare zero. La provenienza

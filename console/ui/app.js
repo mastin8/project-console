@@ -15,6 +15,7 @@ let versioneVista = null;
 let selectedBlock = null;
 let consoleConfig = null;
 let constitutionData = null;
+let planGateData = null;
 
 /* L'interfaccia non conosce il progetto: nome, vista e fasi arrivano dal workspace. Se
    `/config.json` non risponde, quello che si vede resta quello di serie — la pagina funziona
@@ -214,32 +215,94 @@ function actionsReady() {
   return constitutionReady() && planReady();
 }
 
+function promptCreaPiano() {
+  const progetto = (consoleConfig && consoleConfig.project) || "questo progetto";
+  const conferma = planGateData?.required
+    ? "ricordami che devo controllare il piano in Percorso e premere «Approva il piano» in Adesso. Non dichiarare il piano approvato."
+    : "ricordami che devo controllare il piano in Percorso prima di iniziare il lavoro.";
+  return [
+    `Lavora nel repository di ${progetto}. La Costituzione è approvata e immutabile.`,
+    "",
+    "Leggi integralmente constitution.md, agents/CONTRATTO.md, console.yaml e tasks.yaml.",
+    "Crea tasks.yaml traducendo la Costituzione in blocchi indipendenti, unità e fasi verificabili.",
+    "",
+    "Vincoli:",
+    "- non modificare constitution.md;",
+    "- non aprire fasi in state.yaml, non attivare task, non prendere prese e non scrivere codice di prodotto;",
+    "- ogni unità deve avere un risultato osservabile, un perimetro di file non sovrapposto e criteri di accettazione verificabili;",
+    "- dichiara dipendenze solo da artefatti, con l'interfaccia condivisa nominata;",
+    "- rispetta il numero e l'ampiezza dei task, le fasi, il parallelismo e la stop rule della Costituzione;",
+    "- controlla il formato di tasks.yaml secondo agents/CONTRATTO.md.",
+    "",
+    `Al termine fermati. Spiega in linguaggio semplice quali blocchi hai creato e ${conferma}`,
+  ].join("\n");
+}
+
 function renderPlanGate(gate, constitutionGate) {
+  planGateData = gate || null;
   const banner = $("#plan-gate-global");
   if (!banner) return;
   const richiesto = Boolean(gate && gate.required);
-  if (!richiesto || gate.approved || !constitutionGate?.approved) {
+  const pianoPronto = Number(gate?.units || 0) > 0 && Number(gate?.tasks || 0) > 0;
+  const assente = ["missing", "empty"].includes(gate?.status) || !pianoPronto;
+  const invalido = gate?.status === "invalid";
+  const cambiato = gate?.status === "changed";
+  const daCreare = assente || invalido;
+  const daConfermare = richiesto && pianoPronto && !gate?.approved;
+  if (
+    !constitutionGate?.approved
+    || (!daCreare && !daConfermare && !cambiato)
+    || (richiesto && gate?.approved)
+  ) {
     banner.hidden = true;
     return;
   }
   banner.hidden = false;
-  const vuoto = gate.status === "empty" || gate.status === "invalid";
-  const cambiato = gate.status === "changed";
   $("#plan-gate-title").textContent = cambiato
     ? "Il piano è cambiato"
-    : vuoto
-      ? "Il piano dei task non è ancora pronto"
+    : invalido
+      ? "Il piano dei task non è leggibile"
+      : assente
+      ? "Prossimo passo: crea il piano dei task"
       : "Conferma il piano dei task";
   $("#plan-gate-copy").textContent = cambiato
     ? "tasks.yaml è diverso dal piano che avevi approvato. Le nuove attivazioni restano bloccate finché non lo riconfermi."
-    : vuoto
-      ? gate.message || "Il piano deve contenere almeno un'unità e un task."
+    : invalido
+      ? `${gate.message || "tasks.yaml non è valido."} Usa il prompt per farlo correggere da un agente.`
+      : assente
+      ? "La Costituzione è approvata. Manda a un agente il prompt che crea tasks.yaml; quando il file è pronto, controlla Percorso e torna qui per approvarlo."
       : "La Costituzione è approvata. Controlla unità, task, dipendenze e ampiezza; poi conferma questa mappa.";
+  const crea = $("#plan-gate-create");
+  const revisione = $("#plan-gate-review");
   const approva = $("#plan-gate-approve");
-  approva.hidden = vuoto;
-  approva.disabled = vuoto;
+  if (crea) {
+    crea.hidden = !daCreare;
+    crea.disabled = false;
+    crea.textContent = invalido
+      ? "Copia prompt per correggere tasks.yaml"
+      : "Copia prompt per creare tasks.yaml";
+  }
+  if (revisione) revisione.hidden = daCreare || !richiesto;
+  approva.hidden = daCreare || !richiesto;
+  approva.disabled = daCreare || !richiesto || !gate.tasks_sha256;
   approva.textContent = cambiato ? "Riconferma il piano" : "Approva il piano";
   approva.dataset.expected = gate.tasks_sha256 || "";
+  const messaggio = $("#plan-gate-message");
+  if (messaggio) {
+    messaggio.className = "msg";
+    messaggio.textContent = "";
+  }
+}
+
+async function loadPlanGate() {
+  try {
+    const response = await fetch("/api/plan", { cache: "no-store" });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    renderPlanGate(await response.json(), { approved: true });
+  } catch {
+    const banner = $("#plan-gate-global");
+    if (banner) banner.hidden = true;
+  }
 }
 
 /* ----------------------------------------------------------------- domande */
@@ -1458,6 +1521,12 @@ function renderCostituzione(data) {
   const stato = $("#constitution-status");
   stato.hidden = false;
   stato.dataset.status = data.status;
+  if (data.status === "approved") {
+    loadPlanGate();
+  } else {
+    const piano = $("#plan-gate-global");
+    if (piano) piano.hidden = true;
+  }
   const bloccanti = Array.isArray(data.blocking_findings) ? data.blocking_findings : [];
   const pannello = $("#constitution-findings");
   if (pannello) {
@@ -1632,6 +1701,28 @@ function initCostituzione() {
 }
 
 function initPlanGate() {
+  $("#plan-gate-create")?.addEventListener("click", async () => {
+    const bottone = $("#plan-gate-create");
+    const messaggio = $("#plan-gate-message");
+    bottone.disabled = true;
+    messaggio.className = "msg show pending";
+    messaggio.textContent = "preparo il prompt…";
+    const testo = promptConCostituzione(promptCreaPiano());
+    const copia = await copiaTesto(testo);
+    if (copia.ok) {
+      messaggio.className = "msg show ok";
+      messaggio.textContent = "prompt copiato: incollalo in una chat nuova.";
+    } else {
+      messaggio.className = "msg show err";
+      messaggio.textContent = "il prompt si apre qui: selezionalo e copialo.";
+      apriTesto("Creare tasks.yaml — prompt", testo, {
+        copia: true,
+        seleziona: true,
+        file: "crea-tasks.md",
+      });
+    }
+    bottone.disabled = false;
+  });
   $("#plan-gate-approve")?.addEventListener("click", async () => {
     const bottone = $("#plan-gate-approve");
     const conferma = window.confirm(

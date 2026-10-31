@@ -93,6 +93,8 @@ class PlanTests(unittest.TestCase):
             stato = plan.gate(ws)
             self.assertFalse(stato["required"])
             self.assertTrue(stato["approved"])
+            self.assertEqual(stato["units"], 0)
+            self.assertEqual(stato["tasks"], 0)
 
 
 if __name__ == "__main__":

@@ -85,25 +85,25 @@ def _tasks(workspace):
 
 
 def gate(workspace):
+    _, tasks_sha256, conteggi, errore = _tasks(workspace)
     if not workspace.require_plan_approval:
         return {
             "schema": SCHEMA,
             "required": False,
             "approved": True,
             "status": "not_required",
-            "tasks_sha256": "",
+            "tasks_sha256": tasks_sha256,
             "approved_sha256": "",
-            "units": 0,
-            "tasks": 0,
-            "message": "",
+            "units": conteggi.get("units", 0),
+            "tasks": conteggi.get("tasks", 0),
+            "message": errore,
         }
-    _, sha256, conteggi, errore = _tasks(workspace)
     base = {
         "schema": SCHEMA,
         "required": True,
         "approved": False,
         "status": "missing",
-        "tasks_sha256": sha256,
+        "tasks_sha256": tasks_sha256,
         "approved_sha256": "",
         "units": conteggi.get("units", 0),
         "tasks": conteggi.get("tasks", 0),
@@ -139,7 +139,7 @@ def gate(workspace):
         base["status"] = "pending"
         base["message"] = "il piano dei task aspetta la conferma dell'utente"
         return base
-    if approved_sha != sha256:
+    if approved_sha != tasks_sha256:
         base["status"] = "changed"
         base["message"] = (
             "tasks.yaml è cambiato dopo l'approvazione: nuove attivazioni bloccate"
