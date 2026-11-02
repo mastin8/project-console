@@ -2057,6 +2057,11 @@ def build_handler(state):
                     return self._constitution_error(error)
                 except plan.PlanError as error:
                     return self._plan_error(error)
+                except SystemExit as error:
+                    # I registri del coordinatore usano SystemExit anche come errore applicativo.
+                    # Qui non deve terminare il thread HTTP lasciando la connessione vuota: il
+                    # browser lo vede come "Failed to fetch" invece del vero messaggio.
+                    return self._json(400, {"error": str(error)})
                 except Exception as error:  # noqa: BLE001
                     return self._json(400, {"error": str(error)})
             if route == "/api/esiti":
