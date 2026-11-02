@@ -38,6 +38,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import activate  # noqa: E402 - le impronte del perimetro sono sue
 import next_prompts  # noqa: E402 - il quaderno, per il prompt che esiste gia'
+import report_contract  # noqa: E402 - forma macchina obbligatoria del report
 from registers import plan  # noqa: E402 - il piano dei task deve essere approvato
 from console import constitution  # noqa: E402 - la Costituzione approvata e' parte del mandato
 from workspace import Workspace  # noqa: E402
@@ -475,6 +476,8 @@ def busta(ws, fase):
             f"SCHEMA DEI REPORT DI QUESTO PROGETTO: {ws.report_schema} (puntatore: {ws.pointer_schema}).",
             "I campi che la piattaforma legge restano quelli del contratto — `verdict`, `published_at`,",
             "`next` — e tutto il resto e' del progetto.",
+            "",
+            *report_contract.prompt_contract(ws),
             "",
             "e subito dopo, nella stessa voce, due richieste: taken_by: <la tua corsia> e",
             "taken_at: '<adesso>'. Poi fallo applicare al coordinamento:",

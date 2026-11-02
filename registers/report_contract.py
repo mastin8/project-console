@@ -69,6 +69,29 @@ def validate(workspace, document):
     return errori
 
 
+def prompt_contract(workspace):
+    """Le clausole macchina che ogni prompt deve mostrare quando il workspace le richiede."""
+    righe = []
+    if workspace.require_usage:
+        righe.extend(
+            [
+                "USAGE OBBLIGATORIO nel report: `usage.availability` vale `measured` oppure `unavailable`.",
+                "Se vale `unavailable`, `usage.reason` e' obbligatorio; se vale `measured`, dichiara",
+                "`total_tokens` oppure entrambi `input_tokens` e `output_tokens`.",
+            ]
+        )
+    if workspace.require_git_provenance:
+        righe.extend(
+            [
+                "GIT OBBLIGATORIO nel report: branch, worktree, base_commit, head_commit,",
+                "changed_paths, dirty_before e clean_after.",
+                "`changed_paths` e `dirty_before` sono LISTE YAML (`- percorso` oppure `[]`),",
+                "non booleani o stringhe. `clean_after` e' un booleano true/false.",
+            ]
+        )
+    return righe
+
+
 def unavailable_usage(reason):
     return {
         "availability": "unavailable",

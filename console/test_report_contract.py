@@ -60,6 +60,19 @@ class ReportContractTests(unittest.TestCase):
         )
         self.assertEqual(report_contract.validate(workspace, {}), [])
 
+    def test_prompt_contract_declares_machine_shapes(self):
+        workspace = SimpleNamespace(
+            require_usage=True,
+            require_git_provenance=True,
+        )
+        righe = report_contract.prompt_contract(workspace)
+        testo = "\n".join(righe)
+        self.assertIn("USAGE OBBLIGATORIO", testo)
+        self.assertIn("GIT OBBLIGATORIO", testo)
+        self.assertIn("dirty_before", testo)
+        self.assertIn("LISTE YAML", testo)
+        self.assertIn("clean_after", testo)
+
     def test_delivered_refinement_rejects_report_without_new_contract(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

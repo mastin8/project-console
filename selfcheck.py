@@ -41,7 +41,7 @@ PORTE = {
     ],
     "registers/plan.py": ["gate", "require_approved", "approve", "main"],
     "registers/report_contract.py": [
-        "validate", "usage_errors", "git_errors", "git_snapshot",
+        "validate", "usage_errors", "git_errors", "prompt_contract", "git_snapshot",
     ],
     "registers/activate.py": ["attivabili", "attiva", "rilascia", "aggiorna_ordini", "elenco", "main"],
     "registers/handoff.py": ["dichiarazioni", "lacune", "dovuto", "scrivi", "main"],
