@@ -76,6 +76,30 @@ class NextActionTests(unittest.TestCase):
         self.assertEqual(azione["code"], "accept")
         self.assertEqual(azione["after_phase"], "T")
 
+    def test_negative_task_with_newer_rework_reruns_current_phase(self):
+        azione = next_action.for_task(
+            {
+                "phase": "FND01T",
+                "unit": "FND01",
+                "rifai": "",
+                "verdetto": "needs_changes",
+            }
+        )
+        self.assertEqual(azione["code"], "run_phase")
+        self.assertEqual(azione["target_phase"], "FND01T")
+
+    def test_negative_task_targets_the_full_rework_phase_code(self):
+        azione = next_action.for_task(
+            {
+                "phase": "FND01T",
+                "unit": "FND01",
+                "rifai": "E",
+                "verdetto": "needs_changes",
+            }
+        )
+        self.assertEqual(azione["code"], "rework_e")
+        self.assertEqual(azione["target_phase"], "FND01E")
+
     def test_fast_task_uses_only_its_declared_e_and_t_phases(self):
         with tempfile.TemporaryDirectory() as tmp:
             radice = Path(tmp)

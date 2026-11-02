@@ -425,15 +425,30 @@ def for_task(item):
             primary="none",
         )
     if kind == "negative":
-        fase = str(item.get("rifai") or "E").upper()
-        return _action(
-            "rework_e",
-            f"Correggi in {fase}",
-            phase=fase,
-            target_phase=fase,
-            reason=f"Il verdetto «{verdict}» respinge l'atto.",
-            primary="prompt",
-        )
+        rifai = str(item.get("rifai") or "").upper()
+        if rifai:
+            unita = str(item.get("unit") or "")
+            target = rifai if not unita or rifai.startswith(unita) else f"{unita}{rifai}"
+            return _action(
+                "rework_e",
+                f"Correggi in {target}",
+                phase=target,
+                target_phase=target,
+                reason=f"Il verdetto «{verdict}» respinge l'atto.",
+                primary="prompt",
+            )
+        # `rifai` vuoto non significa "usa E": significa che la fase precedente ha gia'
+        # una consegna piu' nuova del verdetto negativo. La verifica va quindi rieseguita
+        # sui byte correnti, non riportata a un E gia' completato.
+        if phase:
+            return _action(
+                "run_phase",
+                f"Riesegui {phase}",
+                phase=phase,
+                target_phase=phase,
+                reason="La correzione precedente è già consegnata: serve un nuovo tentativo su questa fase.",
+                primary="prompt",
+            )
     if verdict and kind == "unknown":
         return _action(
             "review",
