@@ -183,6 +183,14 @@ def leggi(ws, fase, state=None, tasks_doc=None):
     #    «PRONTA» — che e' il modo peggiore di sbagliare: un via libera su niente.
     if task is None:
         motivi.append(f"la fase {fase} non e' dichiarata in {ws.tasks}: niente da giudicare")
+    # La dichiarazione in tasks.yaml non basta: l'accettazione deve scrivere nella voce di
+    # `state.yaml#tasks`. Se il piano non e' stato sincronizzato, l'atto fallirebbe DOPO aver
+    # scritto report e puntatore. Il cancello lo blocca prima, e dice come aprire le fasi.
+    if not registrata:
+        motivi.append(
+            f"la fase {fase} non e' aperta in {ws.state}#tasks: "
+            "esegui sync_phases.py --apply prima di accettare"
+        )
 
     # 1. I registri si leggono.
     rotti = []

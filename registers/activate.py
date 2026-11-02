@@ -820,6 +820,17 @@ def _occorrenze(state, fase):
     return sum(1 for v in state.get("active_claims") or [] if str(v.get("task_id")) == fase)
 
 
+def _fasi_non_aperte(state, tasks_doc):
+    """Fasi dichiarate dal piano ma assenti da `state.yaml#tasks`.
+
+    Una presa non puo' precedere l'apertura della fase: altrimenti l'ordine nasce su un registro
+    che l'accettazione non sapra' aggiornare. La sincronizzazione e' un cancello, non un passaggio
+    facoltativo.
+    """
+    registrate = state.get("tasks") or {}
+    return [fase for fase, *_ in fasi(tasks_doc) if fase not in registrate]
+
+
 def _applica(ws, richieste):
     applicate, fallite = [], []
     import fcntl
@@ -848,6 +859,14 @@ def attiva(ws, fase, dry_run=False):
     plan.require_approved(ws)
     state = _carica(ws.state_path.read_text(encoding="utf-8")) or {}
     tasks_doc = _carica(ws.path(ws.tasks).read_text(encoding="utf-8")) or {}
+    non_aperte = _fasi_non_aperte(state, tasks_doc)
+    if non_aperte:
+        mostrate = ", ".join(non_aperte[:4])
+        resto = f" e altre {len(non_aperte) - 4}" if len(non_aperte) > 4 else ""
+        raise apply_transitions.TransitionError(
+            f"il registro non e' sincronizzato: {mostrate}{resto} mancano da {ws.state}#tasks. "
+            "Esegui sync_phases.py --apply prima di attivare una fase."
+        )
     voce = next((v for v in attivabili(ws, state, tasks_doc) if v["phase"] == fase), None)
     if voce is None:
         presa = prese(state).get(fase)

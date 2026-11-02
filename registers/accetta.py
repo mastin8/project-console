@@ -53,6 +53,57 @@ def _leggi(percorso: Path):
         return {}
 
 
+def _foto(percorso: Path):
+    """Contenuto precedente di un file, sufficiente per ripristinarlo dopo un errore."""
+    try:
+        return True, percorso.read_bytes()
+    except FileNotFoundError:
+        return False, None
+
+
+def _ripristina(percorso: Path, foto):
+    esisteva, contenuto = foto
+    if esisteva:
+        percorso.write_bytes(contenuto)
+    else:
+        percorso.unlink(missing_ok=True)
+
+
+def _applica_campi_accettazione(ws, fase, richieste):
+    """Applica i campi dell'accettazione come una sola unita', validando il registro alla fine."""
+    for richiesta in richieste:
+        completa = {
+            "schema": apply_transitions.SCHEMA,
+            "file": ws.state,
+            # L'ancora della voce nei TASK e' la chiave indentata (`  REG03R:`), non
+            # `- task_id: REG03R` — quella e' la voce della PRESA in `active_claims`, ed e'
+            # l'errore che ha fatto finire silenziosamente la prima versione di questo atto
+            # sulla voce sbagliata. La convenzione sta nel README delle transizioni del pack.
+            "anchor": f"  {fase}:",
+            **richiesta,
+        }
+        apply_transitions.apply_request(
+            completa,
+            pack=ws.root,
+            validate_after=False,
+        )
+    valido, report = apply_transitions.validate(ws.root)
+    if not valido:
+        raise apply_transitions.TransitionError(
+            f"registri non validi dopo l'accettazione:\n{report}"
+        )
+
+
+def _aggiorna_stato_accettazione(ws, fase, richieste):
+    """Aggiorna lo stato e torna ai byte precedenti se qualunque campo fallisce."""
+    prima = _foto(ws.state_path)
+    try:
+        _applica_campi_accettazione(ws, fase, richieste)
+    except Exception:
+        _ripristina(ws.state_path, prima)
+        raise
+
+
 def per(ws, fase, nota=None, firmatario="utente", dry_run=False):
     """Scrive l'atto di accettazione di quella fase. Ritorna cosa ha scritto."""
     quadro = preflight.leggi(ws, fase)
@@ -106,7 +157,7 @@ def per(ws, fase, nota=None, firmatario="utente", dry_run=False):
         with open(Path(lock_file(ws.root)), "a+") as maniglia:
             fcntl.flock(maniglia, fcntl.LOCK_EX)
             try:
-                for richiesta in (
+                _aggiorna_stato_accettazione(ws, fase, (
                     {"field": "status", "text": "accepted"},
                     {"field": "attempt", "text": str(numero)},
                     {"field": "report", "text": riferimento},
@@ -118,14 +169,7 @@ def per(ws, fase, nota=None, firmatario="utente", dry_run=False):
                             f"il {adesso.strftime('%Y-%m-%dT%H:%M:%S%z')}, senza riscrivere l'atto."
                         ),
                     },
-                ):
-                    completa = {
-                        "schema": apply_transitions.SCHEMA,
-                        "file": ws.state,
-                        "anchor": f"  {fase}:",
-                        **richiesta,
-                    }
-                    apply_transitions.apply_request(completa, pack=ws.root, validate_after=False)
+                ))
             finally:
                 fcntl.flock(maniglia, fcntl.LOCK_UN)
         return {
@@ -221,34 +265,32 @@ def per(ws, fase, nota=None, firmatario="utente", dry_run=False):
     with open(Path(lock_file(ws.root)), "a+") as maniglia:
         fcntl.flock(maniglia, fcntl.LOCK_EX)
         try:
+            if destinazione.exists():
+                raise ValueError(
+                    f"{destinazione.relative_to(ws.root)} e' stato creato da un'altra accettazione: "
+                    "ricarica la pagina e riprova"
+                )
+            puntatore_path = ws.reports_dir / f"{fase}.yaml"
+            foto_puntatore = _foto(puntatore_path)
             cartella.mkdir(parents=True, exist_ok=True)
-            destinazione.write_text(corpo, encoding="utf-8")
-            (ws.reports_dir / f"{fase}.yaml").write_text(puntatore, encoding="utf-8")
             richieste = [
                 {"field": "status", "text": "accepted"},
                 {"field": "attempt", "text": str(numero)},
                 {"field": "report", "text": consegna},
             ]
-            # La RISERVA dell'ordine (se c'era) non si tocca da qui: la sua voce nel registro ha lo
-            # stesso ancoraggio di quella dei task, e scioglierla alla cieca sarebbe un'ambiguita'.
-            # Resta scritto nell'atto: si toglie con `Rilascia`.
-            applicate = []
-            for richiesta in richieste:
-                completa = {
-                    "schema": apply_transitions.SCHEMA,
-                    "file": ws.state,
-                    # L'ancora della voce nei TASK e' la chiave indentata (`  REG03R:`), non
-                    # `- task_id: REG03R` — quella e' la voce della PRESA in `active_claims`, ed e'
-                    # l'errore che ha fatto finire silenziosamente la prima versione di questo atto
-                    # sulla voce sbagliata. La convenzione sta nel README delle transizioni del pack.
-                    "anchor": f"  {fase}:",
-                    **richiesta,
-                }
-                applicate.append(
-                    apply_transitions.apply_request(completa, pack=ws.root, validate_after=False)
-                )
-            # La validazione, una volta: se il registro non regge, la fase non risulta accettata.
-            _leggi(ws.state_path)
+            try:
+                destinazione.write_text(corpo, encoding="utf-8")
+                puntatore_path.write_text(puntatore, encoding="utf-8")
+                # La RISERVA dell'ordine (se c'era) non si tocca da qui: la sua voce nel registro
+                # ha lo stesso ancoraggio di quella dei task, e scioglierla alla cieca sarebbe
+                # un'ambiguita'. Resta scritto nell'atto: si toglie con `Rilascia`.
+                _aggiorna_stato_accettazione(ws, fase, richieste)
+            except Exception:
+                # Nessuna firma parziale: o report, puntatore e stato diventano coerenti insieme,
+                # oppure il workspace torna esattamente ai byte visti prima dell'atto.
+                destinazione.unlink(missing_ok=True)
+                _ripristina(puntatore_path, foto_puntatore)
+                raise
         finally:
             fcntl.flock(maniglia, fcntl.LOCK_UN)
     return {
