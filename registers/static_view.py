@@ -47,6 +47,7 @@ def _carica(flusso):
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import next_prompts  # noqa: E402 - script fratello: una sola implementazione della regola
+import claim_identity  # noqa: E402 - taken_by prima del residuo owner dell'attivazione
 from workspace import Workspace  # noqa: E402 - il contratto dei nomi, uno per tutto il repo
 
 #: Dove sta il workspace: `$CONSOLE_WORKSPACE`, o la cartella corrente. Nessun progetto cablato.
@@ -257,7 +258,7 @@ def render(
             parts.append(
                 f"<tr><td><code>{esc(claim.get('task_id'))}</code></td>"
                 f"<td>{esc(claim.get('phase'))}</td>"
-                f"<td>{esc((claim.get('owner_agent') or claim.get('owner') or '')[:70])}</td>"
+                f"<td>{esc(claim_identity.owner(claim)[:70])}</td>"
                 f"<td>{esc(claim.get('taken_at'))}</td></tr>"
             )
         parts.append("</table>")

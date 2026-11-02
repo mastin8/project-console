@@ -647,6 +647,7 @@ sys.path.insert(0, str(ROOT))
 
 import apply_transitions  # noqa: E402
 import activate  # noqa: E402 - attivare: riserva la fase e deposita l'ordine
+import claim_identity  # noqa: E402 - chi tiene una fase: taken_by prima del residuo owner
 from console import constitution  # noqa: E402 - una sola classe anche fra server e registri
 import esiti  # noqa: E402 - gli esiti di un atto in punti: criteri, casi, finding, limiti
 import recap  # noqa: E402 - il recap dei sospesi: registri + esiti, in un prompt
@@ -1034,7 +1035,8 @@ class ReviewState:
             {
                 "task_id": c.get("task_id"),
                 "phase": c.get("phase"),
-                "owner": c.get("owner_agent") or c.get("owner"),
+                "owner": claim_identity.owner(c),
+                "taken_by": claim_identity.owner(c),
                 "taken_at": c.get("taken_at"),
             }
             for c in state.get("active_claims", []) or []
@@ -1286,7 +1288,7 @@ class ReviewState:
                     "phase": fase,
                     # Chi tiene la fase lo dice `taken_by`; `owner` puo' essere un residuo
                     # dell'attivazione («NESSUN TITOLARE: …») e non va mostrato come titolare.
-                    "owner": (voce.get("taken_by") or voce.get("owner_agent") or voce.get("owner") or ""),
+                    "owner": claim_identity.owner(voce),
                     "order": voce.get("order"),
                     "status": voce.get("status"),
                     "since": voce.get("registered_at") or voce.get("taken_at"),

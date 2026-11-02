@@ -19,6 +19,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / "registers")]
 
 import esiti  # noqa: E402
 import handoff  # noqa: E402
+import claim_identity  # noqa: E402
 from console import constitution  # noqa: E402
 
 CATEGORIE = (
@@ -194,13 +195,13 @@ def costruisci(state_obj):
     for claim in istantanea.get("claims") or []:
         fase = claim.get("task_id")
         if fase in per_fase:
-            owner = claim.get("owner") or "titolare non dichiarato"
+            owner = claim_identity.owner(claim) or "titolare non dichiarato"
             per_fase[fase]["dettaglio"] += f"; tenuta da {owner}"
             continue
         voci.append(_voce(
             "in_corso",
             f"{fase or 'fase'} · presa viva",
-            f"tenuta da {claim.get('owner') or 'titolare non dichiarato'}"
+            f"tenuta da {claim_identity.owner(claim) or 'titolare non dichiarato'}"
             + (f" dal {claim['taken_at']}" if claim.get("taken_at") else ""),
             "registro",
         ))
