@@ -1703,20 +1703,10 @@ class ReviewState:
         return f"- id: {ids[-1]}"
 
     # -------------------------------------------------------- ordini di lavoro
-    def dispatch_draft(self, task_id, note=None):
-        """Deposita in dispatch-queue/ un ordine per rilanciare una fase respinta o dovuta.
-
-        Non esegue nulla e non tocca i registri: scrive un file autosufficiente in una coda che
-        vive su disco, perche' il canale dei messaggi oggi perde i mandati (24 consegne a vuoto su
-        24 il 2026-10-14). Chi raccoglie l'ordine trova dentro: fase, esito che l'ha respinta,
-        revisione congelata del report, cosa blocca e che cosa va corretto.
-        """
-        state = self._load(self.workspace.state) or {}
-        registered = (state.get("tasks") or {}).get(task_id)
-        if registered is None:
-            raise apply_transitions.TransitionError(f"fase sconosciuta: {task_id}")
-        status = registered.get("status")
-        tasks_doc = self._load(self.workspace.tasks) or {}
+    def _owed_directions(self, task_id, state=None, tasks_doc=None, *, from_phase=False):
+        """Le direzioni che nominano una fase accettata, oppure partono da una fase."""
+        state = state if state is not None else (self._load(self.workspace.state) or {})
+        tasks_doc = tasks_doc if tasks_doc is not None else (self._load(self.workspace.tasks) or {})
         owed = handoff.dovuto(
             self.workspace,
             state,
@@ -1727,8 +1717,13 @@ class ReviewState:
         directions = []
         for direction in owed:
             for code in direction.get("codes") or []:
+                match = (
+                    str(direction.get("from_phase") or "") == task_id
+                    if from_phase
+                    else str(code.get("code") or "") == task_id
+                )
                 if (
-                    str(code.get("code") or "") == task_id
+                    match
                     and str(code.get("status") or "") == "accepted"
                     and not code.get("live")
                     and not code.get("done")
@@ -1742,6 +1737,58 @@ class ReviewState:
                             "text": direction.get("text"),
                         }
                     )
+        return directions
+
+    def owed_order_target(self, task_id):
+        """La prima fase accettata che il report di `task_id` nomina come atto dovuto."""
+        state = self._load(self.workspace.state) or {}
+        tasks_doc = self._load(self.workspace.tasks) or {}
+        directions = self._owed_directions(task_id, state, tasks_doc, from_phase=True)
+        if not directions:
+            return None, directions
+        direction = directions[0]
+        text = str(direction.get("text") or "")
+        noti = {str(t.get("id")) for t in tasks_doc.get("tasks") or [] if t.get("id")}
+        for code in dict.fromkeys(re.findall(r"[A-Z][A-Z0-9]{2,}", text)):
+            if code in noti and code != task_id:
+                return code, directions
+        return None, directions
+
+    def activate_or_owed(self, target):
+        """Attiva la fase, oppure deposita l'ordine della fase realmente dovuta.
+
+        Una riga con `altrove: true` non deve restare un vicolo cieco: se l'utente preme
+        «Attiva» sulla fase che il report ha gia' spostato altrove, il gesto viene tradotto
+        nell'ordine del primo tentativo dovuto.
+        """
+        owed_target, directions = self.owed_order_target(target)
+        if not owed_target:
+            return activate.attiva(self.workspace, target)
+        note = directions[0].get("text") if directions else None
+        esito = self.dispatch_draft(owed_target, note)
+        return {
+            **esito,
+            "action": "dispatch_order",
+            "target": owed_target,
+            "requested_target": target,
+            "owed_reason": note,
+        }
+
+    def dispatch_draft(self, task_id, note=None):
+        """Deposita un ordine per rilanciare una fase respinta o accettata ma dovuta.
+
+        Non esegue nulla e non tocca i registri: scrive un file autosufficiente in una coda che
+        vive su disco, perche' il canale dei messaggi oggi perde i mandati (24 consegne a vuoto su
+        24 il 2026-10-14). Chi raccoglie l'ordine trova dentro: fase, esito che l'ha respinta,
+        revisione congelata del report, cosa blocca e che cosa va corretto.
+        """
+        state = self._load(self.workspace.state) or {}
+        registered = (state.get("tasks") or {}).get(task_id)
+        if registered is None:
+            raise apply_transitions.TransitionError(f"fase sconosciuta: {task_id}")
+        status = registered.get("status")
+        tasks_doc = self._load(self.workspace.tasks) or {}
+        directions = self._owed_directions(task_id, state, tasks_doc)
         accepted_and_owed = status == "accepted" and bool(directions)
         if status not in ("needs_changes", "failed") and not accepted_and_owed:
             # Caso frequente e non un errore dell'utente: la pagina e' un'istantanea, il registro
@@ -1779,10 +1826,8 @@ class ReviewState:
             ):
                 open_orders.append(existing.name)
         if open_orders:
-            raise apply_transitions.TransitionError(
-                f"esiste gia' un ordine aperto per {task_id}: {', '.join(open_orders)}. "
-                f"Non ne deposito un secondo: un ordine per fase, finche' quello non e' chiuso."
-            )
+            existing = str((queue / open_orders[-1]).relative_to(self.pack))
+            return {"file": existing, "task_id": task_id, "reused": True}
         stamp = datetime.now().strftime("%Y-%m-%dT%H%M")
         target = queue / f"{stamp}-{task_id}-relaunch.yaml"
         if target.exists():
@@ -2572,7 +2617,7 @@ def build_handler(state):
                     esito = (
                         activate.rilascia(state.workspace, target)
                         if azione == "release"
-                        else activate.attiva(state.workspace, target)
+                        else state.activate_or_owed(target)
                     )
                 except constitution.ConstitutionError as error:
                     return self._constitution_error(error)

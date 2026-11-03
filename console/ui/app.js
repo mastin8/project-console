@@ -2409,16 +2409,20 @@ function attivaEConsegna(phase, message, etichetta) {
       });
       const payload = await risposta.json();
       if (!risposta.ok) throw new Error(payload.error || `errore ${risposta.status}`);
-      const testo = await chiediPrompt(phase);
+      const promptTarget = payload.target || phase;
+      const testo = await chiediPrompt(promptTarget);
       const copia = await copiaTesto(testo.text || "");
-      annotaPromptConsegnato(phase);
+      annotaPromptConsegnato(promptTarget);
       message.className = "msg show ok";
-      message.textContent = copia.ok
-        ? `fatto: ordine in ${payload.order}, fase riservata, prompt COPIATO (${(testo.text || "").length} caratteri). Incollalo in una chat.`
-        : `ordine in ${payload.order} e fase riservata, ma il prompt NON è stato copiato: è qui sotto, selezionalo e premi Ctrl+C.`;
-      apriTesto(`${phase} \u2014 il prompt (già copiato)`, testo.text, {
+      const ordineDovuto = payload.action === "dispatch_order";
+      message.textContent = ordineDovuto
+        ? `fatto: ${payload.requested_target} non viene attivata; ho depositato l'ordine per ${promptTarget}. Il prompt è aperto e copiato.`
+        : copia.ok
+          ? `fatto: ordine in ${payload.order}, fase riservata, prompt COPIATO (${(testo.text || "").length} caratteri). Incollalo in una chat.`
+          : `ordine in ${payload.order} e fase riservata, ma il prompt NON è stato copiato: è qui sotto, selezionalo e premi Ctrl+C.`;
+      apriTesto(`${promptTarget} \u2014 il prompt (già copiato)`, testo.text, {
         copia: true,
-        file: `prompt-${phase}.md`,
+        file: `prompt-${promptTarget}.md`,
       });
       setTimeout(load, 1500);
     } catch (error) {
@@ -2446,8 +2450,12 @@ function attivaButtonPlain(phase, message) {
         });
         const payload = await risposta.json();
         if (!risposta.ok) throw new Error(payload.error || `errore ${risposta.status}`);
+        const promptTarget = payload.target || phase;
+        const ordineDovuto = payload.action === "dispatch_order";
         message.className = "msg show ok";
-        message.textContent = `ordine in ${payload.order}, fase riservata.`;
+        message.textContent = ordineDovuto
+          ? `${payload.requested_target} non viene attivata; ordine depositato per ${promptTarget} (${payload.order}).`
+          : `ordine in ${payload.order}, fase riservata.`;
         setTimeout(load, 1500);
       } catch (error) {
         message.className = "msg show err";
@@ -4346,19 +4354,31 @@ function activationButton(phase, action, label, message, disabled) {
       });
       const payload = await response.json();
       if (!response.ok) throw new Error(payload.error || `errore ${response.status}`);
+      const promptTarget = payload.target || phase;
       message.className = "msg show ok";
       if (action === "release") {
         message.textContent = "rilasciata: la fase è di nuovo disponibile, l'ordine resta su disco.";
+      } else if (payload.action === "dispatch_order") {
+        message.textContent = `${payload.requested_target} non viene attivata: ho depositato l'ordine per ${promptTarget}. Ecco il prompt del tentativo nuovo.`;
+        try {
+          const testo = await chiediPrompt(promptTarget);
+          apriTesto(`${promptTarget} — il prompt del nuovo tentativo`, testo.text, {
+            copia: true,
+            file: `prompt-${promptTarget}.md`,
+          });
+        } catch (error) {
+          message.textContent += ` (il prompt non si è aperto: ${error.message})`;
+        }
       } else {
         // ATTIVARE NON AVVIA NESSUNO — e il passo dopo dev'essere a portata di mano, non raccontato.
         // Dopo l'ordine si apre il PROMPT col pulsante per copiarlo, e la riga dice le tre cose che
         // servono: dov'è l'ordine, che la fase è riservata, e che adesso il prompt va consegnato.
         message.textContent = `ORDINE DEPOSITATO: ${payload.order} — la fase è RISERVATA e non la sta facendo nessuno. Ecco il prompt: copialo e dallo a una corsia.`;
         try {
-          const testo = await chiediPrompt(phase);
-          apriTesto(`${phase} — il prompt da consegnare a una corsia`, testo.text, {
+          const testo = await chiediPrompt(promptTarget);
+          apriTesto(`${promptTarget} — il prompt da consegnare a una corsia`, testo.text, {
             copia: true,
-            file: `prompt-${phase}.md`,
+            file: `prompt-${promptTarget}.md`,
           });
         } catch (error) {
           message.textContent += ` (il prompt non si è aperto: ${error.message})`;

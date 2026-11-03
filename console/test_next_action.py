@@ -201,6 +201,14 @@ class NextActionTests(unittest.TestCase):
                 "  domain: fondamenta\n"
                 "  title: Perimetri\n"
                 "tasks:\n"
+                "- id: FND01A\n"
+                "  unit_id: FND01\n"
+                "  kind: analysis\n"
+                "  title: Analisi autenticazione\n"
+                "- id: FND01E\n"
+                "  unit_id: FND01\n"
+                "  kind: implementation\n"
+                "  title: Implementazione autenticazione\n"
                 "- id: FND01R\n"
                 "  unit_id: FND01\n"
                 "  kind: functional_acceptance\n"
@@ -219,6 +227,12 @@ class NextActionTests(unittest.TestCase):
                 "schema: project-console-state/1.0\n"
                 "active_claims:\n"
                 "tasks:\n"
+                "  FND01A:\n"
+                "    status: accepted\n"
+                "    attempt: 1\n"
+                "  FND01E:\n"
+                "    status: accepted\n"
+                "    attempt: 1\n"
                 "  FND01R:\n"
                 "    report: reports/FND01R/attempt-1.yaml\n"
                 "    status: accepted\n"
@@ -294,18 +308,25 @@ class NextActionTests(unittest.TestCase):
             )
             workspace = Workspace.load(radice)
 
-            esito = server.ReviewState(workspace).dispatch_draft(
-                "FND01R",
-                "Chiudere il residuo mobile FND01R-L01.",
-            )
+            state = server.ReviewState(workspace)
+            esito = state.activate_or_owed("FND02T")
 
+            self.assertEqual(esito["action"], "dispatch_order")
+            self.assertEqual(esito["target"], "FND01R")
+            self.assertEqual(esito["requested_target"], "FND02T")
             ordine = yaml.safe_load((radice / esito["file"]).read_text(encoding="utf-8"))
             self.assertEqual(ordine["task_id"], "FND01R")
             self.assertEqual(ordine["action"], "resume_accepted")
             self.assertEqual(ordine["previous_status"], "accepted")
-            self.assertEqual(ordine["what_to_fix"], "Chiudere il residuo mobile FND01R-L01.")
+            self.assertIn("Aprire FND01R e FND01T", ordine["what_to_fix"])
             self.assertEqual(ordine["direction_sources"][0]["from_phase"], "FND02T")
             self.assertIn(esito["file"], activate.ordini_aperti(workspace)["FND01R"])
+
+            riuso = state.activate_or_owed("FND02T")
+            self.assertEqual(riuso["action"], "dispatch_order")
+            self.assertEqual(riuso["target"], "FND01R")
+            self.assertTrue(riuso["reused"])
+            self.assertEqual(riuso["file"], esito["file"])
 
     def test_close_obligation_writes_the_declared_closure(self):
         with tempfile.TemporaryDirectory() as tmp:
