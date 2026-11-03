@@ -3458,6 +3458,14 @@ function owedRow(voce) {
       )
     );
   }
+  if (azione.code === "dispatch_order" && azione.target_phase) {
+    azioni.append(
+      owedDispatchButton(
+        azione.target_phase,
+        semplice ? "Prepara ordine e istruzioni" : azione.label
+      )
+    );
+  }
   azioni.append(
     h("button", {
       type: "button",
@@ -3494,6 +3502,54 @@ function owedPromptButton(code, etichetta) {
       }
     },
   });
+}
+
+/* Una fase accettata puo' comunque avere un tentativo nuovo dovuto: per esempio un residuo
+   esplicitamente rimandato da una verifica precedente. In quel caso non si "attiva" la fase —
+   il registro la considera gia' accettata — si deposita un ordine nuovo e si consegna il prompt
+   composto sul tentativo successivo. */
+function owedDispatchButton(code, etichetta) {
+  const message = h("span", { class: "msg", role: "status", "aria-live": "polite" });
+  const bottone = h("button", {
+    type: "button",
+    class: "actbtn",
+    text: etichetta || `Prepara l'ordine per ${code}`,
+    disabled: !actionsReady(),
+    title: `deposita l'ordine del tentativo nuovo per ${code} e apre il prompt`,
+  });
+  const contenitore = h("span", { class: "phasecell" }, [bottone, message]);
+  bottone.addEventListener("click", async () => {
+    bottone.disabled = true;
+    message.className = "msg show pending";
+    message.textContent = "preparo l'ordine…";
+    try {
+      const risposta = await fetch("/api/dispatch-draft", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ task_id: code }),
+      });
+      const payload = await risposta.json();
+      const esistente = !risposta.ok && /ordine aperto/i.test(payload.error || "");
+      if (!risposta.ok && !esistente) {
+        throw new Error(payload.error || `errore ${risposta.status}`);
+      }
+      const testo = await chiediPrompt(code);
+      annotaPromptConsegnato(code);
+      message.className = "msg show ok";
+      message.textContent = esistente
+        ? `ordine gia' presente per ${code}: apro il prompt del nuovo tentativo.`
+        : `ordine depositato in ${payload.file}: apro il prompt del nuovo tentativo.`;
+      apriTesto(`${code} — il prompt del nuovo tentativo`, testo.text, {
+        copia: true,
+        file: `prompt-${code}.md`,
+      });
+    } catch (error) {
+      message.className = "msg show err";
+      message.textContent = `non fatto: ${error.message}`;
+      bottone.disabled = false;
+    }
+  });
+  return contenitore;
 }
 
 /* QUANDO CONSEGNI UN PROMPT, LA PAGINA SE LO SEGNA.

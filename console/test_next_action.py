@@ -170,6 +170,143 @@ class NextActionTests(unittest.TestCase):
         self.assertEqual(azione["code"], "run_phase")
         self.assertEqual(azione["target_phase"], "TASK01E")
 
+    def test_owed_accepted_phase_requires_a_new_order_not_activation(self):
+        azione = next_action.for_owed(
+            {
+                "codes": [
+                    {
+                        "code": "FND01R",
+                        "status": "accepted",
+                        "live": False,
+                        "done": False,
+                        "attesa": [],
+                        "busy": [],
+                    }
+                ]
+            }
+        )
+        self.assertEqual(azione["code"], "dispatch_order")
+        self.assertEqual(azione["target_phase"], "FND01R")
+        self.assertEqual(azione["primary"], "dispatch")
+
+    def test_dispatch_draft_opens_an_owed_accepted_phase_after_consumed_order(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            radice = Path(tmp)
+            (radice / "tasks.yaml").write_text(
+                "units:\n"
+                "- id: FND01\n"
+                "  domain: fondamenta\n"
+                "  title: Fondamenta\n"
+                "- id: FND02\n"
+                "  domain: fondamenta\n"
+                "  title: Perimetri\n"
+                "tasks:\n"
+                "- id: FND01R\n"
+                "  unit_id: FND01\n"
+                "  kind: functional_acceptance\n"
+                "  title: Accettazione autenticazione\n"
+                "- id: FND01T\n"
+                "  unit_id: FND01\n"
+                "  kind: independent_verification\n"
+                "  title: Verifica autenticazione\n"
+                "- id: FND02T\n"
+                "  unit_id: FND02\n"
+                "  kind: independent_verification\n"
+                "  title: Verifica accessi\n",
+                encoding="utf-8",
+            )
+            (radice / "state.yaml").write_text(
+                "schema: project-console-state/1.0\n"
+                "active_claims:\n"
+                "tasks:\n"
+                "  FND01R:\n"
+                "    report: reports/FND01R/attempt-1.yaml\n"
+                "    status: accepted\n"
+                "    attempt: 1\n"
+                "  FND01T:\n"
+                "    report: reports/FND01T/attempt-1.yaml\n"
+                "    status: accepted\n"
+                "    attempt: 1\n"
+                "  FND02T:\n"
+                "    report: reports/FND02T/attempt-1.yaml\n"
+                "    status: pending\n"
+                "    attempt: 1\n"
+                "execution_attempts:\n",
+                encoding="utf-8",
+            )
+            for fase, verdict, next_text in (
+                ("FND01R", "accepted", "Nessun nuovo lavoro."),
+                ("FND01T", "accepted", "Nessun nuovo lavoro."),
+                ("FND02T", "needs_changes", "Aprire FND01R e FND01T come tentativi nuovi."),
+            ):
+                cartella = radice / "reports" / fase
+                cartella.mkdir(parents=True)
+                report = cartella / "attempt-1.yaml"
+                report.write_text(
+                    yaml.safe_dump(
+                        {
+                            "task_id": fase,
+                            "attempt": 1,
+                            "status": "published",
+                            "verdict": verdict,
+                            "published_at": (
+                                "2099-01-01T10:00:00+01:00"
+                                if fase == "FND02T"
+                                else "2026-11-03T10:00:00+01:00"
+                            ),
+                            "next": next_text,
+                        },
+                        sort_keys=False,
+                    ),
+                    encoding="utf-8",
+                )
+                (radice / "reports" / f"{fase}.yaml").write_text(
+                    yaml.safe_dump(
+                        {
+                            "task_id": fase,
+                            "attempt": 1,
+                            "report": f"reports/{fase}/attempt-1.yaml",
+                            "status": "published",
+                            "verdict": verdict,
+                            "published_at": (
+                                "2099-01-01T10:00:00+01:00"
+                                if fase == "FND02T"
+                                else "2026-11-03T10:00:00+01:00"
+                            ),
+                        },
+                        sort_keys=False,
+                    ),
+                    encoding="utf-8",
+                )
+            queue = radice / "dispatch-queue"
+            queue.mkdir()
+            (queue / "20261102T120000-FND01R-attivazione.yaml").write_text(
+                yaml.safe_dump(
+                    {
+                        "schema": "project-console-work-order/1.0",
+                        "code": "FND01R",
+                        "activated_at": "2026-11-02T12:00:00+01:00",
+                        "deliverable": "reports/FND01R/attempt-1.yaml",
+                    },
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+            workspace = Workspace.load(radice)
+
+            esito = server.ReviewState(workspace).dispatch_draft(
+                "FND01R",
+                "Chiudere il residuo mobile FND01R-L01.",
+            )
+
+            ordine = yaml.safe_load((radice / esito["file"]).read_text(encoding="utf-8"))
+            self.assertEqual(ordine["task_id"], "FND01R")
+            self.assertEqual(ordine["action"], "resume_accepted")
+            self.assertEqual(ordine["previous_status"], "accepted")
+            self.assertEqual(ordine["what_to_fix"], "Chiudere il residuo mobile FND01R-L01.")
+            self.assertEqual(ordine["direction_sources"][0]["from_phase"], "FND02T")
+            self.assertIn(esito["file"], activate.ordini_aperti(workspace)["FND01R"])
+
     def test_close_obligation_writes_the_declared_closure(self):
         with tempfile.TemporaryDirectory() as tmp:
             radice = Path(tmp)

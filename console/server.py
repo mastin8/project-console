@@ -681,15 +681,15 @@ PHASE_KIND = {
 
 
 class NotStalledError(Exception):
-    """La fase non e' (piu') respinta: quasi sempre la pagina e' un'istantanea vecchia."""
+    """La fase non ammette un nuovo ordine: non e' respinta ne' dovuta da un report."""
 
     def __init__(self, task_id, current_status):
         self.task_id = task_id
         self.current_status = current_status
         super().__init__(
             f"{task_id} nel registro e' in stato «{current_status}»: un ordine di rilancio "
-            f"si prepara solo per una fase respinta. La pagina che stai guardando e' un'istantanea: "
-            f"il registro e' cambiato mentre la tenevi aperta."
+            f"si prepara solo per una fase respinta o per una fase accettata che una direzione "
+            f"aperta nomina come nuovo tentativo."
         )
 
 
@@ -1704,7 +1704,7 @@ class ReviewState:
 
     # -------------------------------------------------------- ordini di lavoro
     def dispatch_draft(self, task_id, note=None):
-        """Deposita in dispatch-queue/ un ordine di lavoro per RILANCIARE una fase respinta.
+        """Deposita in dispatch-queue/ un ordine per rilanciare una fase respinta o dovuta.
 
         Non esegue nulla e non tocca i registri: scrive un file autosufficiente in una coda che
         vive su disco, perche' il canale dei messaggi oggi perde i mandati (24 consegne a vuoto su
@@ -1716,7 +1716,34 @@ class ReviewState:
         if registered is None:
             raise apply_transitions.TransitionError(f"fase sconosciuta: {task_id}")
         status = registered.get("status")
-        if status not in ("needs_changes", "failed"):
+        tasks_doc = self._load(self.workspace.tasks) or {}
+        owed = handoff.dovuto(
+            self.workspace,
+            state,
+            tasks_doc,
+            limite=100,
+            prese=set(activate.prese(state)),
+        )
+        directions = []
+        for direction in owed:
+            for code in direction.get("codes") or []:
+                if (
+                    str(code.get("code") or "") == task_id
+                    and str(code.get("status") or "") == "accepted"
+                    and not code.get("live")
+                    and not code.get("done")
+                    and not code.get("attesa")
+                    and not code.get("busy")
+                ):
+                    directions.append(
+                        {
+                            "from_phase": direction.get("from_phase"),
+                            "source": direction.get("source"),
+                            "text": direction.get("text"),
+                        }
+                    )
+        accepted_and_owed = status == "accepted" and bool(directions)
+        if status not in ("needs_changes", "failed") and not accepted_and_owed:
             # Caso frequente e non un errore dell'utente: la pagina e' un'istantanea, il registro
             # e' vivo, e qualcuno puo' aver accettato la fase mentre la guardavi.
             raise NotStalledError(task_id, status)
@@ -1730,6 +1757,7 @@ class ReviewState:
                 frozen = hashlib.sha256(path.read_bytes()).hexdigest()
         queue = self.pack / "dispatch-queue"
         queue.mkdir(parents=True, exist_ok=True)
+        stati_ordini = activate.mandati(self.workspace)
         # Un ordine APERTO per fase, non uno per minuto: il nome porta il timestamp, quindi
         # clic in minuti diversi creavano file diversi per la stessa fase (misurato: tre ordini
         # UPL04ZE in quattro minuti). Il controllo e' sulla fase, non sul nome.
@@ -1739,10 +1767,15 @@ class ReviewState:
                 data = _carica(existing.read_text(encoding="utf-8")) or {}
             except yaml.YAMLError:
                 continue
+            relativo = str(existing.relative_to(self.pack))
+            stato_ordine = stati_ordini.get(relativo) or {}
             if (
                 data.get("task_id") == task_id
                 and not data.get("fulfilled_status")
                 and not data.get("superseded_by")
+                and not data.get("done_at")
+                and not stato_ordine.get("scaduto")
+                and not stato_ordine.get("consumato_da")
             ):
                 open_orders.append(existing.name)
         if open_orders:
@@ -1757,17 +1790,34 @@ class ReviewState:
         payload = {
             "schema": "binche.ux-dispatch-order/1.0",
             "task_id": task_id,
+            "code": task_id,
+            "action": "resume_accepted" if accepted_and_owed else "rework",
+            "unit": self.unit_of(task_id),
+            "status_at_activation": status,
             "requested_by": "pagina di verifica (utente)",
             "requested_at": datetime.now().strftime("%Y-%m-%dT%H:%M:%S%z"),
-            "why": "fase respinta in verifica: va ripresa con il mandato corretto",
+            "why": (
+                "fase accettata ma nominata come tentativo nuovo da una direzione aperta"
+                if accepted_and_owed
+                else "fase respinta in verifica: va ripresa con il mandato corretto"
+            ),
             "previous_attempt": registered.get("attempt"),
             "previous_status": status,
             "report": report,
             "report_sha256": frozen,
             "blocked_units": None,
-            "what_to_fix": self._stall_reason(task_id, registered.get("report")),
+            "what_to_fix": (
+                note
+                or (directions[0].get("text") if directions else None)
+                or self._stall_reason(task_id, registered.get("report"))
+            ),
             "user_note": note,
-            "acceptance": "il nuovo tentativo si misura sugli stessi casi che l'hanno respinta",
+            "acceptance": (
+                "il nuovo tentativo risolve il residuo che lo ha reso dovuto"
+                if accepted_and_owed
+                else "il nuovo tentativo si misura sugli stessi casi che l'hanno respinta"
+            ),
+            "direction_sources": directions,
         }
         for block in self.snapshot()["blocks"]:
             for unit in block["units"]:

@@ -505,7 +505,20 @@ def for_owed(item):
         and not voce.get("busy")
     ]
     if azionabili:
-        codice = str(azionabili[0].get("code") or "")
+        prima = azionabili[0]
+        codice = str(prima.get("code") or "")
+        if str(prima.get("status") or "") == "accepted":
+            return _action(
+                "dispatch_order",
+                f"Prepara l'ordine per {codice}",
+                phase=codice,
+                target_phase=codice,
+                reason=(
+                    "La fase e' gia' accettata ma una consegna aperta la nomina come "
+                    "tentativo nuovo: serve un ordine, non un'altra attivazione."
+                ),
+                primary="dispatch",
+            )
         return _action(
             "run_phase",
             f"Esegui {codice}",
