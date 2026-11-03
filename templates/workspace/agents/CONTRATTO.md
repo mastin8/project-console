@@ -141,15 +141,25 @@ schema: project-console-transition/1.0
 requested_by: /nome/della/tua/corsia
 requested_at: '2026-01-01T09:00:00+02:00'
 file: state.yaml
-anchor: "- task_id: ES01T"        # la riga di apertura della voce, RIPRODOTTA ESATTAMENTE
-occurrence: 2                     # se la stessa ancora compare piu' volte, quale (1-based)
-field: status
-text: taken
+anchor: "- task_id: ES01A"        # ultima presa esistente, riprodotta esattamente
+occurrence: 1                     # n-esima voce con questa ancora
+position: after
+item:
+  task_id: ES01T
+  unit: ES01
+  phase: T
+  status: taken
+  attempt: 2
+  taken_by: /nome/della/tua/corsia
+  taken_at: '2026-01-01T09:00:00+02:00'
+  registered_at: '2026-01-01T09:00:00+02:00'
+  registered_by: /nome/della/tua/corsia
+  owner: /nome/della/tua/corsia
 ```
 
-Poi altri campi nella stessa voce, uno per richiesta: `taken_by` (il tuo nome canonico) e
-`taken_at`. Se l'ancora non e' unica e non dici `occurrence`, l'applicatore **rifiuta** invece di
-scegliere lui. L'ordine completo del ciclo e' in `pending-transitions/README.md`.
+Una presa nuova si crea con `item` + `position: after`: non si modifica la voce released di un
+tentativo precedente. Se l'ancora non e' unica e non dici `occurrence`, l'applicatore **rifiuta**
+invece di scegliere lui. L'ordine completo del ciclo e' in `pending-transitions/README.md`.
 
 Il coordinatore applica la coda automaticamente. Per forzare subito lo stesso batch sicuro:
 `python3 registers/coda.py --workspace . --applica`.
@@ -417,10 +427,20 @@ options:
 ```yaml
 # 1. pending-transitions/20260101T0900-mia-corsia.yaml  -> prendo la fase
 file: state.yaml
-anchor: "- task_id: ES01T"
+anchor: "- task_id: ES01A"
 occurrence: 1
-field: status
-text: taken
+position: after
+item:
+  task_id: ES01T
+  unit: ES01
+  phase: T
+  status: taken
+  attempt: 1
+  taken_by: /mia-corsia
+  taken_at: '2026-01-01T09:00:00+02:00'
+  registered_at: '2026-01-01T09:00:00+02:00'
+  registered_by: /mia-corsia
+  owner: /mia-corsia
 ```
 
 ```yaml
@@ -448,7 +468,10 @@ published_at: '2026-01-01T12:00:00+02:00'
 # 4. pending-transitions/20260101T1300-mia-corsia.yaml  -> rilascio
 file: state.yaml
 anchor: "- task_id: ES01T"
-occurrence: 2
+occurrence: 1
 field: status
 text: released
 ```
+
+Il rilascio deposita anche una seconda richiesta sulla stessa occorrenza:
+`field: released_at`, `text: '2026-01-01T13:00:00+02:00'`.

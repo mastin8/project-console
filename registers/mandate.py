@@ -77,6 +77,56 @@ def _occorrenza_per(ws, fase):
     return max(quante, 1)
 
 
+def _prossimo_tentativo(ws, fase):
+    """Il numero del nuovo tentativo: dopo report e prese gia' visti."""
+    numeri = []
+    cartella = ws.reports_dir / str(fase)
+    for percorso in cartella.glob("attempt-*.yaml") if cartella.is_dir() else []:
+        trovato = re.match(r"attempt-(\d+)\.yaml$", percorso.name)
+        if trovato:
+            numeri.append(int(trovato.group(1)))
+    stato = _leggi(ws.state_path)
+    for voce in stato.get("active_claims") or []:
+        if str(voce.get("task_id")) == str(fase):
+            try:
+                numeri.append(int(voce.get("attempt") or 0))
+            except (TypeError, ValueError):
+                pass
+    return max(numeri, default=0) + 1
+
+
+def _nuova_presa(ws, fase):
+    """Ancora e metadati per APPENDERE una presa, invece di mutare un tentativo chiuso."""
+    stato = _leggi(ws.state_path)
+    tasks_doc = _leggi(ws.path(ws.tasks))
+    task = next(
+        (voce for voce in tasks_doc.get("tasks") or [] if str(voce.get("id")) == str(fase)),
+        {},
+    )
+    unita = str(task.get("unit_id") or "")
+    if not unita:
+        trovato = re.match(r"^[A-Z]+[0-9]+", str(fase))
+        unita = trovato.group(0) if trovato else str(fase)
+    anchor, occurrence = activate._ultima_ancora(stato, ws)
+    attempt = _prossimo_tentativo(ws, fase)
+    return {
+        "anchor": anchor,
+        "occurrence": occurrence,
+        "item": {
+            "task_id": fase,
+            "unit": unita,
+            "phase": str(fase)[-1:] if str(fase)[-1:] in (ws.phases or ("A", "E", "T", "R")) else "",
+            "status": "taken",
+            "attempt": attempt,
+            "taken_by": "<la tua corsia>",
+            "taken_at": "<adesso, ISO>",
+            "registered_at": "<adesso, ISO>",
+            "registered_by": "<la tua corsia>",
+            "owner": "<la tua corsia>",
+        },
+    }
+
+
 def componi(ws, fase, state=None, tasks_doc=None):
     """Un prompt per quella fase, costruito da cio' che il registro sa."""
     state = state if state is not None else _leggi(ws.state_path)
@@ -98,13 +148,7 @@ def componi(ws, fase, state=None, tasks_doc=None):
     # Il prossimo tentativo e' il primo numero LIBERO su disco: i file sono la storia pubblicata.
     # Il registro puo' essere indietro e una presa puo' non portare `attempt`: misurato il
     # 2026-10-17 su ZIP02E, dove il prompt diceva `attempt-1` mentre su disco c'erano 1 e 2.
-    cartella_consegne = ws.reports_dir / str(fase)
-    numeri = []
-    for percorso in cartella_consegne.glob("attempt-*.yaml") if cartella_consegne.is_dir() else []:
-        trovato = re.match(r"attempt-(\d+)\.yaml$", percorso.name)
-        if trovato:
-            numeri.append(int(trovato.group(1)))
-    attempt = max(numeri, default=0) + 1
+    attempt = _prossimo_tentativo(ws, fase)
     consegna = f"{ws.deliverable_prefix}{fase}/attempt-{attempt}.yaml"
     revisione, fonte_revisione = activate.impronte(ws, state, fase)
     criteria = task.get("acceptance_criteria") or []
@@ -449,11 +493,15 @@ def busta(ws, fase):
     dello stesso prompt non trova nessun ostacolo. Per questo e' la PRIMA riga, e per questo la
     mette il coordinatore invece di sperare che chi scrive il prompt se ne ricordi.
     """
-    occorrenza = _occorrenza_per(ws, fase)
+    nuova = _nuova_presa(ws, fase)
+    item = nuova["item"]
     return "\n".join(
         [
             "════ PRIMA ISTRUZIONE — DICHIARA CHE STAI LAVORANDO, PRIMA DI QUALUNQUE ALTRA COSA ════",
             f"Questa fase e' {fase} e la stai prendendo TU: deposita la presa adesso, sul registro.",
+            "",
+            "Se esiste gia' una presa VIVA per questa fase, FERMATI e dillo. Altrimenti crea una voce",
+            "NUOVA: non modificare la presa di un tentativo precedente.",
             "",
             f"Scrivi il file {ws.transitions_dir}/<timestamp>-<tua-corsia>.yaml con DENTRO:",
             "",
@@ -461,14 +509,20 @@ def busta(ws, fase):
             "    requested_by: <la tua corsia>",
             "    requested_at: '<adesso, ISO>'",
             f"    file: {ws.state}",
-            f'    anchor: "- task_id: {fase}"',
-            f"    occurrence: {occorrenza}      # l'occorrenza di QUESTA voce nel registro",
-            "    field: status",
-            "    text: taken",
-            "",
-            "SE LA VOCE HA GIA' UN released_at (una presa precedente chiusa), azzeralo con una seconda",
-            "richiesta sulla stessa occorrenza (field: released_at, text: ''): senza, la fase risulta",
-            "rilasciata e la pagina continua a dire «in attesa».",
+            f'    anchor: "{nuova["anchor"]}"',
+            f"    occurrence: {nuova['occurrence']}",
+            "    position: after",
+            "    item:",
+            f"      task_id: {item['task_id']}",
+            f"      unit: {item['unit']}",
+            f"      phase: {item['phase']}",
+            f"      status: {item['status']}",
+            f"      attempt: {item['attempt']}",
+            "      taken_by: <la tua corsia>",
+            "      taken_at: '<adesso, ISO>'",
+            "      registered_at: '<adesso, ISO>'",
+            "      registered_by: <la tua corsia>",
+            "      owner: <la tua corsia>",
             "",
             # Lo schema lo dichiara il progetto, e questa riga viaggia con OGNI prompt (la busta sta
             # davanti anche al testo del quaderno): una piattaforma che scrive nei registri di un
@@ -479,9 +533,8 @@ def busta(ws, fase):
             "",
             *report_contract.prompt_contract(ws),
             "",
-            "e subito dopo, nella stessa voce, due richieste: taken_by: <la tua corsia> e",
-            "taken_at: '<adesso>'. Il coordinatore applica la coda automaticamente; per applicarla",
-            "subito, senza lasciare file pendenti, esegui il batch sicuro:",
+            "Questa singola richiesta crea una presa completa e atomica con il nuovo attempt. Il",
+            "coordinatore applica la coda automaticamente; per applicarla subito esegui il batch:",
             # Il percorso del coordinatore, ASSOLUTO: dentro il progetto di solito non esiste una
             # cartella `registers/` — un agente l'ha segnalato («il comando non esiste in questo
             # repository») dopo aver perso tempo a cercarla.

@@ -156,8 +156,8 @@ Una sezione numerata per prompt. Perche' il coordinatore lo riconosca servono tr
 ```
 Lavora in /percorso/mio-progetto. Sei un agente di esecuzione: non coordinare, non chiedere conferme.
 
-REGISTRO: in state.yaml esiste la voce di claim CAT01A. Deposita la presa in pending-transitions/
-prima del primo byte, e il rilascio alla fine.
+REGISTRO: in state.yaml esiste la voce di claim CAT01A. Appendi in pending-transitions/ una presa
+NUOVA con attempt successivo prima del primo byte, e rilasciala alla fine.
 
 CONSEGNA: reports/CAT01A/attempt-1.yaml (verifica che NON esista) e il puntatore reports/CAT01A.yaml.
 ```

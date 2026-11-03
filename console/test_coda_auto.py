@@ -6,6 +6,7 @@ import sys
 import tempfile
 import threading
 import time
+import textwrap
 import unittest
 from contextlib import redirect_stdout
 from io import StringIO
@@ -21,6 +22,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "registers"))
 
 import apply_transitions  # noqa: E402
 from registers import coda  # noqa: E402
+from registers import mandate  # noqa: E402
 import server  # noqa: E402
 from workspace import Workspace  # noqa: E402
 
@@ -194,6 +196,52 @@ class CodaAutomaticaTests(unittest.TestCase):
             self.assertEqual(list(ws.transitions_dir.glob("*.yaml")), [])
             self.assertTrue(state.applicazione.get("automatica"))
             self.assertEqual(state.applicazione.get("returncode"), 0)
+
+    def test_generated_claim_appends_the_next_attempt_without_mutating_history(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ws = self._workspace(root)
+            state_path = root / "state.yaml"
+            documento = yaml.safe_load(state_path.read_text(encoding="utf-8"))
+            documento["active_claims"][0].update(
+                {
+                    "status": "released",
+                    "attempt": 1,
+                    "released_at": "2026-11-03T17:00:00+01:00",
+                }
+            )
+            state_path.write_text(
+                yaml.safe_dump(documento, sort_keys=False),
+                encoding="utf-8",
+            )
+
+            prompt = mandate.busta(ws, "DEMO1")
+            inizio = prompt.index("    schema: project-console-transition/1.0")
+            fine = prompt.index("\n\nSCHEMA DEI REPORT", inizio)
+            richiesta = yaml.safe_load(textwrap.dedent(prompt[inizio:fine]))
+            richiesta["requested_by"] = "/test"
+            richiesta["requested_at"] = "2026-11-03T17:05:00+01:00"
+            richiesta["item"]["taken_by"] = "/test"
+            richiesta["item"]["taken_at"] = "2026-11-03T17:05:00+01:00"
+            richiesta["item"]["registered_at"] = "2026-11-03T17:05:00+01:00"
+            richiesta["item"]["registered_by"] = "/test"
+            richiesta["item"]["owner"] = "/test"
+            percorso = ws.transitions_dir / "20261103T170500-test-claim.yaml"
+            percorso.write_text(
+                yaml.safe_dump(richiesta, sort_keys=False),
+                encoding="utf-8",
+            )
+
+            esito = coda.applica(ws)
+
+            aggiornato = yaml.safe_load(state_path.read_text(encoding="utf-8"))
+            self.assertIn("1 applicate", esito["esito"])
+            self.assertEqual(len(aggiornato["active_claims"]), 2)
+            self.assertEqual(aggiornato["active_claims"][0]["status"], "released")
+            self.assertEqual(aggiornato["active_claims"][0]["attempt"], 1)
+            self.assertEqual(aggiornato["active_claims"][1]["status"], "taken")
+            self.assertEqual(aggiornato["active_claims"][1]["attempt"], 2)
+            self.assertEqual(aggiornato["active_claims"][1]["taken_by"], "/test")
 
 
 if __name__ == "__main__":

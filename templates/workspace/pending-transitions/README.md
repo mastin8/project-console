@@ -27,3 +27,26 @@ text: taken
 L'ancora e' la riga di APERTURA della voce, riprodotta esattamente, e deve essere unica. Campi
 facoltativi: `occurrence` (la n-esima voce con la stessa ancora), `item` (una voce NUOVA al posto
 di `field`+`text`), `position: before|after`, `mapping` (per i campi che sono mappe).
+
+Per iniziare un nuovo tentativo non si modifica una presa released: si appende una voce completa.
+
+```yaml
+schema: project-console-transition/1.0
+requested_by: /corsia
+requested_at: '2026-01-01T09:00:00+02:00'
+file: state.yaml
+anchor: "- task_id: ES01A"
+occurrence: 1
+position: after
+item:
+  task_id: ES01T
+  unit: ES01
+  phase: T
+  status: taken
+  attempt: 2
+  taken_by: /corsia
+  taken_at: '2026-01-01T09:00:00+02:00'
+  registered_at: '2026-01-01T09:00:00+02:00'
+  registered_by: /corsia
+  owner: /corsia
+```

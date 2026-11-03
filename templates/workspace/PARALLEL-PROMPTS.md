@@ -24,14 +24,15 @@ lavoro e' gia' cominciato, e una seconda copia dello stesso prompt non trova nes
 ```
 ════ PRIMA ISTRUZIONE — DICHIARA CHE STAI LAVORANDO, PRIMA DI QUALUNQUE ALTRA COSA ════
 Questa fase e' <FASE> e la stai prendendo TU: deposita la presa adesso, sul registro.
-Scrivi pending-transitions/<timestamp>-<tua-corsia>.yaml con: file, anchor "- task_id: <FASE>",
-occurrence <n>, field status, text taken — poi taken_by e taken_at. Fallo applicare.
+Scrivi pending-transitions/<timestamp>-<tua-corsia>.yaml con una richiesta `item` e
+`position: after`: crea una presa NUOVA con attempt successivo, taken_by e taken_at.
+Non modificare la presa di un tentativo precedente. Il coordinatore la applica da solo.
 Se e' GIA' presa da un altro, fermati e dillo. Alla fine deposita il rilascio.
 ══════════════════════════════════════════════════════════════════════════════════════
 ```
 
-Il numero di occorrenza **non si scrive a mano**: i prompt composti dal coordinatore
-(`registers/mandate.py`) hanno gia' questo blocco in testa, calcolato sul registro.
+Ancora, occorrenza e numero di attempt **non si scrivono a mano**: i prompt composti dal
+coordinatore (`registers/mandate.py`) hanno gia' questo blocco in testa, calcolato sul registro.
 
 ---
 
