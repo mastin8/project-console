@@ -150,9 +150,11 @@ disaccordo invece di crederci. Vedi `templates/workspace/PARALLEL-PROMPTS.md`.
 
 ### `pending-transitions/` — la coda delle scritture
 
-Nessuno scrive i registri a mano: si deposita una richiesta, l'applicatore la applica con
-indentazione calcolata dall'ancora, idempotenza per campo e ripristino se il file non regge piu' la
-validazione. Formato in `templates/workspace/pending-transitions/README.md`.
+Nessuno scrive i registri a mano: si deposita una richiesta. Il coordinatore applica
+automaticamente le richieste valide con indentazione calcolata dall'ancora, idempotenza per campo,
+archiviazione delle riuscite e ripristino se il file non regge piu' la validazione. Il comando
+`registers/coda.py --applica` forza lo stesso batch sicuro. Formato in
+`templates/workspace/pending-transitions/README.md`.
 
 ## Il primo giorno di un progetto: aprire le fasi
 

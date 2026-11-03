@@ -5,7 +5,7 @@ lascia applicare. L'applicatore calcola l'indentazione dall'ancora, e' idempoten
 ripristina il file se dopo l'edit non e' piu' valido.
 
 ```
-python3 registers/apply_transitions.py --workspace <progetto> --dir <progetto>/pending-transitions
+python3 registers/coda.py --workspace <progetto> --applica
 ```
 
 ## Formato

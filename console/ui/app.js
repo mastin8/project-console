@@ -1331,7 +1331,7 @@ function renderCoda(coda, applicazione) {
     ),
     document.createTextNode(
       (coda.da_applicare || 0)
-        ? "Il pulsante le applica: fa prima una copia dei registri, salta quelle segnalate e ti dice com'è andata."
+        ? "Il coordinatore le applica automaticamente entro pochi secondi: prima copia i registri, salta quelle segnalate e archivia le riuscite. Il pulsante serve solo a forzare subito il batch."
         : `Nessuna di queste si può applicare da sola: ${coda.sospette_totali} vanno guardate prima (elenco qui sotto), e l'applicatore ha già rifiutato le altre.`
     )
   );
@@ -1355,7 +1355,7 @@ function renderCoda(coda, applicazione) {
   const avvia = h("button", {
     type: "button",
     id: "coda-applica",
-    text: daApplicare ? `Applica la coda (${daApplicare})` : "Niente da applicare",
+    text: daApplicare ? `Applica ora (${daApplicare})` : "Niente da applicare",
     disabled: Boolean(stato.in_corso) || !daApplicare,
     onclick: async () => {
       avvia.disabled = true;
@@ -1367,7 +1367,7 @@ function renderCoda(coda, applicazione) {
         if (!risposta.ok) throw new Error(payload.error || `errore ${risposta.status}`);
         esito.className = "msg show ok";
         esito.textContent =
-          "applicazione avviata: fa una copia dei registri, applica a blocchi e salta quelle segnalate. La pagina si aggiorna da sola.";
+          "applicazione avviata manualmente: fa una copia dei registri, applica a blocchi e salta quelle segnalate. La pagina si aggiorna da sola.";
       } catch (error) {
         esito.className = "msg show err";
         esito.textContent = `non avviata: ${error.message}`;
@@ -1379,7 +1379,7 @@ function renderCoda(coda, applicazione) {
     type: "button",
     class: "ghost",
     id: "coda-copia-bottone",
-    text: "Copia i comandi (a mano)",
+    text: "Copia i comandi di recupero",
   });
   azioni.replaceChildren(avvia, copiaTutto);
   if (stato.in_corso) {
@@ -1397,7 +1397,7 @@ function renderCoda(coda, applicazione) {
     try {
       await navigator.clipboard.writeText(comandi);
       esito.className = "msg show ok";
-      esito.textContent = "copiati: incollali nel terminale del progetto, la prova prima.";
+      esito.textContent = "copiati: sono il percorso di recupero; l'applicazione normale è automatica.";
     } catch (error) {
       esito.className = "msg show err";
       esito.textContent = `non copiati (${error.message}): il testo è qui sotto, selezionalo.`;
@@ -5523,7 +5523,7 @@ const GLOSSARIO = [
   ["Consegnata", "Il report esiste (verdetto positivo) ma il registro non l'ha ancora accettata. Il passo dopo è l'accettazione, non un altro prompt."],
   ["Non rieseguito", "Cosa l'atto NON ha rifatto, dichiarato invece di lasciarlo intendere. Per un'accettazione significa: «non ho rimisurato; ho letto le prove della verifica». Non significa «non ho guardato»."],
   ["Accettazione (R)", "L'atto che chiude l'unità: si leggono criteri e byte, si giudica, si dichiarano limiti e residui. La firma deve essere di chi non ha eseguito quei byte."],
-  ["Coda dei registri", "Le richieste degli agenti non ancora applicate al registro. Se è piena, la pagina mostra uno stato vecchio: si applica col pulsante, che fa prima una copia."],
+  ["Coda dei registri", "Le richieste degli agenti non ancora applicate al registro. Il coordinatore applica automaticamente i lotti validi; il pulsante forza subito il batch di recupero, con una copia prima."],
   ["Prompt consegnato", "La traccia che un prompt è stato copiato e dato a una chat. Se dopo non compare una presa, il registro non sa che qualcuno ci sta lavorando."],
   ["Testimone", "Il `next` del report: cosa resta da fare dopo, scritto da chi ha finito. È l'unico canale per la direzione; una chat non è un archivio."],
 ];

@@ -72,25 +72,25 @@ applica, **il registro e' indietro rispetto ai file** — e con lui tutto quello
 | «sostituita da `<file>`, depositata dopo» | superata: vale l'ultima |
 | «ancora ambigua e nessuna `occurrence`» | l'applicatore la **rifiutera'** da solo |
 
-**I tre passi, nell'ordine, dal pulsante «Copia i due comandi»**:
+Il coordinatore applica automaticamente i lotti validi. Il pulsante «Copia i comandi di recupero»
+mostra il percorso manuale da usare soltanto se il watcher non parte:
 
 ```bash
 # 0. la copia, PRIMA. I registri non sono in git: questa e' l'unica via del ritorno.
 cd <progetto> && cp state.yaml /tmp/state-prima-della-coda.yaml
 
 # 1. cosa farebbe, su UNA richiesta (su tutte stamperebbe il registro intero, 2,3 MB, 129 volte)
-python3 tools/apply_transitions.py pending-transitions/<una>.yaml --dry-run | head -40
+python3 registers/apply_transitions.py --workspace <progetto> pending-transitions/<una>.yaml --dry-run | head -40
 
 # 2. applica la coda: una riga per richiesta; le riuscite vanno in applied/
-python3 tools/registry_runner.py --once
+python3 registers/coda.py --workspace <progetto> --applica
 ```
 
-**Cosa deve succedere dopo il passo 2**: una riga `APPLICATA <file> -> <campo>` per ogni richiesta
-riuscita, `RIFIUTATA <file>: <motivo>` per le altre (che **restano in coda**), le riuscite spostate in
-`pending-transitions/applied/`, e `STATUS.html` rigenerato. **In pagina**, entro mezzo minuto: il
-numero del riquadro scende, le fasi smettono di risultare respinte quando era il registro a essere
-indietro, le prese fantasma escono da «In corso adesso», il conteggio delle unità accettate può
-salire.
+**Cosa deve succedere dopo il passo 2**: un riepilogo con applicate, rifiutate, saltate e richieste
+ancora in coda. Le riuscite passano in `pending-transitions/applied/`; le sospette e le rifiutate
+**restano in coda** con il motivo. **In pagina**, entro mezzo minuto: il numero del riquadro scende,
+le fasi smettono di risultare respinte quando era il registro a essere indietro, le prese fantasma
+escono da «In corso adesso», il conteggio delle unità accettate può salire.
 
 **Le richieste che decidi di scartare** si spostano a mano in `applied/` (il runner legge solo il
 livello superiore): cosi' la coda non conta lavoro che non c'e'.
@@ -254,7 +254,7 @@ Git elenca branch, worktree, commit iniziale/finale, path modificati e stato fin
 
 | Se vedi | Fai |
 | --- | --- |
-| il riquadro **Coda dei registri** | copia i comandi, la copia del registro per prima, poi applica. Le richieste segnalate le metti da parte |
+| il riquadro **Coda dei registri** | attendi il batch automatico; se non parte, usa il pulsante o il comando di recupero. Le richieste segnalate restano da valutare |
 | una fase in **«Da rifare»** con «questo non si sblocca con un altro tentativo» | non riattivarla: guarda *chi lo deve*. Se dice l'utente, e' una decisione |
 | una fase in **«Non tocca a queste»** | non attivarla: manda il prompt della fase dovuta, che trovi nella riga sopra |
 | `X: in corso` in una riga dovuta | niente: qualcuno la sta facendo |
@@ -262,6 +262,6 @@ Git elenca branch, worktree, commit iniziale/finale, path modificati e stato fin
 | **«mandato già eseguito»** su una fase che vuoi attivare | premi **Attiva**: deposita un ordine nuovo con il prompt e le impronte di adesso |
 | una **domanda** con «una firma distinta non esiste ancora» | e' una tua decisione: o la firmi tu, o la fa un attore fuori da questo albero, o decidi chi vale come firmatario |
 
-**E quello che questa pagina non fa**: non applica la coda, non avvia agenti, non prende decisioni al
-posto tuo, non riscrive i report. Sono i tre o quattro atti che restano tuoi — ed e' per questo che
-ognuno di essi, qui, e' scritto con accanto il comando o il pulsante che lo esegue.
+**E quello che questa pagina non fa**: non avvia agenti, non prende decisioni al posto tuo, non
+riscrive i report. La coda valida invece la applica da sola in background; le richieste sospette
+restano visibili e non vengono forzate.

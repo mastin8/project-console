@@ -30,7 +30,7 @@ Un campo il cui valore e' una MAPPA si descrive con ``mapping`` invece di ``text
 Uso::
 
     apply_transitions.py <richiesta.yaml> [...]     # applica in ordine
-    apply_transitions.py --dir pending-transitions  # applica tutte le richieste in coda
+    apply_transitions.py --dir pending-transitions  # batch sicuro: salta le sospette e archivia le riuscite
 
 Se il file non e' piu' valido dopo l'edit, l'applicatore RIPRISTINA il backup ed esce in errore: la
 validazione e' parte della scrittura, non un controllo che qualcuno deve ricordarsi di fare.
@@ -383,6 +383,31 @@ def main(argv=None):
     )
     args = parser.parse_args(argv)
     pack = Path(args.workspace).resolve() if args.workspace else PACK
+
+    # `--dir` e' il comando che finisce nei prompt delle corsie. Deve quindi avere la stessa
+    # semantica del runner: niente riapplicazione delle richieste storiche, niente file lasciati in
+    # coda dopo un successo. La vecchia implementazione applicava TUTTI i file e non li archiviava:
+    # la coda sembrava sempre piena e il giro successivo riapplicava anche richieste superate.
+    if args.dir and not args.dry_run:
+        if args.requests:
+            parser.error("--dir non si combina con richieste esplicite; usa uno dei due ingressi")
+        sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+        import coda
+        from workspace import Workspace
+
+        ws = Workspace.load(pack)
+        richiesta_dir = Path(args.dir).expanduser().resolve()
+        attesa_dir = ws.transitions_dir.resolve()
+        if richiesta_dir != attesa_dir:
+            parser.error(
+                f"--dir {richiesta_dir} non coincide con la coda dichiarata dal workspace: {attesa_dir}"
+            )
+        esito = coda.applica(ws)
+        print(esito["esito"])
+        for rifiutata in esito["rifiutate"]:
+            print(f"  rifiutata: {rifiutata['file']} — {rifiutata['motivo'][:160]}")
+        print("copie: " + (", ".join(esito["backup"]) or "nessuna"))
+        return 1 if esito["rifiutate"] else 0
 
     paths = [Path(item) for item in args.requests]
     if args.dir:

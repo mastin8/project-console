@@ -1,11 +1,13 @@
 # Coda di transizioni dei registri
 
-Ogni corsia che deve toccare un registro NON lo scrive a mano: deposita qui una richiesta e la
-lascia applicare. L'applicatore calcola l'indentazione dall'ancora, e' idempotente per campo, e
-ripristina il file se dopo l'edit non e' piu' valido.
+Ogni corsia che deve toccare un registro NON lo scrive a mano: deposita qui una richiesta. Il
+coordinatore applica automaticamente le richieste valide in background, dopo un breve intervallo di
+quiete; il comando seguente forza subito lo stesso batch sicuro. L'applicatore calcola
+l'indentazione dall'ancora, e' idempotente per campo, salta le richieste sospette, archivia le
+riuscite e ripristina il registro se dopo l'edit non e' piu' valido.
 
 ```
-python3 registers/apply_transitions.py --workspace <progetto> --dir <progetto>/pending-transitions
+python3 registers/coda.py --workspace <progetto> --applica
 ```
 
 ## Formato

@@ -25,6 +25,8 @@ import os
 import re
 import subprocess
 import sys
+import threading
+import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -701,8 +703,13 @@ class ReviewState:
         self.pack = workspace.root
         #: I registri letti, con il loro tempo di modifica: vedi `_load`.
         self._loaded = {}
-        #: L'ultima applicazione della coda, per il pulsante: `in_corso`, `esito`, quante fatte.
-        self.applicazione = {"in_corso": False, "esito": "", "quando": ""}
+        #: L'ultima applicazione della coda, automatica o manuale.
+        self.applicazione = {
+            "in_corso": False,
+            "esito": "",
+            "quando": "",
+            "automatica": False,
+        }
         #: Il lock e' per PROGETTO e il nome si deriva dal percorso con un digest STABILE: `hash()`
         #: cambia a ogni processo (sale casuale), quindi due processi non si vedrebbero.
         self.lock_path = lock_file(self.pack)
@@ -1280,8 +1287,8 @@ class ReviewState:
             # in pagina — non le dichiarazioni dei report, che nominano anche fasi vecchie o di unità
             # mai iniziate (49 «mandabili» su Binche, fra cui la R di un'unità ferma alla A).
             "percorso": activate.prossimi(self.workspace, state, tasks_doc),
-            # Lo stato dell'applicazione della coda avviata dal pulsante: la pagina lo mostra mentre
-            # lavora e quando ha finito, senza che nessuno debba guardare un terminale.
+            # Lo stato del batch automatico o manuale: la pagina lo mostra mentre lavora e quando ha
+            # finito, senza che nessuno debba guardare un terminale.
             "applicazione": dict(self.applicazione),
             "activated": [
                 {
@@ -2005,6 +2012,138 @@ class ReviewState:
         return [voce for voce in fuori if voce["label"]]
 
 
+def avvia_applicazione_coda(state, *, automatica=False):
+    """Applica la coda in un processo figlio, con copia e archivio.
+
+    Il runner e' lo stesso del pulsante e della CLI: una sola politica, quindi una sola risposta
+    possibile agli stessi byte. Il processo separato evita di bloccare il server mentre valida un
+    registro grande.
+    """
+    if state.applicazione.get("in_corso"):
+        return False
+    identificatore = hashlib.sha1(str(state.workspace.root).encode()).hexdigest()[:12]
+    registro = Path(f"/tmp/project-console-coda-{identificatore}.log")
+    state.applicazione = {
+        "in_corso": True,
+        "esito": "",
+        "quando": "",
+        "fatte": 0,
+        "totali": 0,
+        "automatica": bool(automatica),
+    }
+
+    def sorveglia(processo):
+        processo.wait()
+        righe = []
+        try:
+            righe = registro.read_text("utf-8", errors="replace").strip().splitlines()
+        except OSError:
+            pass
+        esito = next((riga for riga in reversed(righe) if "applicate" in riga), "")
+        state.applicazione = {
+            "in_corso": False,
+            "esito": esito or f"finito (uscita {processo.returncode})",
+            "quando": datetime.now().strftime("%H:%M:%S"),
+            "rifiutate": [riga.strip() for riga in righe if "rifiutata" in riga][:8],
+            "copie": [
+                riga.split("copie:", 1)[1].strip()
+                for riga in righe
+                if riga.startswith("copie:")
+            ][:1],
+            "automatica": bool(automatica),
+            "returncode": processo.returncode,
+        }
+
+    try:
+        with open(registro, "w", encoding="utf-8") as uscita:
+            processo = subprocess.Popen(
+                [
+                    sys.executable,
+                    str(ROOT / "registers" / "coda.py"),
+                    "--workspace",
+                    str(state.workspace.root),
+                    "--applica",
+                ],
+                stdout=uscita,
+                stderr=subprocess.STDOUT,
+                cwd=str(state.workspace.root),
+            )
+    except Exception as error:
+        state.applicazione = {
+            "in_corso": False,
+            "esito": f"non avviata: {error}",
+            "quando": datetime.now().strftime("%H:%M:%S"),
+            "automatica": bool(automatica),
+        }
+        raise
+    threading.Thread(target=sorveglia, args=(processo,), daemon=True).start()
+    return True
+
+
+def _coda_stabile(workspace, *, quiet_seconds=1.5, adesso=None):
+    """La coda e' ferma da abbastanza tempo da poter essere letta come un lotto.
+
+    Un agente deposita spesso tre richieste consecutive (status, taken_by, taken_at). Applicare la
+    prima mentre la terza non esiste ancora produce una presa incompleta: il debounce evita di
+    trasformare l'automazione in una corsa contro chi scrive.
+    """
+    cartella = workspace.transitions_dir
+    try:
+        file_coda = sorted(cartella.glob("*.yaml"))
+    except OSError:
+        return False
+    if not file_coda:
+        return False
+    istante = time.time() if adesso is None else float(adesso)
+    try:
+        ultima = max(percorso.stat().st_mtime for percorso in file_coda)
+    except OSError:
+        return False
+    return istante - ultima >= quiet_seconds
+
+
+def applica_coda_se_pronta(state, *, quiet_seconds=1.5):
+    """Avvia il batch solo se c'e' almeno una richiesta applicabile e il lotto e' stabile."""
+    if state.applicazione.get("in_corso") or not _coda_stabile(
+        state.workspace, quiet_seconds=quiet_seconds
+    ):
+        return False
+    quadro = coda.leggi(state.workspace)
+    if not quadro.get("da_applicare"):
+        return False
+    return avvia_applicazione_coda(state, automatica=True)
+
+
+def sorveglia_coda(state, stop, *, quiet_seconds=1.5, intervallo=0.5):
+    """Applica in background i lotti validi, senza richiedere un clic nella pagina."""
+    firma = None
+    valutata = None
+    quiete_fino = 0.0
+    while not stop.is_set():
+        if state.applicazione.get("in_corso"):
+            stop.wait(intervallo)
+            continue
+        try:
+            mtime = state.workspace.transitions_dir.stat().st_mtime_ns
+        except OSError:
+            mtime = 0
+        if mtime != firma:
+            firma = mtime
+            quiete_fino = time.monotonic() + quiet_seconds
+        if firma != valutata and time.monotonic() >= quiete_fino:
+            valutata = firma
+            try:
+                applica_coda_se_pronta(state, quiet_seconds=0)
+            except Exception as error:  # noqa: BLE001 - il watcher non deve morire
+                state.applicazione = {
+                    "in_corso": False,
+                    "esito": f"controllo automatico fallito: {error}",
+                    "quando": datetime.now().strftime("%H:%M:%S"),
+                    "automatica": True,
+                }
+        stop.wait(intervallo)
+
+
 def build_handler(state):
     class Handler(BaseHTTPRequestHandler):
         def log_message(self, fmt, *args):  # silenzio: il log e' la pagina, non la console
@@ -2402,45 +2541,14 @@ def build_handler(state):
                 except Exception as error:  # noqa: BLE001
                     return self._json(500, {"error": str(error)})
             if route == "/api/coda/apply":
-                # Il pulsante che fa il lavoro: la coda si applica in un PROCESSO A PARTE. Perche' non
-                # in un thread: misurato il 2026-10-16, un'applicazione da 90 richieste su un server a
-                # un processo solo (con tre browser che interrogavano la pagina) ha portato la CPU al
-                # 97% e l'API a non rispondere piu'. Un figlio si puo' uccidere; un server no.
-                if state.applicazione.get("in_corso"):
+                # Il pulsante e il watcher usano lo STESSO avvio: processo figlio, copia dei
+                # registri, salto delle richieste sospette e archivio delle riuscite.
+                try:
+                    avviata = avvia_applicazione_coda(state, automatica=False)
+                except Exception as error:  # noqa: BLE001
+                    return self._json(500, {"error": str(error)})
+                if not avviata:
                     return self._json(409, {"error": "una applicazione e' gia' in corso"})
-                import threading
-
-                registro = Path("/tmp/console-coda.log")
-                def sorveglia(processo):
-                    processo.wait()
-                    righe = []
-                    try:
-                        righe = registro.read_text("utf-8", errors="replace").strip().splitlines()
-                    except OSError:
-                        pass
-                    esito = next((r for r in reversed(righe) if "applicate" in r), "")
-                    state.applicazione = {
-                        "in_corso": False,
-                        "esito": esito or f"finito (uscita {processo.returncode})",
-                        "quando": datetime.now().strftime("%H:%M:%S"),
-                        "rifiutate": [r.strip() for r in righe if "rifiutata" in r][:8],
-                        "copie": [r.split("copie:", 1)[1].strip() for r in righe if r.startswith("copie:")][:1],
-                    }
-                state.applicazione = {"in_corso": True, "esito": "", "quando": "", "fatte": 0, "totali": 0}
-                with open(registro, "w", encoding="utf-8") as uscita:
-                    processo = subprocess.Popen(
-                        [
-                            sys.executable,
-                            str(ROOT / "registers" / "coda.py"),
-                            "--workspace",
-                            str(state.workspace.root),
-                            "--applica",
-                        ],
-                        stdout=uscita,
-                        stderr=subprocess.STDOUT,
-                        cwd=str(state.workspace.root),
-                    )
-                threading.Thread(target=sorveglia, args=(processo,), daemon=True).start()
                 return self._json(200, {"ok": True, "avviata": True})
             if route == "/api/pins/reconcile":
                 # IL PULSANTE UNICO dei timbri: legge le voci dichiarate dai report di rifinitura
@@ -2695,6 +2803,11 @@ def main(argv=None):
         dest="workspace",
         help="radice del workspace (default: cwd o $CONSOLE_WORKSPACE)",
     )
+    parser.add_argument(
+        "--no-auto-queue",
+        action="store_true",
+        help="disattiva l'applicazione automatica delle sole transizioni valide",
+    )
     args = parser.parse_args(argv)
     workspace = Workspace.load(args.workspace)
     missing = workspace.writable_check()
@@ -2706,10 +2819,28 @@ def main(argv=None):
         # Un workspace incompleto si dice all'avvio, non si scopre rompendo una pagina.
         print(f"ATTENZIONE: manca {', '.join(missing)} — la pagina mostrera' vuoti, non errori finti.")
     print("Ctrl-C per fermare. Nessuna scrittura fuori dal workspace; le risposte passano dal lock.")
+    stop_coda = threading.Event()
+    auto_coda = not args.no_auto_queue and os.environ.get("CONSOLE_AUTO_QUEUE", "1").lower() not in (
+        "0",
+        "false",
+        "no",
+        "off",
+    )
+    if auto_coda:
+        threading.Thread(
+            target=sorveglia_coda,
+            args=(state, stop_coda),
+            daemon=True,
+        ).start()
+        print("coda: applicazione automatica attiva; le richieste sospette restano da esaminare.")
+    else:
+        print("coda: applicazione automatica disattivata (--no-auto-queue).")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nfermato.")
+    finally:
+        stop_coda.set()
     return 0
 
 

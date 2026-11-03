@@ -73,7 +73,11 @@ PORTE = {
     "console/test_plan.py": ["PlanTests"],
     "console/test_report_contract.py": ["ReportContractTests"],
     "console/test_refinements.py": ["main"],
-    "console/server.py": ["main", "ReviewState"],
+    "console/test_coda_auto.py": ["CodaAutomaticaTests"],
+    "console/server.py": [
+        "main", "ReviewState", "avvia_applicazione_coda", "applica_coda_se_pronta",
+        "sorveglia_coda",
+    ],
 }
 
 #: Le righe di comando che devono rispondere (senza workspace: solo `--help`).

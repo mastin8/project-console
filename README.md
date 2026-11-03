@@ -213,7 +213,7 @@ due corsie lavorano sugli stessi byte e la vista mostra due titolari sulla stess
 ## Comandi
 
 ```bash
-python3 console/server.py --workspace <progetto> [--port 8899] [--host 127.0.0.1]
+python3 console/server.py --workspace <progetto> [--port 8899] [--host 127.0.0.1] [--no-auto-queue]
 python3 scaffold.py <cartella> --project "Nome" [--esempio]
 python3 registers/activate.py --workspace <progetto> --list          # cosa si puo' far partire adesso
 python3 registers/activate.py --workspace <progetto> --target <fase> # attiva: ordine + riserva
@@ -226,7 +226,7 @@ python3 registers/inbox.py --workspace <progetto> --list [--tutte]           # l
 python3 registers/inbox.py --workspace <progetto> --add --file <messaggio> [--phase <FASE>]
 python3 registers/rework.py --workspace <progetto> [--fase <FASE>|--json]        # cosa si ripete
 python3 registers/static_view.py --workspace <progetto>             # la stessa cosa, in una pagina statica
-python3 registers/apply_transitions.py --workspace <progetto> --dir <progetto>/pending-transitions
+python3 registers/coda.py --workspace <progetto> --applica  # batch sicuro: salta sospette e archivia
 ```
 
 Il servizio manda `index.html`, `app.js` e `style.css` con `Cache-Control: no-store`: dopo un

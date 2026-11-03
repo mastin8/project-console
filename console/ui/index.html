@@ -480,14 +480,14 @@
       <h4 id="tut-registro">Il registro e la coda</h4>
       <p>Il <b>registro</b> (<code>state.yaml</code>, <code>tasks.yaml</code>) è il quaderno
         condiviso: stato delle fasi, prese, tentativi, accettazioni. Gli agenti non lo scrivono a
-        mano: depositano richieste in <code>pending-transitions/</code>. Un applicatore le esegue
-        sotto lock, con una copia di sicurezza e la validazione; le applicate finiscono in
-        <code>applied/</code>, le rifiutate in <code>refused/</code> con il motivo.</p>
-      <p><b>Depositare non è applicare.</b> Finché una richiesta è solo un file, la pagina non la
-        vede: una presa non applicata lascia la fase «in attesa», un rilascio non applicato la
-        lascia «in corso». Quando la coda è piena compare il riquadro <b>«Coda dei registri»</b> e il
-        pulsante che applica. Non usare <code>--dir</code> mentre altre corsie lavorano: applica
-        anche le loro richieste.</p>
+        mano: depositano richieste in <code>pending-transitions/</code>. Il coordinatore le applica
+        automaticamente sotto lock, con una copia di sicurezza e la validazione; le applicate finiscono
+        in <code>applied/</code>, mentre le sospette restano in coda con il motivo.</p>
+      <p><b>Depositare non è applicare.</b> Il coordinatore consuma automaticamente i lotti validi
+        dopo un breve intervallo di quiete; una presa non applicata lascia la fase «in attesa», un
+        rilascio non applicato la lascia «in corso». Se il watcher è fermo, il riquadro
+        <b>«Coda dei registri»</b> offre il pulsante di recupero. Le richieste sospette non vengono
+        mai applicate in automatico.</p>
 
       <h4 id="tut-pagine">Le sette pagine</h4>
       <ul>

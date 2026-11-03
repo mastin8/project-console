@@ -151,8 +151,8 @@ Poi altri campi nella stessa voce, uno per richiesta: `taken_by` (il tuo nome ca
 `taken_at`. Se l'ancora non e' unica e non dici `occurrence`, l'applicatore **rifiuta** invece di
 scegliere lui. L'ordine completo del ciclo e' in `pending-transitions/README.md`.
 
-Chi applica: il coordinamento, con
-`python3 registers/apply_transitions.py --workspace . --dir pending-transitions`.
+Il coordinatore applica la coda automaticamente. Per forzare subito lo stesso batch sicuro:
+`python3 registers/coda.py --workspace . --applica`.
 
 Lo schema si chiama `project-console-transition/1.0`; l'applicatore accetta anche il nome storico
 `binche.ux-transition/1.0`, cosi' le richieste depositate prima della generalizzazione continuano a

@@ -266,7 +266,7 @@ def leggi(ws, adesso=None, limite_sospette: int = 12):
             "prova": f"cd {radice} && python3 {coordinatore}/registers/apply_transitions.py --workspace . {prima} --dry-run | head -40",
             "applica": f"cd {radice} && python3 {coordinatore}/registers/coda.py --workspace . --applica",
         },
-        # Le stesse misure servono al pulsante «Applica la coda», che fa il lavoro al posto tuo.
+        # Le stesse misure servono al watcher automatico e al pulsante di recupero.
         "da_applicare": len(elenco) - len(sospette),
     }
 

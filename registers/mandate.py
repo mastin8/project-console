@@ -480,11 +480,12 @@ def busta(ws, fase):
             *report_contract.prompt_contract(ws),
             "",
             "e subito dopo, nella stessa voce, due richieste: taken_by: <la tua corsia> e",
-            "taken_at: '<adesso>'. Poi fallo applicare al coordinamento:",
+            "taken_at: '<adesso>'. Il coordinatore applica la coda automaticamente; per applicarla",
+            "subito, senza lasciare file pendenti, esegui il batch sicuro:",
             # Il percorso del coordinatore, ASSOLUTO: dentro il progetto di solito non esiste una
             # cartella `registers/` — un agente l'ha segnalato («il comando non esiste in questo
             # repository») dopo aver perso tempo a cercarla.
-            f"    python3 {Path(__file__).resolve().parent / 'apply_transitions.py'} --workspace {ws.root} --dir {ws.transitions_dir}",
+            f"    python3 {Path(__file__).resolve().parent / 'coda.py'} --workspace {ws.root} --applica",
             "",
             "Se il registro dice che la fase e' GIA' presa da un altro, FERMATI e dillo: due esecutori",
             "sugli stessi byte sono il difetto piu' caro. Alla fine del lavoro deposita il rilascio",
