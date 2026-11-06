@@ -1258,6 +1258,7 @@ class ReviewState:
                     "from_phase": voce["from_phase"],
                     "from_unit": voce["from_unit"],
                     "from_status": voce["from_status"],
+                    "from_verdict": voce.get("from_verdict") or "",
                     "from_open": voce["from_open"],
                     "source": voce["source"],
                     "when": voce["when"],

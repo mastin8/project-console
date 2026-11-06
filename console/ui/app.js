@@ -3613,6 +3613,53 @@ function owedGroup(voci) {
   ]);
 }
 
+function ruoloFase(code) {
+  const suffisso = String(code || "").slice(-1).toUpperCase();
+  return {
+    A: "analisi",
+    E: "esecuzione",
+    T: "verifica indipendente",
+    R: "accettazione funzionale",
+  }[suffisso] || "passaggio successivo";
+}
+
+function spiegaPassaggio(voce) {
+  const precedente = voce.from_phase || "Il passaggio precedente";
+  const verdetto = String(voce.from_verdict || "").toLowerCase();
+  const azione = voce.next_action || {};
+  const seguente = azione.target_phase;
+  const ruolo = seguente ? ruoloFase(seguente) : "";
+  const negativo = /(?:needs_changes|fail|rejected|respint)/.test(verdetto);
+  const conLimiti = /(?:with_declared_limits|partial|declared_limit)/.test(verdetto);
+
+  if (negativo) {
+    return {
+      title: `${precedente} richiede un nuovo passaggio`,
+      body: seguente
+        ? `${precedente} non ha superato il controllo. Per correggere le eccezioni rilevate, il prossimo passaggio è ${seguente} (${ruolo}).`
+        : `${precedente} non ha superato il controllo. Le eccezioni richiedono una correzione, ma il prossimo passaggio non è ancora determinato.`,
+    };
+  }
+  if (conLimiti) {
+    return {
+      title: `${precedente} è concluso con limiti`,
+      body: seguente
+        ? `${precedente} ha superato il controllo, ma restano limiti dichiarati. Si può procedere a ${seguente} (${ruolo}) tenendoli tracciati.`
+        : `${precedente} ha superato il controllo, ma restano limiti dichiarati da tracciare prima di proseguire.`,
+    };
+  }
+  if (azione.code === "review" || !seguente) {
+    return {
+      title: `Esito di ${precedente}`,
+      body: `${precedente} ha lasciato una direzione, ma il sistema non ha ancora un passaggio eseguibile. Leggi il testo originale senza trasformarlo in un ordine.`,
+    };
+  }
+  return {
+    title: `Esito di ${precedente}`,
+    body: `${precedente} ha superato il controllo. Il prossimo passaggio è ${seguente} (${ruolo}).`,
+  };
+}
+
 function owedRow(voce) {
   const riga = h("div", { class: "actrow" });
   const testo = h("div", { class: "acttext" });
@@ -3623,9 +3670,10 @@ function owedRow(voce) {
     label: "Leggi la direzione",
     reason: "Il motore non ha ricevuto una decisione.",
   };
+  const spiegazione = spiegaPassaggio(voce);
   if (semplice) {
     testo.append(
-      h("b", { class: "actsimple-title", text: "Indicazione lasciata dal lavoro precedente" })
+      h("b", { class: "actsimple-title", text: spiegazione.title })
     );
   } else {
     testo.append(h("code", { class: "actcode", text: voce.from_phase }));
@@ -3646,16 +3694,17 @@ function owedRow(voce) {
       })
     );
   }
-  // Il TESTO è la direzione vera. La riga sintetica «il prossimo atto è X» faceva sembrare
-  // un ordine ciò che è solo una frase del report, e i codici citati potevano essere già
-  // accettati. Qui si legge cosa ha scritto chi ha finito; i pulsanti arrivano dopo.
+  testo.append(h("p", { class: "actsimple-reason", text: spiegazione.body }));
   const direzione = String(voce.text || "").trim();
   if (direzione) {
     testo.append(
-      h("div", {
-        class: "actmeta",
-        text: direzione.length > 420 ? `${direzione.slice(0, 419)}…` : direzione,
-      })
+      h("details", { class: "actdetails" }, [
+        h("summary", { text: "Testo originale del report" }),
+        h("p", {
+          class: "actmeta",
+          text: direzione.length > 900 ? `${direzione.slice(0, 899)}…` : direzione,
+        }),
+      ])
     );
   }
   testo.append(

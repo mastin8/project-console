@@ -379,6 +379,7 @@ def dovuto(ws, state=None, tasks_doc=None, limite: int = 8, prese=None):
             "from_phase": voce["phase"],
             "from_unit": voce["unit"],
             "from_status": voce["status"],
+            "from_verdict": voce.get("verdict") or "",
             "from_open": voce["unit_open"],
             "source": voce["source"],
             "when": voce["when"],
