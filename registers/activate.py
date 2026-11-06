@@ -494,12 +494,23 @@ def prossimi(ws, state=None, tasks_doc=None):
     fasi_per_unita = {}
     for fase_id, unit_id, *_ in fasi(tasks_doc):
         fasi_per_unita.setdefault(unit_id, []).append(fase_id)
+    unita_di_fase = {
+        str(t.get("id")): str(t.get("unit_id") or "")
+        for t in tasks_doc.get("tasks") or []
+        if t.get("id")
+    }
+    unita_con_presa = {
+        unita_di_fase.get(str(fase), "")
+        for fase in vive
+        if unita_di_fase.get(str(fase), "")
+    }
 
     chiuse = {
         uid
         for uid in unita
         if fasi_per_unita.get(uid)
         and all(stato_di(fase) == "accepted" for fase in fasi_per_unita[uid])
+        and uid not in unita_con_presa
     }
     blocca = {}
     for uid, u in unita.items():
@@ -511,7 +522,10 @@ def prossimi(ws, state=None, tasks_doc=None):
         if uid in chiuse:
             continue
         fasi_unita = fasi_per_unita.get(uid) or []
-        fasi_aperte = [fase for fase in fasi_unita if stato_di(fase) != "accepted"]
+        fasi_vive = [fase for fase in fasi_unita if fase in vive]
+        fasi_aperte = fasi_vive + [
+            fase for fase in fasi_unita if stato_di(fase) != "accepted" and fase not in fasi_vive
+        ]
         if not fasi_aperte:
             continue
         prossima = fasi_aperte[0]
@@ -613,7 +627,9 @@ def prossimi(ws, state=None, tasks_doc=None):
                 "block": str(u.get("domain") or "senza-dominio"),
                 "title": str(next((t.get("title") for t in tasks_doc.get("tasks") or [] if str(t.get("id")) == prossima), "") or u.get("title") or ""),
                 "status": stato_di(prossima),
-                "attempt": (registrate.get(prossima) or {}).get("attempt") or 0,
+                "attempt": (presa.get("attempt") if stato_presa else None)
+                or (registrate.get(prossima) or {}).get("attempt")
+                or 0,
                 "attesa": sorted(set(attesa)),
                 "leva": len(blocca.get(uid, [])),
                 # «In corso» e «riservata» non sono la stessa cosa: una presa `pre_registered` e' un

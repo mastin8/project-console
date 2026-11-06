@@ -2012,7 +2012,9 @@ function renderActivation(data) {
               h("code", { class: "actcode", text: voce.phase }),
               h("div", {
                 class: "actmeta",
-                text: `${voce.status} · presa da ${voce.owner || "—"}. Quando consegna, la riga dopo è la sua.`,
+                text: `${voce.live || voce.status} · tentativo ${voce.attempt || "?"} · presa da ${
+                  voce.owner || "—"
+                }. Quando consegna, la riga dopo è la sua.`,
               }),
             ]),
           ])
@@ -2129,7 +2131,9 @@ function codaRow(voce) {
     testo.append(
       h("b", {
         class: "actsimple-title",
-        text: titolo || voce.phase || "Lavoro da fare",
+        text: voce.code
+          ? `${voce.code} — ${titolo || "lavoro da fare"}`
+          : titolo || voce.phase || "Lavoro da fare",
       })
     );
   } else if (titolo) {

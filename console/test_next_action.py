@@ -157,6 +157,77 @@ class NextActionTests(unittest.TestCase):
             self.assertEqual([voce["phase"] for voce in percorso], ["FAST01E"])
             self.assertEqual(percorso[0]["next_action"]["target_phase"], "FAST01E")
 
+    def test_live_attempt_keeps_an_accepted_unit_in_the_active_path(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            radice = Path(tmp)
+            (radice / "tasks.yaml").write_text(
+                "units:\n"
+                "- id: FND01\n"
+                "  domain: prova\n"
+                "  title: Fondamenta\n"
+                "tasks:\n"
+                "- id: FND01A\n"
+                "  unit_id: FND01\n"
+                "  kind: analysis\n"
+                "- id: FND01E\n"
+                "  unit_id: FND01\n"
+                "  kind: implementation\n"
+                "- id: FND01T\n"
+                "  unit_id: FND01\n"
+                "  kind: independent_verification\n"
+                "- id: FND01R\n"
+                "  unit_id: FND01\n"
+                "  kind: functional_acceptance\n",
+                encoding="utf-8",
+            )
+            (radice / "state.yaml").write_text(
+                yaml.safe_dump(
+                    {
+                        "schema": "project-console-state/1.0",
+                        "active_claims": [
+                            {
+                                "task_id": "FND01T",
+                                "unit": "FND01",
+                                "phase": "T",
+                                "status": "taken",
+                                "attempt": 4,
+                                "taken_by": "/root",
+                                "taken_at": "2026-11-06T14:10:25+01:00",
+                            }
+                        ],
+                        "tasks": {
+                            fase: {"status": "accepted", "attempt": 2}
+                            for fase in ("FND01A", "FND01E", "FND01T", "FND01R")
+                        },
+                        "execution_attempts": [],
+                    },
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+            (radice / "constitution.md").write_text(
+                "---\n"
+                "schema: project-console-constitution/1.0\n"
+                "status: draft\n"
+                'project: "Progetto"\n'
+                'updated_at: ""\n'
+                'approved_at: ""\n'
+                'approved_sha256: ""\n'
+                "---\n\n"
+                "# Costituzione\n\n## 1. Obiettivo\n\nUna presa viva resta visibile.\n",
+                encoding="utf-8",
+            )
+            workspace = Workspace.load(radice)
+            constitution.approve(workspace)
+
+            percorso = activate.prossimi(workspace)
+
+            self.assertEqual([voce["phase"] for voce in percorso], ["FND01T"])
+            self.assertEqual(percorso[0]["live"], "taken")
+            self.assertEqual(percorso[0]["owner"], "/root")
+            self.assertEqual(percorso[0]["attempt"], 4)
+            self.assertEqual(percorso[0]["next_action"]["code"], "wait")
+
     def test_completed_fast_lane_without_closure_asks_for_review(self):
         azione = next_action.for_obligation(
             {
