@@ -243,6 +243,40 @@ class CodaAutomaticaTests(unittest.TestCase):
             self.assertEqual(aggiornato["active_claims"][1]["attempt"], 2)
             self.assertEqual(aggiornato["active_claims"][1]["taken_by"], "/test")
 
+    def test_version_fingerprint_tracks_files_outside_the_main_registries(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ws = self._workspace(root)
+            state = server.ReviewState(ws)
+            prima = state.versione()
+            self.assertEqual(prima["reports_mtime_ns"], 0)
+            self.assertEqual(prima["dispatch_queue_mtime_ns"], 0)
+            self.assertEqual(prima["transitions_mtime_ns"], 0)
+            self.assertEqual(prima["inbox_mtime_ns"], 0)
+
+            (root / "reports" / "DEMO1").mkdir(parents=True)
+            (root / "reports" / "DEMO1" / "attempt-1.yaml").write_text(
+                "task_id: DEMO1\nattempt: 1\n",
+                encoding="utf-8",
+            )
+            (root / "dispatch-queue").mkdir()
+            (root / "dispatch-queue" / "ordine.yaml").write_text(
+                "task_id: DEMO1\n",
+                encoding="utf-8",
+            )
+            (ws.transitions_dir / "transizione.yaml").write_text(
+                "schema: project-console-transition/1.0\n",
+                encoding="utf-8",
+            )
+            (root / "inbox").mkdir()
+            (root / "inbox" / "messaggio.md").write_text("testo\n", encoding="utf-8")
+
+            dopo = state.versione()
+            self.assertGreater(dopo["reports_mtime_ns"], 0)
+            self.assertGreater(dopo["dispatch_queue_mtime_ns"], 0)
+            self.assertGreater(dopo["transitions_mtime_ns"], 0)
+            self.assertGreater(dopo["inbox_mtime_ns"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

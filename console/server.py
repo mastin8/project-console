@@ -736,11 +736,20 @@ class ReviewState:
         return dato
 
     def versione(self):
-        """Quando sono stati scritti i registri che contano: solo `stat`, non una rilettura."""
+        """Quando sono cambiati i dati che la pagina mostra: solo `stat`, nessuna rilettura."""
 
         def mtime(percorso):
             try:
                 return percorso.stat().st_mtime_ns
+            except OSError:
+                return 0
+
+        def massimo(percorso, pattern="*.yaml"):
+            try:
+                return max(
+                    (voce.stat().st_mtime_ns for voce in percorso.glob(pattern)),
+                    default=0,
+                )
             except OSError:
                 return 0
 
@@ -750,6 +759,13 @@ class ReviewState:
             "constitution_mtime_ns": mtime(self.workspace.constitution_path),
             "onboarding_findings_mtime_ns": mtime(self.workspace.onboarding_findings_path),
             "onboarding_questions_mtime_ns": mtime(self.workspace.onboarding_questions_path),
+            # Non tutto passa da state.yaml: ordini, report, transizioni e posta sono file propri.
+            # Senza queste impronte la pagina non si accorgeva di un ordine nuovo o di un report
+            # appena pubblicato, e lasciava a schermo pulsanti costruiti sullo snapshot precedente.
+            "reports_mtime_ns": massimo(self.workspace.reports_dir, "**/*.yaml"),
+            "dispatch_queue_mtime_ns": massimo(self.workspace.path("dispatch-queue")),
+            "transitions_mtime_ns": massimo(self.workspace.transitions_dir),
+            "inbox_mtime_ns": massimo(self.workspace.inbox_dir, "*"),
         }
 
     def _queue(self):

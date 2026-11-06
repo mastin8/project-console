@@ -903,13 +903,10 @@ async function controllaVersione() {
     const risposta = await fetch("/api/versione", { cache: "no-store" });
     if (!risposta.ok) return;
     const nuova = await risposta.json();
-    if (
-      nuova.state_mtime_ns !== versioneVista.state_mtime_ns ||
-      nuova.tasks_mtime_ns !== versioneVista.tasks_mtime_ns ||
-      nuova.constitution_mtime_ns !== versioneVista.constitution_mtime_ns ||
-      nuova.onboarding_findings_mtime_ns !== versioneVista.onboarding_findings_mtime_ns ||
-      nuova.onboarding_questions_mtime_ns !== versioneVista.onboarding_questions_mtime_ns
-    ) {
+    const cambiata = Object.entries(nuova).some(
+      ([chiave, valore]) => versioneVista[chiave] !== valore
+    );
+    if (cambiata) {
       const avviso = $("#nuovo-registro");
       if (avviso) avviso.hidden = false;
       await load();
