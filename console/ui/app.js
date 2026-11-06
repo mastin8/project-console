@@ -887,15 +887,18 @@ function refreshAge() {
 }
 setInterval(refreshAge, 30000);
 
-/* UNA PRESA APPLICATA DOPO IL CARICAMENTO RESTAVA INVISIBILE. La pagina e' un'istantanea, e finora
-   l'unico modo di accorgersene era leggere l'eta' in testa o premere «Ricarica». Qui si guarda solo
-   il tempo di scrittura dei registri (due `stat`), non si ricarica da soli: un avviso compare, e il
-   clic resta dell'utente. Si tace mentre si scrive o si legge un dialogo. */
+/* UNA PRESA APPLICATA DOPO IL CARICAMENTO RESTAVA INVISIBILE. La pagina e' un'istantanea e il
+   registro cambia sotto: prima compariva soltanto un avviso, quindi un clic su una riga vecchia
+   poteva chiedere il rilancio di una fase gia' accettata. Ora si confronta la versione leggera
+   (`stat`, non i registri) e si ricarica da soli. Si tace mentre si scrive o si legge un dialogo. */
+let controlloVersioneInCorso = false;
 async function controllaVersione() {
+  if (controlloVersioneInCorso) return;
   if (document.visibilityState !== "visible" || !versioneVista) return;
   if (document.querySelector("dialog[open]")) return;
   const attivo = document.activeElement;
   if (attivo && /^(INPUT|TEXTAREA|SELECT)$/.test(attivo.tagName)) return;
+  controlloVersioneInCorso = true;
   try {
     const risposta = await fetch("/api/versione", { cache: "no-store" });
     if (!risposta.ok) return;
@@ -909,12 +912,15 @@ async function controllaVersione() {
     ) {
       const avviso = $("#nuovo-registro");
       if (avviso) avviso.hidden = false;
+      await load();
     }
   } catch {
     // Il prossimo giro riprova: un avviso mancato non deve rompere la pagina.
+  } finally {
+    controlloVersioneInCorso = false;
   }
 }
-setInterval(controllaVersione, 20000);
+setInterval(controllaVersione, 5000);
 
 function questionCard(question) {
   const fieldset = h("fieldset", { class: "opts" }, [h("legend", { text: "Scegli una risposta" })]);

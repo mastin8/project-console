@@ -32,7 +32,7 @@ consegnato.
 | Cosa leggi | Cosa significa | Cosa fare |
 | --- | --- | --- |
 | nome del progetto + la vista | da `console.yaml` (`project`, `surface`) | niente |
-| «istantanea di … (adesso)» | quando la pagina ha letto i registri. La pagina si rilegge da sola **ogni 30 secondi** (non mentre stai scrivendo in un campo, ne' con un dialogo aperto) | se vuoi il dato di ora, premi **Ricarica** |
+| «istantanea di … (adesso)» | quando la pagina ha letto i registri. Ogni 5 secondi controlla solo le date di modifica e si rilegge da sola se sono cambiate (non mentre stai scrivendo in un campo, ne' con un dialogo aperto) | se il server non risponde, premi **Ricarica** |
 | **15 aperte** | unita' non ancora accettate | clic: filtra su «Aperte» e ti porta alla linea del tempo |
 | **4 respinte** | fasi respinte in verifica (`needs_changes`, `failed`): tornano a chi le esegue, non a te | clic: filtra e ti porta sulla prima |
 | **3 in corso** | fasi con una **presa viva**: qualcuno ci sta lavorando adesso | clic: vai a «In corso adesso» |
