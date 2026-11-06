@@ -91,6 +91,28 @@
     </aside>
 
   <main id="main">
+    <section class="ops-brief" id="ops-brief" aria-labelledby="ops-title">
+      <div class="ops-brief__head">
+        <div>
+          <h2 id="ops-title">Stato del flusso</h2>
+          <p class="ops-brief__summary" id="ops-summary">Leggo il registro…</p>
+        </div>
+        <p class="ops-brief__next" id="ops-next" role="status" aria-live="polite"></p>
+      </div>
+      <ol class="ops-flow" id="ops-flow" aria-label="Sequenza delle fasi">
+        <li data-stage="A"><b>A</b><span>Analisi</span></li>
+        <li data-stage="E"><b>E</b><span>Esecuzione</span></li>
+        <li data-stage="T"><b>T</b><span>Verifica</span></li>
+        <li data-stage="R"><b>R</b><span>Accettazione</span></li>
+      </ol>
+      <p class="ops-rule">
+        Una fase alla volta: <b>A</b> definisce, <b>E</b> esegue, <b>T</b> verifica e
+        <b>R</b> accetta. Se T respinge, il lavoro torna a E. Se R lascia un residuo,
+        il residuo passa al gate indicato e non si ripete automaticamente la stessa fase.
+      </p>
+      <div class="ops-alerts" id="ops-alerts" aria-live="polite"></div>
+    </section>
+
     <section id="constitution-section" data-page="costituzione" aria-labelledby="constitution-title">
       <div class="constitution-intro">
         <div>
@@ -545,6 +567,14 @@
 
       <h4 id="tut-problemi">Se qualcosa non torna</h4>
       <ul>
+        <li><b>Stato del flusso</b>: il pannello in alto dice quante fasi sono in corso, quali
+          prenotazioni aspettano una corsia e quali eccezioni richiedono una decisione. «Adesso»
+          indica il prossimo gesto; gli alert spiegano se occorre attendere, accettare o rifare.</li>
+        <li><b>Rifacimento richiesto</b>: il verdetto precedente ha respinto un passaggio. Se la fase
+          è già in corso, l'alert dice che la nuova presa sta correggendo il lavoro; se non lo è,
+          indica quale fase riaprire.</li>
+        <li><b>Presa viva</b>: qualcuno ha dichiarato il lavoro e la fase non può essere avviata una
+          seconda volta. La presa resta visibile finché quella corsia non consegna e rilascia.</li>
         <li><b>La pagina è vecchia</b>: si aggiorna da sola entro cinque secondi; se il server non risponde, usa F5.</li>
         <li><b>La presa non si vede</b>: la richiesta è depositata ma non applicata, guarda la coda.</li>
         <li><b>Non riesci ad accettare</b>: leggi il motivo nel messaggio; se la revisione è mossa,

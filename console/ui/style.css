@@ -149,6 +149,61 @@ h1 .surface{color:var(--ink-3);font-weight:450;font-size:15px}
     margin-right:var(--s4)}
 }
 
+/* ---------------------------------------------------------- stato del flusso */
+/* Il pannello risponde a tre domande prima di qualsiasi elenco: dove siamo, cosa e'
+   cambiato fuori dal percorso normale, quale gesto viene dopo. */
+.ops-brief{margin:var(--s4) 0 0;padding:var(--s4) var(--s5);border:1px solid var(--line-strong);
+  border-radius:var(--r-md);background:var(--surface)}
+.ops-brief__head{display:grid;grid-template-columns:minmax(0,1fr) minmax(260px,42%);gap:var(--s4);
+  align-items:start}
+.ops-brief__summary{margin:var(--s1) 0 0;color:var(--ink-2);font-size:13.5px;max-width:70ch;
+  text-wrap:pretty}
+.ops-brief__next{margin:0;padding:10px var(--s3);border:1px solid var(--line);
+  border-radius:var(--r-sm);background:var(--surface-2);color:var(--ink-2);font-size:12.5px;
+  line-height:1.45;text-wrap:pretty}
+.ops-brief__next b{color:var(--ink);font-weight:650}
+.ops-flow{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:var(--s2);
+  margin:var(--s4) 0 var(--s2);padding:0;list-style:none}
+.ops-flow li{position:relative;display:flex;align-items:center;gap:var(--s2);min-width:0;
+  min-height:42px;padding:var(--s2) var(--s3);border:1px solid var(--line);
+  border-radius:var(--r-sm);background:var(--surface-2);color:var(--ink-3);font-size:12.5px}
+.ops-flow li b{display:grid;place-items:center;width:23px;height:23px;flex:none;border-radius:50%;
+  border:1px solid currentColor;font-size:11px;font-weight:700}
+.ops-flow li span{min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ops-flow li.is-current{border-color:var(--accent);background:var(--accent-soft);color:var(--accent)}
+.ops-flow li.is-current b{background:var(--accent);border-color:var(--accent);color:var(--accent-ink)}
+.ops-flow li.is-issue{border-color:var(--bad);background:var(--bad-soft);color:var(--bad)}
+.ops-flow li.is-issue b{background:var(--bad);border-color:var(--bad);color:var(--surface)}
+.ops-flow li em{margin-left:auto;font:650 11px/1 var(--mono);font-style:normal}
+.ops-rule{margin:var(--s2) 0 0;color:var(--ink-3);font-size:12px;max-width:96ch;
+  text-wrap:pretty}
+.ops-alerts{display:grid;gap:var(--s2);margin-top:var(--s3)}
+.ops-alerts:empty{display:none}
+.ops-alert{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:var(--s2) var(--s3);
+  align-items:start;padding:var(--s3);border:1px solid var(--line-strong);border-radius:var(--r-sm);
+  background:var(--surface-2)}
+.ops-alert__icon{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;
+  background:var(--surface);color:var(--ink-2);font:700 12px/1 var(--mono)}
+.ops-alert strong{display:block;font-size:13px;color:var(--ink)}
+.ops-alert p{margin:2px 0 0;color:var(--ink-2);font-size:12.5px;max-width:82ch;text-wrap:pretty}
+.ops-alert a{font-size:12.5px;font-weight:650;white-space:nowrap}
+.ops-alert.is-critical{border-color:var(--bad);background:var(--bad-soft)}
+.ops-alert.is-critical .ops-alert__icon{color:var(--bad)}
+.ops-alert.is-action{border-color:var(--warn);background:var(--warn-soft)}
+.ops-alert.is-action .ops-alert__icon{color:var(--warn)}
+.ops-alert.is-live{border-color:var(--accent);background:var(--accent-soft)}
+.ops-alert.is-live .ops-alert__icon{color:var(--accent)}
+.ops-alert.is-clear{border-color:var(--ok);background:var(--ok-soft)}
+.ops-alert.is-clear .ops-alert__icon{color:var(--ok)}
+@media (max-width:760px){
+  .ops-brief{padding:var(--s3);margin-top:var(--s3)}
+  .ops-brief__head{grid-template-columns:1fr;gap:var(--s3)}
+  .ops-flow{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ops-alert{grid-template-columns:auto minmax(0,1fr)}
+  .ops-alert a{grid-column:2}
+}
+body[data-page="costituzione"] .ops-brief{display:none}
+
 /* --------------------------------------------------------------- sezioni */
 /* `--top-h` la misura l'header appiccicato: cosi' un salto non finisce sotto la barra. */
 main{max-width:var(--page);margin:0 auto;padding:var(--s5) var(--s5) var(--s7)}

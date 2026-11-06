@@ -163,8 +163,244 @@ function render(data) {
   renderIndice(data);
   renderTabs(data);
   renderCoda(data.queue, data.applicazione);
+  renderOpsBrief(data);
   loadTimeline();
   refreshAge();
+}
+
+function renderOpsBrief(data) {
+  const box = $("#ops-brief");
+  const summary = $("#ops-summary");
+  const next = $("#ops-next");
+  const alertsBox = $("#ops-alerts");
+  const flow = $("#ops-flow");
+  if (!box || !summary || !next || !alertsBox || !flow) return;
+
+  const claims = data.claims || [];
+  const percorso = data.percorso || [];
+  const reserved = (data.activated || []).filter((voce) =>
+    ["pre_registered", "ready"].includes(voce.status)
+  );
+  const toAccept = percorso.filter(
+    (voce) => voce.consegnata && !voce.live && !voce.riservata
+  );
+  const pronti = percorso.filter(
+    (voce) =>
+      !(voce.attesa || []).length && !voce.live && !voce.riservata && !voce.consegnata
+  );
+  const negative = (voce) =>
+    /(?:needs_changes|fail|rejected|rejected|respint)/i.test(String(voce.verdetto || ""));
+  const rowFor = (phase) => percorso.find((voce) => voce.phase === phase) || {};
+  const campi = [
+    claims.length ? `${claims.length} in corso` : null,
+    reserved.length ? `${reserved.length} prenotate` : null,
+    toAccept.length ? `${toAccept.length} da accettare` : null,
+    pronti.length ? `${pronti.length} da avviare` : null,
+    (data.owed || []).length
+      ? (data.owed || []).length === 1
+        ? "1 direzione aperta"
+        : `${(data.owed || []).length} direzioni aperte`
+      : null,
+  ].filter(Boolean);
+  summary.textContent = campi.length
+    ? campi.join(" · ")
+    : "Nessun lavoro operativo aperto.";
+
+  const counts = new Map();
+  const issueStages = new Set(
+    percorso
+      .filter((voce) => negative(voce) || voce.rifai)
+      .map((voce) => String(voce.phase || "").slice(-1).toUpperCase())
+  );
+  [...claims.map((voce) => voce.task_id), ...reserved.map((voce) => voce.phase)].forEach(
+    (code) => {
+      const stage = String(code || "").slice(-1).toUpperCase();
+      if (["A", "E", "T", "R"].includes(stage)) {
+        counts.set(stage, (counts.get(stage) || 0) + 1);
+      }
+    }
+  );
+  flow.querySelectorAll("[data-stage]").forEach((item) => {
+    const stage = item.dataset.stage;
+    const count = counts.get(stage) || 0;
+    item.classList.toggle("is-current", count > 0);
+    item.classList.toggle("is-issue", issueStages.has(stage));
+    item.querySelector("em")?.remove();
+    if (count) item.append(h("em", { text: String(count) }));
+  });
+
+  const nextNode = [];
+  if (claims.length) {
+    const nomi = claims.map((voce) => voce.task_id).join(", ");
+    nextNode.push(
+      h("b", { text: "Adesso: attendi la consegna. " }),
+      document.createTextNode(
+        `${nomi} ${claims.length === 1 ? "ha" : "hanno"} una presa viva; non avviare un secondo tentativo sulle stesse fasi.`
+      )
+    );
+  } else if (reserved.length) {
+    const nomi = reserved.map((voce) => voce.phase).join(", ");
+    nextNode.push(
+      h("b", { text: "Adesso: consegna il prompt. " }),
+      document.createTextNode(
+        reserved.length === 1
+          ? `${nomi} è prenotata ma nessuno l'ha ancora presa.`
+          : `${nomi} sono prenotate ma nessuno le ha ancora prese.`
+      )
+    );
+  } else if (toAccept.length) {
+    const nomi = toAccept.map((voce) => voce.phase).join(", ");
+    nextNode.push(
+      h("b", { text: "Adesso: accetta il lavoro. " }),
+      document.createTextNode(
+        `${nomi} ${toAccept.length === 1 ? "ha" : "hanno"} una consegna positiva che aspetta la tua firma.`
+      )
+    );
+  } else if (pronti.length) {
+    nextNode.push(
+      h("b", { text: "Adesso: avvia la prossima fase. " }),
+      document.createTextNode(pronti.map((voce) => voce.phase).join(", "))
+    );
+  } else {
+    nextNode.push(
+      h("b", { text: "Adesso: leggi le eccezioni. " }),
+      document.createTextNode(
+        "Il percorso non offre un avvio diretto; le righe sotto dicono cosa manca."
+      )
+    );
+  }
+  next.replaceChildren(...nextNode);
+
+  const alerts = [];
+  const alert = ({ tone, icon, title, copy, href = "#activation-section", action = "Vai al gesto" }) =>
+    h("div", { class: `ops-alert is-${tone}` }, [
+      h("span", { class: "ops-alert__icon", "aria-hidden": "true", text: icon }),
+      h("div", {}, [h("strong", { text: title }), h("p", { text: copy })]),
+      h("a", { href, text: action }),
+    ]);
+
+  claims.forEach((claim) => {
+    const row = rowFor(claim.task_id);
+    const rifacimento = negative(row);
+    alerts.push(
+      alert({
+        tone: rifacimento ? "action" : "live",
+        icon: rifacimento ? "!" : "→",
+        title: `${rifacimento ? "Rifacimento in corso" : "In corso"} · ${claim.task_id}`,
+        copy:
+          `Tentativo ${row.attempt || "?"} · presa da ${claim.owner || claim.taken_by || "—"}` +
+          (claim.taken_at ? ` dal ${String(claim.taken_at).slice(0, 16).replace("T", " ")}` : "") +
+          ". " +
+          (rifacimento
+            ? `Il report precedente dice ${row.verdetto}: la nuova presa sta già correggendo il passaggio.`
+            : "La presa blocca l'avvio di un secondo tentativo sulla stessa fase."),
+      })
+    );
+  });
+
+  reserved.forEach((voce) => {
+    alerts.push(
+      alert({
+        tone: "action",
+        icon: "○",
+        title: `Prenotata · ${voce.phase}`,
+        copy:
+          "L'ordine esiste ma nessuno ha ancora dichiarato la presa. Copia il prompt e consegnalo a una corsia.",
+        action: "Vai al prompt",
+      })
+    );
+  });
+
+  toAccept.forEach((voce) => {
+    alerts.push(
+      alert({
+        tone: "action",
+        icon: "✓",
+        title: `Consegna pronta · ${voce.phase}`,
+        copy: `Attempt ${voce.attempt || "?"} ha verdetto ${voce.verdetto || "positivo"}. Manca la tua accettazione.`,
+        action: "Vai all'accettazione",
+      })
+    );
+  });
+
+  percorso.forEach((voce) => {
+    if (voce.live || (!voce.rifai && voce.next_action?.code !== "rework_e")) return;
+    alerts.push(
+      alert({
+        tone: "critical",
+        icon: "↩",
+        title: `Rifacimento richiesto · ${voce.phase}`,
+        copy:
+          `Il verdetto ${voce.verdetto || "negativo"} richiede una nuova esecuzione` +
+          (voce.rifai ? ` in ${voce.rifai}.` : "."),
+      })
+    );
+  });
+
+  (data.owed || []).forEach((voce) => {
+    const azione = voce.next_action || {};
+    if (azione.code === "review" && (voce.codes || []).some((codice) => codice.live)) {
+      return;
+    }
+    alerts.push(
+      alert({
+        tone: azione.code === "dispatch_order" ? "action" : "live",
+        icon: "→",
+        title: `Passaggio aperto · ${voce.from_phase}`,
+        copy:
+          `${azione.reason || "Il report ha lasciato una direzione."} ` +
+          (azione.target_phase ? `Fase indicata: ${azione.target_phase}.` : ""),
+        action: azione.target_phase ? "Vai alla direzione" : "Leggi la direzione",
+      })
+    );
+  });
+
+  const queue = data.queue || {};
+  if ((queue.sospette_totali || 0) > 0) {
+    alerts.unshift(
+      alert({
+        tone: "critical",
+        icon: "!",
+        title: "Coda bloccata da richieste sospette",
+        copy: `${queue.sospette_totali} richieste richiedono una decisione prima di poter essere applicate.`,
+        href: "#coda-section",
+      })
+    );
+  } else if ((queue.indietro || []).length) {
+    alerts.unshift(
+      alert({
+        tone: "action",
+        icon: "!",
+        title: "Registro non allineato ai report",
+        copy:
+          queue.indietro.length === 1
+            ? "1 fase ha un report più recente del registro. Non è un errore del prodotto: va registrata l'accettazione o la sincronizzazione."
+            : `${queue.indietro.length} fasi hanno un report più recente del registro. Non è un errore del prodotto: va registrata l'accettazione o la sincronizzazione.`,
+      })
+    );
+  }
+
+  const visti = new Set();
+  const unici = alerts.filter((node) => {
+    const chiave = node.textContent;
+    if (visti.has(chiave)) return false;
+    visti.add(chiave);
+    return true;
+  });
+  alertsBox.replaceChildren(
+    ...(unici.length
+      ? unici.slice(0, 6)
+      : [
+          alert({
+            tone: "clear",
+            icon: "✓",
+            title: "Nessuna eccezione aperta",
+            copy: "Il flusso segue la sequenza normale.",
+            href: "#activation-section",
+            action: "Vai al lavoro",
+          }),
+        ])
+  );
 }
 
 function renderConstitutionGate(gate) {
