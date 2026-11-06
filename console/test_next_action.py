@@ -7,6 +7,7 @@ import unittest
 from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
+from types import SimpleNamespace
 
 import yaml
 
@@ -21,6 +22,20 @@ from workspace import Workspace  # noqa: E402
 
 
 class NextActionTests(unittest.TestCase):
+    def test_owed_target_uses_the_structured_code_not_the_first_name_in_prose(self):
+        direzioni = [
+            {
+                "from_phase": "FND02T",
+                "text": "Aprire FND01R e poi FND01T.",
+                "owed_code": "FND01T",
+            }
+        ]
+        finto = SimpleNamespace(_owed_directions=lambda *args, **kwargs: direzioni)
+
+        target, _ = server.ReviewState.owed_order_target(finto, "FND02T")
+
+        self.assertEqual(target, "FND01T")
+
     def test_negative_verdict_always_returns_to_e(self):
         for phase in ("E", "T", "R"):
             azione = next_action.decide_report(phase, "needs_changes")

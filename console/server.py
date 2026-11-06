@@ -1758,24 +1758,21 @@ class ReviewState:
                             "from_phase": direction.get("from_phase"),
                             "source": direction.get("source"),
                             "text": direction.get("text"),
+                            # Il codice va scelto QUI, dove `done/live/attesa/busy` sono gia'
+                            # misurati. Estrarlo di nuovo dalla prosa prende il primo nome citato,
+                            # che puo' essere un tentativo gia' concluso.
+                            "owed_code": str(code.get("code") or ""),
                         }
                     )
         return directions
 
     def owed_order_target(self, task_id):
         """La prima fase accettata che il report di `task_id` nomina come atto dovuto."""
-        state = self._load(self.workspace.state) or {}
-        tasks_doc = self._load(self.workspace.tasks) or {}
-        directions = self._owed_directions(task_id, state, tasks_doc, from_phase=True)
+        directions = self._owed_directions(task_id, from_phase=True)
         if not directions:
             return None, directions
-        direction = directions[0]
-        text = str(direction.get("text") or "")
-        noti = {str(t.get("id")) for t in tasks_doc.get("tasks") or [] if t.get("id")}
-        for code in dict.fromkeys(re.findall(r"[A-Z][A-Z0-9]{2,}", text)):
-            if code in noti and code != task_id:
-                return code, directions
-        return None, directions
+        target = str(directions[0].get("owed_code") or "")
+        return (target, directions) if target and target != task_id else (None, directions)
 
     def activate_or_owed(self, target):
         """Attiva la fase, oppure deposita l'ordine della fase realmente dovuta.
