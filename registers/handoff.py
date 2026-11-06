@@ -347,6 +347,22 @@ def dovuto(ws, state=None, tasks_doc=None, limite: int = 8, prese=None):
             if codice not in noti or codice == voce["phase"]:
                 continue
             registrata = registrate.get(codice) or {}
+            attempt_nominato = None
+            for testo in testi:
+                trovato_attempt = re.search(
+                    rf"\b{re.escape(codice)}\s+(?:attempt[-\s]*)?(\d+)\b",
+                    testo,
+                    re.IGNORECASE,
+                )
+                if trovato_attempt:
+                    attempt_nominato = int(trovato_attempt.group(1))
+                    break
+            attempt_registrato = int(registrata.get("attempt") or 0)
+            attempt_gia_coperto = bool(
+                registrata.get("status") == "accepted"
+                and attempt_nominato
+                and attempt_registrato >= attempt_nominato
+            )
             codici.append(
                 {
                     "code": codice,
@@ -366,8 +382,13 @@ def dovuto(ws, state=None, tasks_doc=None, limite: int = 8, prese=None):
                     # e' un atto su niente. Misurato il 2026-10-16: la coda offriva `HIST01R`,
                     # l'ultima fase di un'unita' ferma alla prima.
                     "attesa": _attesa(ws, tasks_doc, registrate, codice),
-                    # Consegnata dopo la dichiarazione: l'atto che questa riga chiedeva c'e' gia'.
-                    "done": consegnata_dopo(codice, voce["when"]),
+                    # Accettata e con l'attempt nominato gia' coperto dal registro: l'atto e'
+                    # concluso anche se il file che lo prova precede la direzione. Senza un
+                    # attempt esplicito la direzione resta valida: puo' chiedere un nuovo giro.
+                    "done": (
+                        attempt_gia_coperto
+                        or consegnata_dopo(codice, voce["when"])
+                    ),
                 }
             )
         # Se TUTTI gli atti che questa dichiarazione nomina sono gia' in mano a qualcuno, la

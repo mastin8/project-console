@@ -14,7 +14,7 @@ import yaml
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from registers import next_action  # noqa: E402
+from registers import handoff, next_action  # noqa: E402
 from registers import activate, mandate, sync_phases  # noqa: E402
 from console import constitution  # noqa: E402
 import server  # noqa: E402
@@ -22,6 +22,63 @@ from workspace import Workspace  # noqa: E402
 
 
 class NextActionTests(unittest.TestCase):
+    def test_accepted_phase_is_not_reoffered_by_an_older_direction(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            radice = Path(tmp)
+            (radice / "tasks.yaml").write_text(
+                yaml.safe_dump(
+                    {
+                        "units": [{"id": "DEMO", "domain": "prova"}],
+                        "tasks": [
+                            {"id": "DEMOE", "unit_id": "DEMO", "kind": "implementation"},
+                            {
+                                "id": "DEMOT",
+                                "unit_id": "DEMO",
+                                "kind": "independent_verification",
+                            },
+                        ],
+                    },
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+            (radice / "state.yaml").write_text(
+                yaml.safe_dump(
+                    {
+                        "tasks": {
+                            "DEMOE": {"status": "accepted", "attempt": 1},
+                            "DEMOT": {"status": "accepted", "attempt": 1},
+                        }
+                    },
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+            (radice / "reports" / "DEMOE").mkdir(parents=True)
+            report = {
+                "task_id": "DEMOE",
+                "attempt": 1,
+                "status": "published",
+                "verdict": "pass",
+                "published_at": "2099-01-01T10:00:00+01:00",
+                "next": "Procedere con DEMOT attempt-1.",
+            }
+            (radice / "reports" / "DEMOE" / "attempt-1.yaml").write_text(
+                yaml.safe_dump(report, sort_keys=False),
+                encoding="utf-8",
+            )
+            (radice / "reports" / "DEMOE.yaml").write_text(
+                yaml.safe_dump(
+                    {**report, "report": "reports/DEMOE/attempt-1.yaml"},
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+
+            direzioni = handoff.dovuto(Workspace.load(radice))
+
+            self.assertEqual(direzioni, [])
+
     def test_flow_prioritizes_acceptance_and_exposes_the_latest_t_review(self):
         review = {
             "phase": "DEMOT",
