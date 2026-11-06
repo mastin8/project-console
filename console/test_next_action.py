@@ -22,6 +22,36 @@ from workspace import Workspace  # noqa: E402
 
 
 class NextActionTests(unittest.TestCase):
+    def test_owed_direction_waits_for_acceptance_of_its_source_report(self):
+        voce = {
+            "from_phase": "FND02T",
+            "from_unit": "FND02",
+            "from_status": "pending",
+            "from_verdict": "pass",
+            "from_open": True,
+            "source": "reports/FND02T/attempt-3.yaml",
+            "when": None,
+            "text": "Avviare FND02R.",
+            "codes": [
+                {
+                    "code": "FND02R",
+                    "status": "pending",
+                    "live": False,
+                    "done": False,
+                    "attesa": [],
+                    "busy": [],
+                }
+            ],
+        }
+        state = {"tasks": {"FND02T": {"status": "pending", "attempt": 0}}}
+
+        snapshot = server.ReviewState._owed_snapshot(SimpleNamespace(), voce, state)
+
+        self.assertEqual(snapshot["blocked_by_acceptance"], "FND02T")
+        self.assertEqual(snapshot["next_after_acceptance"], "FND02R")
+        self.assertEqual(snapshot["next_action"]["code"], "wait")
+        self.assertEqual(snapshot["next_action"]["accept_phase"], "FND02T")
+
     def test_owed_target_uses_the_structured_code_not_the_first_name_in_prose(self):
         direzioni = [
             {

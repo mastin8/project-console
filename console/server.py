@@ -695,6 +695,21 @@ class NotStalledError(Exception):
         )
 
 
+def _accettazione_pendente(voce, state):
+    """Il report ha parlato, ma il registro non ha ancora assorbito quell'esito."""
+    fase = str(voce.get("from_phase") or "")
+    registrata = (state.get("tasks") or {}).get(fase) or {}
+    if str(registrata.get("status") or "") != "accepted":
+        return True
+    trovato = re.search(r"attempt-(\d+)\.ya?ml$", str(voce.get("source") or ""))
+    try:
+        attempt_report = int(trovato.group(1)) if trovato else 0
+        attempt_registro = int(registrata.get("attempt") or 0)
+    except (TypeError, ValueError):
+        return False
+    return attempt_report > attempt_registro
+
+
 class ReviewState:
     def __init__(self, workspace):
         # `workspace` e' un oggetto Workspace: radice + nomi. `pack` resta come scorciatoia verso
@@ -1254,18 +1269,7 @@ class ReviewState:
             # invisibili in pagina, perche' ognuno nominava una fase GIA' ACCETTATA e la coda mostra
             # solo le non accettate. Chi cercava «cosa mando adesso?» non aveva risposta.
             "owed": [
-                {
-                    "from_phase": voce["from_phase"],
-                    "from_unit": voce["from_unit"],
-                    "from_status": voce["from_status"],
-                    "from_verdict": voce.get("from_verdict") or "",
-                    "from_open": voce["from_open"],
-                    "source": voce["source"],
-                    "when": voce["when"],
-                    "text": voce["text"],
-                    "codes": voce["codes"],
-                    "next_action": next_action.for_owed(voce),
-                }
+                self._owed_snapshot(voce, state)
                 for voce in dovuto
                 if voce["from_open"]
             ],
@@ -1727,6 +1731,40 @@ class ReviewState:
         return f"- id: {ids[-1]}"
 
     # -------------------------------------------------------- ordini di lavoro
+    def _owed_snapshot(self, voce, state):
+        azione = next_action.for_owed(voce)
+        pendente = _accettazione_pendente(voce, state)
+        if pendente:
+            fase = str(voce.get("from_phase") or "")
+            azione = {
+                **azione,
+                "code": "wait",
+                "label": f"Accetta prima {fase}",
+                "reason": (
+                    "Il report ha concluso il passaggio, ma l'esito non è ancora "
+                    "accettato nel registro."
+                ),
+                "phase": fase,
+                "accept_phase": fase,
+                "after_phase": azione.get("target_phase"),
+                "target_phase": None,
+                "primary": "none",
+            }
+        return {
+            "from_phase": voce["from_phase"],
+            "from_unit": voce["from_unit"],
+            "from_status": voce["from_status"],
+            "from_verdict": voce.get("from_verdict") or "",
+            "from_open": voce["from_open"],
+            "source": voce["source"],
+            "when": voce["when"],
+            "text": voce["text"],
+            "codes": voce["codes"],
+            "blocked_by_acceptance": str(voce["from_phase"]) if pendente else "",
+            "next_after_acceptance": azione.get("after_phase") if pendente else "",
+            "next_action": azione,
+        }
+
     def _owed_directions(self, task_id, state=None, tasks_doc=None, *, from_phase=False):
         """Le direzioni che nominano una fase accettata, oppure partono da una fase."""
         state = state if state is not None else (self._load(self.workspace.state) or {})

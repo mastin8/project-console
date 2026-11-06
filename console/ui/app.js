@@ -312,12 +312,18 @@ function renderOpsBrief(data) {
   });
 
   toAccept.forEach((voce) => {
+    const direzione = (data.owed || []).find(
+      (item) => item.blocked_by_acceptance === voce.phase
+    );
+    const dopo = direzione?.next_after_acceptance;
     alerts.push(
       alert({
         tone: "action",
         icon: "✓",
         title: `Consegna pronta · ${voce.phase}`,
-        copy: `Attempt ${voce.attempt || "?"} ha verdetto ${voce.verdetto || "positivo"}. Manca la tua accettazione.`,
+        copy:
+          `Attempt ${voce.attempt || "?"} ha verdetto ${voce.verdetto || "positivo"}. ` +
+          `Manca la tua accettazione.${dopo ? ` Dopo la firma si potrà procedere a ${dopo}.` : ""}`,
         action: "Vai all'accettazione",
       })
     );
@@ -338,6 +344,7 @@ function renderOpsBrief(data) {
   });
 
   (data.owed || []).forEach((voce) => {
+    if (voce.blocked_by_acceptance) return;
     const azione = voce.next_action || {};
     if (azione.code === "review" && (voce.codes || []).some((codice) => codice.live)) {
       return;
@@ -2172,9 +2179,6 @@ function renderActivation(data) {
   }
   const parti = [];
   if (pronti.length) parti.push(h("div", { class: "actbox" }, pronti.map(codaRow)));
-  // Le direzioni con un ordine da preparare sono AZIONI, non un archivio in fondo alla pagina:
-  // restano accanto alle fasi da mandare e prima delle liste lunghe in attesa.
-  if (dovuti.length) parti.push(owedGroup(dovuti));
   if (daAccettare.length) {
     parti.push(
       h("div", { class: "actbox" }, [
@@ -2238,6 +2242,9 @@ function renderActivation(data) {
       ])
     );
   }
+  // Dopo l'accettazione, le direzioni sono il passo successivo. Restano prima delle liste lunghe
+  // in attesa e non vengono proposte mentre l'esito che le ha generate e' ancora aperto.
+  if (dovuti.length) parti.push(owedGroup(dovuti));
   if (inCorso.length) {
     parti.push(
       h("div", { class: "actbox" }, [
@@ -3631,7 +3638,29 @@ function spiegaPassaggio(voce) {
   const ruolo = seguente ? ruoloFase(seguente) : "";
   const negativo = /(?:needs_changes|fail|rejected|respint)/.test(verdetto);
   const conLimiti = /(?:with_declared_limits|partial|declared_limit)/.test(verdetto);
+  const dopoAccettazione = voce.next_after_acceptance;
 
+  if (voce.blocked_by_acceptance) {
+    const prossimo = dopoAccettazione
+      ? ` Dopo l'accettazione si potrà procedere a ${dopoAccettazione} (${ruoloFase(dopoAccettazione)}).`
+      : "";
+    if (negativo) {
+      return {
+        title: `${precedente} ha concluso un controllo negativo`,
+        body: `${precedente} non ha superato il controllo. Registra l'esito e correggi le eccezioni prima di proseguire.${prossimo}`,
+      };
+    }
+    if (conLimiti) {
+      return {
+        title: `${precedente} è pronto per l'accettazione con limiti`,
+        body: `${precedente} ha superato il controllo, ma restano limiti dichiarati. Accetta l'esito per procedere.${prossimo}`,
+      };
+    }
+    return {
+      title: `${precedente} è pronto per l'accettazione`,
+      body: `${precedente} ha superato il controllo. Accetta l'esito per procedere.${prossimo}`,
+    };
+  }
   if (negativo) {
     return {
       title: `${precedente} richiede un nuovo passaggio`,
