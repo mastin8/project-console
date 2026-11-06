@@ -217,7 +217,8 @@ class CodaAutomaticaTests(unittest.TestCase):
 
             prompt = mandate.busta(ws, "DEMO1")
             inizio = prompt.index("    schema: project-console-transition/1.0")
-            fine = prompt.index("\n\nSCHEMA DEI REPORT", inizio)
+            fine = prompt.index("    # FINE RICHIESTA", inizio)
+            fine = prompt.find("\n", fine) + 1
             richiesta = yaml.safe_load(textwrap.dedent(prompt[inizio:fine]))
             richiesta["requested_by"] = "/test"
             richiesta["requested_at"] = "2026-11-03T17:05:00+01:00"
@@ -242,6 +243,55 @@ class CodaAutomaticaTests(unittest.TestCase):
             self.assertEqual(aggiornato["active_claims"][1]["status"], "taken")
             self.assertEqual(aggiornato["active_claims"][1]["attempt"], 2)
             self.assertEqual(aggiornato["active_claims"][1]["taken_by"], "/test")
+
+    def test_generated_claim_promotes_a_reservation_in_one_atomic_request(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            ws = self._workspace(root)
+            state_path = root / "state.yaml"
+            documento = yaml.safe_load(state_path.read_text(encoding="utf-8"))
+            documento["active_claims"][0].update(
+                {
+                    "status": "pre_registered",
+                    "attempt": 2,
+                    "order": "dispatch-queue/ordine.yaml",
+                }
+            )
+            state_path.write_text(
+                yaml.safe_dump(documento, sort_keys=False),
+                encoding="utf-8",
+            )
+
+            prompt = mandate.busta(ws, "DEMO1")
+            inizio = prompt.index("    schema: project-console-transition/1.0")
+            fine = prompt.index("    # FINE RICHIESTA", inizio)
+            fine = prompt.find("\n", fine) + 1
+            richiesta = yaml.safe_load(textwrap.dedent(prompt[inizio:fine]))
+            self.assertIn("fields", richiesta)
+            self.assertNotIn("item", richiesta)
+            self.assertEqual(richiesta["fields"]["status"], "taken")
+            richiesta["requested_by"] = "/test"
+            richiesta["requested_at"] = "2026-11-06T14:17:30+01:00"
+            richiesta["fields"]["taken_by"] = "/test"
+            richiesta["fields"]["taken_at"] = "2026-11-06T14:17:30+01:00"
+            richiesta["fields"]["owner"] = "/test"
+            percorso = ws.transitions_dir / "20261106T141730-test-promote.yaml"
+            percorso.write_text(
+                yaml.safe_dump(richiesta, sort_keys=False),
+                encoding="utf-8",
+            )
+
+            esito = coda.applica(ws)
+
+            aggiornato = yaml.safe_load(state_path.read_text(encoding="utf-8"))
+            self.assertIn("1 applicate", esito["esito"])
+            self.assertEqual(len(aggiornato["active_claims"]), 1)
+            presa = aggiornato["active_claims"][0]
+            self.assertEqual(presa["status"], "taken")
+            self.assertEqual(presa["attempt"], 2)
+            self.assertEqual(presa["taken_by"], "/test")
+            self.assertEqual(presa["taken_at"].isoformat(), "2026-11-06T14:17:30+01:00")
+            self.assertEqual(presa["owner"], "/test")
 
     def test_version_fingerprint_tracks_files_outside_the_main_registries(self):
         with tempfile.TemporaryDirectory() as tmp:

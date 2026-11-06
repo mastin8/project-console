@@ -77,6 +77,40 @@ def _occorrenza_per(ws, fase):
     return max(quante, 1)
 
 
+def prenotazione(ws, fase):
+    """La prenotazione da promuovere, se esiste; None quando va creata una presa nuova."""
+    estado = _leggi(ws.state_path)
+    occorrenza = 0
+    trovata = None
+    for voce in estado.get("active_claims") or []:
+        if str(voce.get("task_id")) != str(fase):
+            continue
+        occorrenza += 1
+        if (
+            voce.get("status") in ("pre_registered", "ready")
+            and not str(voce.get("released_at") or "").strip()
+        ):
+            trovata = {
+                "occurrence": occorrenza,
+                "attempt": int(voce.get("attempt") or 0),
+                "order": str(voce.get("order") or ""),
+            }
+    return trovata
+
+
+def presa_in_corso(ws, fase):
+    estado = _leggi(ws.state_path)
+    for voce in estado.get("active_claims") or []:
+        if str(voce.get("task_id")) != str(fase):
+            continue
+        if (
+            voce.get("status") in ("active", "taken", "active_extension")
+            and not str(voce.get("released_at") or "").strip()
+        ):
+            return voce
+    return None
+
+
 def _prossimo_tentativo(ws, fase):
     """Il numero del nuovo tentativo: dopo report e prese gia' visti."""
     numeri = []
@@ -493,15 +527,45 @@ def busta(ws, fase):
     dello stesso prompt non trova nessun ostacolo. Per questo e' la PRIMA riga, e per questo la
     mette il coordinatore invece di sperare che chi scrive il prompt se ne ricordi.
     """
-    nuova = _nuova_presa(ws, fase)
-    item = nuova["item"]
-    return "\n".join(
-        [
-            "════ PRIMA ISTRUZIONE — DICHIARA CHE STAI LAVORANDO, PRIMA DI QUALUNQUE ALTRA COSA ════",
-            f"Questa fase e' {fase} e la stai prendendo TU: deposita la presa adesso, sul registro.",
+    pre = prenotazione(ws, fase)
+    in_corso = presa_in_corso(ws, fase)
+    if in_corso:
+        deposito = [
+            "Esiste GIA' una presa in corso per questa fase.",
+            f"Titolare: {in_corso.get('taken_by') or in_corso.get('owner_agent') or 'non dichiarato'}.",
+            "FERMATI: non depositare una seconda presa e non toccare i byte.",
             "",
-            "Se esiste gia' una presa VIVA per questa fase, FERMATI e dillo. Altrimenti crea una voce",
-            "NUOVA: non modificare la presa di un tentativo precedente.",
+        ]
+    elif pre:
+        deposito = [
+            "Esiste una PRENOTAZIONE per questa fase: promuovila a presa in corso.",
+            "Non creare una voce nuova e non modificare le prese released precedenti.",
+            "",
+            f"Scrivi il file {ws.transitions_dir}/<timestamp>-<tua-corsia>.yaml con DENTRO:",
+            "",
+            "    schema: project-console-transition/1.0",
+            "    requested_by: <la tua corsia>",
+            "    requested_at: '<adesso, ISO>'",
+            f"    file: {ws.state}",
+            f'    anchor: "- task_id: {fase}"',
+            f"    occurrence: {pre['occurrence']}",
+            "    fields:",
+            "      status: taken",
+            "      taken_by: <la tua corsia>",
+            "      taken_at: '<adesso, ISO>'",
+            "      owner: <la tua corsia>",
+            "    # FINE RICHIESTA",
+            "",
+            "Questa singola richiesta aggiorna in modo atomico la prenotazione",
+            f"attempt-{pre['attempt']} senza crearne una seconda.",
+            "",
+        ]
+    else:
+        nuova = _nuova_presa(ws, fase)
+        item = nuova["item"]
+        deposito = [
+            "Non esiste una prenotazione: crea una voce NUOVA.",
+            "Non modificare la presa di un tentativo precedente.",
             "",
             f"Scrivi il file {ws.transitions_dir}/<timestamp>-<tua-corsia>.yaml con DENTRO:",
             "",
@@ -523,7 +587,17 @@ def busta(ws, fase):
             "      registered_at: '<adesso, ISO>'",
             "      registered_by: <la tua corsia>",
             "      owner: <la tua corsia>",
+            "    # FINE RICHIESTA",
             "",
+            "Questa singola richiesta crea una presa completa e atomica con il nuovo attempt.",
+            "",
+        ]
+    return "\n".join(
+        [
+            "════ PRIMA ISTRUZIONE — DICHIARA CHE STAI LAVORANDO, PRIMA DI QUALUNQUE ALTRA COSA ════",
+            f"Questa fase e' {fase} e la stai prendendo TU: deposita la presa adesso, sul registro.",
+            "",
+            *deposito,
             # Lo schema lo dichiara il progetto, e questa riga viaggia con OGNI prompt (la busta sta
             # davanti anche al testo del quaderno): una piattaforma che scrive nei registri di un
             # progetto non gli impone il proprio formato di report.
@@ -533,8 +607,7 @@ def busta(ws, fase):
             "",
             *report_contract.prompt_contract(ws),
             "",
-            "Questa singola richiesta crea una presa completa e atomica con il nuovo attempt. Il",
-            "coordinatore applica la coda automaticamente; per applicarla subito esegui il batch:",
+            "Il coordinatore applica la coda automaticamente; per applicarla subito esegui il batch:",
             # Il percorso del coordinatore, ASSOLUTO: dentro il progetto di solito non esiste una
             # cartella `registers/` — un agente l'ha segnalato («il comando non esiste in questo
             # repository») dopo aver perso tempo a cercarla.

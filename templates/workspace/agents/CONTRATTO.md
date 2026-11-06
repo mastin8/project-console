@@ -161,6 +161,9 @@ Una presa nuova si crea con `item` + `position: after`: non si modifica la voce 
 tentativo precedente. Se l'ancora non e' unica e non dici `occurrence`, l'applicatore **rifiuta**
 invece di scegliere lui. L'ordine completo del ciclo e' in `pending-transitions/README.md`.
 
+Se la fase ha gia' una prenotazione `pre_registered`, non si crea una seconda voce: si aggiorna
+quella con `fields: {status: taken, taken_by, taken_at, owner}` in una sola transizione atomica.
+
 Il coordinatore applica la coda automaticamente. Per forzare subito lo stesso batch sicuro:
 `python3 registers/coda.py --workspace . --applica`.
 

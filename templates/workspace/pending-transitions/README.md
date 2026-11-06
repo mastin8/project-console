@@ -26,7 +26,20 @@ text: taken
 
 L'ancora e' la riga di APERTURA della voce, riprodotta esattamente, e deve essere unica. Campi
 facoltativi: `occurrence` (la n-esima voce con la stessa ancora), `item` (una voce NUOVA al posto
-di `field`+`text`), `position: before|after`, `mapping` (per i campi che sono mappe).
+di `field`+`text`), `position: before|after`, `mapping` (per i campi che sono mappe), `fields`
+(piu' campi della stessa voce aggiornati atomicamente).
+
+Una prenotazione `pre_registered` NON si duplica. Si promuove in una sola richiesta:
+
+```yaml
+anchor: "- task_id: ES01T"
+occurrence: 1
+fields:
+  status: taken
+  taken_by: /corsia
+  taken_at: '2026-01-01T09:00:00+02:00'
+  owner: /corsia
+```
 
 Per iniziare un nuovo tentativo non si modifica una presa released: si appende una voce completa.
 

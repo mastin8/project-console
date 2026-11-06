@@ -1936,6 +1936,9 @@ function renderActivation(data) {
   }
   const parti = [];
   if (pronti.length) parti.push(h("div", { class: "actbox" }, pronti.map(codaRow)));
+  // Le direzioni con un ordine da preparare sono AZIONI, non un archivio in fondo alla pagina:
+  // restano accanto alle fasi da mandare e prima delle liste lunghe in attesa.
+  if (dovuti.length) parti.push(owedGroup(dovuti));
   if (daAccettare.length) {
     parti.push(
       h("div", { class: "actbox" }, [
@@ -2056,7 +2059,6 @@ function renderActivation(data) {
   const timbri = data.pins || [];
   if (timbri.length) parti.unshift(pinsGroup(timbri));
   if (debiti.length) parti.unshift(debtsGroup(debiti));
-  if (dovuti.length) parti.push(owedGroup(dovuti));
   if (piano.required && !piano.approved) {
     parti.unshift(activationPlanGate(piano));
   }

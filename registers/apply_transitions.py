@@ -27,6 +27,14 @@ Un campo il cui valore e' una MAPPA si descrive con ``mapping`` invece di ``text
       report: reports/QA06T-ratify/attempt-1.yaml
       dated: '2026-10-14T18:40:00+02:00'
 
+Piu' campi della stessa voce che devono cambiare insieme si descrivono con ``fields``::
+
+    field: null
+    fields:
+      status: taken
+      taken_by: /corsia
+      taken_at: '2026-10-14T18:40:00+02:00'
+
 Uso::
 
     apply_transitions.py <richiesta.yaml> [...]     # applica in ordine
@@ -44,6 +52,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+from datetime import date, datetime
 from pathlib import Path
 
 import yaml
@@ -73,7 +82,10 @@ def read_transition(path):
     for required in ("file", "anchor"):
         if not raw.get(required):
             raise TransitionError(f"{path}: campo obbligatorio mancante: {required}")
-    if raw.get("item") is not None:
+    if raw.get("fields") is not None:
+        if not isinstance(raw["fields"], dict) or not raw["fields"]:
+            raise TransitionError(f"{path}: 'fields' deve essere una mappa non vuota")
+    elif raw.get("item") is not None:
         if not isinstance(raw["item"], dict) or not raw["item"]:
             raise TransitionError(f"{path}: 'item' deve essere una mappa non vuota")
     elif raw.get("mapping") is not None:
@@ -288,6 +300,22 @@ def apply_to_lines(lines, request):
     start = locate_block(lines, anchor, request.get("occurrence"))
     end = block_bounds(lines, start)
 
+    if request.get("fields") is not None:
+        updated = lines
+        for field, text in request["fields"].items():
+            if isinstance(text, (date, datetime)):
+                text = text.isoformat()
+            updated = apply_to_lines(
+                updated,
+                {
+                    **request,
+                    "fields": None,
+                    "field": str(field),
+                    "text": str(text),
+                },
+            )
+        return updated
+
     if request.get("item") is not None:
         item = request["item"]
         if item_already_present(lines, item):
@@ -432,6 +460,8 @@ def main(argv=None):
             # avvenuto farebbe riapplicare la richiesta da chi legge l'esito.
             if request.get("item") is not None:
                 label = f"item({request['item'].get('task_id', '?')})"
+            elif request.get("fields") is not None:
+                label = f"fields({', '.join(request['fields'])})"
             else:
                 label = request["field"]
             print(f"APPLICATA {path}: {request['file']}#{label}")

@@ -2270,6 +2270,14 @@ def build_handler(state):
                     # testo consegnato a un esecutore e non deve cambiare sotto. Se il ricomposto
                     # adesso e' diverso, lo si dichiara invece di sostituirlo in silenzio.
                     congelato = mandate.da_ordine(state.workspace, target)
+                    # Una prenotazione o una presa in corso e' uno stato VIVO: il vecchio corpo
+                    # congelato puo' contenere istruzioni non piu' valide (per esempio "crea una
+                    # seconda presa" quando va invece promossa quella gia' prenotata). In quel caso
+                    # si serve il prompt ricomposto adesso dal registro.
+                    if mandate.prenotazione(state.workspace, target) or mandate.presa_in_corso(
+                        state.workspace, target
+                    ):
+                        congelato = None
                     # Ma un ordine che punta a un attempt gia' su disco non e' il prompt di un
                     # NUOVO atto: mostrarlo manderebbe a scrivere sopra una consegna (HIST02A,
                     # 2026-10-17: ordine dell'attempt 1, attempt-1 esistente).
