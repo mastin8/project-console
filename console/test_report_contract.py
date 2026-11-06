@@ -1,6 +1,7 @@
 """Il report dei progetti nuovi dichiara usage e provenienza Git."""
 from __future__ import annotations
 
+import hashlib
 import sys
 import tempfile
 import unittest
@@ -18,6 +19,62 @@ from workspace import Workspace  # noqa: E402
 
 
 class ReportContractTests(unittest.TestCase):
+    def test_t_report_requires_a_review(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace = SimpleNamespace(root=Path(tmp))
+            self.assertTrue(
+                report_contract.review_errors(
+                    workspace,
+                    {},
+                    phase_kind="independent_verification",
+                )
+            )
+
+    def test_backend_review_checks_proof_hash_and_diff(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            (root / "reviews" / "DEMOT" / "attempt-1").mkdir(parents=True)
+            proof = root / "reviews" / "DEMOT" / "attempt-1" / "proof.txt"
+            proof.write_text("5 test superati\n", encoding="utf-8")
+            workspace = SimpleNamespace(root=root)
+            review = {
+                "review": {
+                    "kind": "backend",
+                    "title": "Verifica perimetro",
+                    "summary": "Un utente vede solo il proprio perimetro.",
+                    "route": "/politics/",
+                    "steps": ["Apri la pagina e controlla il risultato."],
+                    "captured_at": "2099-01-01T10:00:00+01:00",
+                    "proof": {
+                        "command": "manage.py test",
+                        "result": "exit 0",
+                        "duration": "1.2 s",
+                        "output_path": "reviews/DEMOT/attempt-1/proof.txt",
+                        "output_sha256": hashlib.sha256(proof.read_bytes()).hexdigest(),
+                    },
+                    "diff": {
+                        "summary": ["Separato l'accesso tra enti fratelli."],
+                        "paths": [],
+                    },
+                }
+            }
+            self.assertEqual(
+                report_contract.review_errors(
+                    workspace,
+                    review,
+                    phase_kind="independent_verification",
+                ),
+                [],
+            )
+            review["review"]["proof"]["output_sha256"] = "0" * 64
+            self.assertTrue(
+                report_contract.review_errors(
+                    workspace,
+                    review,
+                    phase_kind="independent_verification",
+                )
+            )
+
     def test_usage_can_be_measured_or_explicitly_unavailable(self):
         self.assertEqual(
             report_contract.usage_errors(

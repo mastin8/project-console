@@ -53,6 +53,7 @@ class Workspace:
     decisions: str = "decisions.yaml"
     user_decisions: str = "user_decisions.yaml"
     reports: str = "reports"
+    reviews: str = "reviews"
     refinements: str = "refinements.yaml"
     plan_approval: str = "plan-approval.yaml"
     queue: str = "PARALLEL-PROMPTS.md"
@@ -62,6 +63,9 @@ class Workspace:
     brand: str = "brand"
     view: str = "STATUS.html"
     deliverable_prefix: str = "reports/"
+    #: L'applicazione reale che la review di una fase T deve mostrare. La console la collega,
+    #: non la avvia e non ne possiede il ciclo di vita.
+    app_url: str = ""
     #: Gli schemi che il coordinatore SCRIVE. Un progetto con un formato suo di report lo dichiara qui
     #: e l'atto di accettazione usa il suo, invece di imporgli quello di questa piattaforma.
     report_schema: str = "project-console-report/1.0"
@@ -158,6 +162,8 @@ class Workspace:
                 else (str(item), "")
                 for item in data["verify"] or []
             )
+        if "app_url" in data:
+            data["app_url"] = str(data["app_url"] or "").rstrip("/")
         return cls(root=base, **data)
 
     def writable_check(self) -> list:

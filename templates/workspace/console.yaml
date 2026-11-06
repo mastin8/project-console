@@ -19,6 +19,10 @@ surface: "verifica del percorso"
 # deliverable_prefix: reports/
 # report_schema: project-console-report/1.0
 # pointer_schema: project-console-report-pointer/1.0
+# L'app reale mostrata dalle review T: la console la collega, non la avvia.
+# app_url: "http://127.0.0.1:8003"
+# Artefatti di review locali: screenshot, prove backend e diff.
+# reviews: reviews
 # Cancelli obbligatori dei progetti nuovi. Un workspace storico può lasciarli a false.
 require_usage: true
 require_git_provenance: true

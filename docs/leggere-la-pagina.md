@@ -34,6 +34,7 @@ consegnato.
 | nome del progetto + la vista | da `console.yaml` (`project`, `surface`) | niente |
 | «istantanea di … (adesso)» | quando la pagina ha letto i registri. Ogni 5 secondi controlla solo le date di modifica e si rilegge da sola se sono cambiate (non mentre stai scrivendo in un campo, ne' con un dialogo aperto) | se il server non risponde, premi **Ricarica** |
 | **Stato del flusso** | riassume fasi in corso, prenotazioni, accettazioni e direzioni aperte; la sequenza A/E/T/R evidenzia dove si sta lavorando | leggi il riquadro **Adesso** per il prossimo gesto e gli alert per capire se attendere, accettare o rifare |
+| **Ultima verifica** | mostra l'ultima consegna T con percorso reale, prova backend o screenshot, cambiamenti in parole semplici e diff tecnico | **Apri nell'app** porta all'applicazione; il diff serve solo per il controllo tecnico |
 | **15 aperte** | unita' non ancora accettate | clic: filtra su «Aperte» e ti porta alla linea del tempo |
 | **4 respinte** | fasi respinte in verifica (`needs_changes`, `failed`): tornano a chi le esegue, non a te | clic: filtra e ti porta sulla prima |
 | **3 in corso** | fasi con una **presa viva**: qualcuno ci sta lavorando adesso | clic: vai a «In corso adesso» |

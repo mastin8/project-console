@@ -156,6 +156,26 @@ archiviazione delle riuscite e ripristino se il file non regge piu' la validazio
 `registers/coda.py --applica` forza lo stesso batch sicuro. Formato in
 `templates/workspace/pending-transitions/README.md`.
 
+### Review delle consegne T
+
+Una consegna `independent_verification` deve dichiarare nel report un blocco `review`. La console
+usa `console.yaml#app_url` per aprire l'applicazione esistente e `reviews/` per gli artefatti locali.
+La review contiene il percorso osservato, i passi, una prova backend oppure uno screenshot UI, un
+riepilogo leggibile dei cambiamenti e il diff tecnico. Hash e data devono corrispondere ai file vivi:
+una prova precedente a un'altra modifica viene rifiutata.
+
+Per le schermate autenticate si usa un account review dedicato. In PoliticUX:
+
+```bash
+POLITICUX_REVIEW_USERNAME=review \
+POLITICUX_REVIEW_PASSWORD='...' \
+POLITICUX_REVIEW_SIGLA_ID=1 \
+python manage.py review_account
+```
+
+La password resta solo nell'ambiente. L'account è un admin della sigla indicata e non un
+superadmin.
+
 ## Il primo giorno di un progetto: aprire le fasi
 
 Una fase non si puo' prendere se il registro non ha la sua voce: `tasks.yaml` dichiara la mappa,

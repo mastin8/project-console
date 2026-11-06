@@ -286,7 +286,15 @@ def leggi(ws, fase, state=None, tasks_doc=None):
         cartella / f"attempt-{tentativi[-1]}.yaml" if tentativi else None
     )
     giudicato = _leggi(da_giudicare) if da_giudicare else {}
-    violazioni_contratto = report_contract.validate(ws, giudicato) if giudicato else []
+    violazioni_contratto = (
+        report_contract.validate(
+            ws,
+            giudicato,
+            phase_kind=(task or {}).get("kind"),
+        )
+        if giudicato
+        else []
+    )
     if violazioni_contratto:
         motivi.append(
             "il report non rispetta il contratto obbligatorio: "

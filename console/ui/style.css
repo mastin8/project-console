@@ -179,6 +179,7 @@ h1 .surface{color:var(--ink-3);font-weight:450;font-size:15px}
   text-wrap:pretty}
 .ops-alerts{display:grid;gap:var(--s2);margin-top:var(--s3)}
 .ops-alerts:empty{display:none}
+.ops-alerts[hidden]{display:none}
 .ops-alert{display:grid;grid-template-columns:auto minmax(0,1fr) auto;gap:var(--s2) var(--s3);
   align-items:start;padding:var(--s3);border:1px solid var(--line-strong);border-radius:var(--r-sm);
   background:var(--surface-2)}
@@ -195,12 +196,38 @@ h1 .surface{color:var(--ink-3);font-weight:450;font-size:15px}
 .ops-alert.is-live .ops-alert__icon{color:var(--accent)}
 .ops-alert.is-clear{border-color:var(--ok);background:var(--ok-soft)}
 .ops-alert.is-clear .ops-alert__icon{color:var(--ok)}
+.ops-review{margin-top:var(--s4);padding-top:var(--s4);border-top:1px solid var(--line)}
+.ops-review[hidden]{display:none}
+.ops-review__head{display:flex;align-items:flex-start;justify-content:space-between;gap:var(--s3);
+  flex-wrap:wrap}
+.ops-review__head h3{margin:0;font-size:15px;font-weight:650}
+.ops-review__head p{margin:3px 0 0;color:var(--ink-2);font-size:12.5px;max-width:74ch}
+.ops-review__actions{display:flex;gap:var(--s2);flex-wrap:wrap}
+.ops-review__actions a{display:inline-flex;align-items:center;min-height:34px;padding:6px 11px;
+  border:1px solid var(--line-strong);border-radius:var(--r-sm);font-size:12.5px;font-weight:650}
+.ops-review__shot{display:block;width:100%;max-height:360px;object-fit:cover;object-position:top;
+  margin-top:var(--s3);border:1px solid var(--line-strong);border-radius:var(--r-sm);
+  background:var(--surface-2)}
+.ops-review__grid{display:grid;grid-template-columns:minmax(0,1.25fr) minmax(240px,.75fr);
+  gap:var(--s4);margin-top:var(--s3)}
+.ops-review__grid h4{margin:0 0 var(--s15);font-size:12.5px;color:var(--ink-3);
+  text-transform:uppercase;letter-spacing:.04em}
+.ops-review__grid ul{margin:0;padding-left:18px;color:var(--ink-2);font-size:12.5px}
+.ops-review__grid li+li{margin-top:4px}
+.ops-review__proof{margin:0;padding:var(--s3);border-radius:var(--r-sm);background:var(--surface-2);
+  color:var(--ink-2);font:12px/1.55 var(--mono);white-space:pre-wrap;overflow-wrap:anywhere}
+.ops-review details{margin-top:var(--s3);font-size:12.5px}
+.ops-review summary{cursor:pointer;color:var(--ink-2)}
+.ops-review__paths{columns:2;margin:var(--s2) 0 0;padding-left:18px;color:var(--ink-2);
+  font:11.5px/1.5 var(--mono)}
 @media (max-width:760px){
   .ops-brief{padding:var(--s3);margin-top:var(--s3)}
   .ops-brief__head{grid-template-columns:1fr;gap:var(--s3)}
   .ops-flow{grid-template-columns:repeat(2,minmax(0,1fr))}
   .ops-alert{grid-template-columns:auto minmax(0,1fr)}
   .ops-alert a{grid-column:2}
+  .ops-review__grid{grid-template-columns:1fr}
+  .ops-review__paths{columns:1}
 }
 body[data-page="costituzione"] .ops-brief{display:none}
 

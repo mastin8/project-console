@@ -323,6 +323,13 @@ def componi(ws, fase, state=None, tasks_doc=None):
                 "quelli NON rieseguiti e il motivo. Suite completa, MySQL e browser restano fuori",
                 "salvo che il contratto della fase li richieda.",
                 "",
+                "REVIEW T OBBLIGATORIA: aggiungi al report un blocco `review` verificabile.",
+                f"L'app reale è {ws.app_url or '<app_url non configurato>'}; salva gli artefatti in",
+                f"{ws.reviews}/<fase>/attempt-N/. Usa `kind: ui` con screenshot + route, `backend`",
+                "con comando/esito/output, oppure `mixed` con entrambi.",
+                "Il blocco contiene title, summary, route, steps, captured_at e diff.summary/paths;",
+                "ogni file dichiarato porta uno SHA-256 completo. Non includere credenziali o PII.",
+                "",
             ]
     righe += [
         "TESTIMONE: nel report scrivi `next` con cosa c'e' da fare dopo. Chi prende il lavoro da te",

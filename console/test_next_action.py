@@ -22,6 +22,54 @@ from workspace import Workspace  # noqa: E402
 
 
 class NextActionTests(unittest.TestCase):
+    def test_flow_prioritizes_acceptance_and_exposes_the_latest_t_review(self):
+        review = {
+            "phase": "DEMOT",
+            "route": "/politics/",
+            "url": "http://127.0.0.1:8001/politics/",
+            "summary": "La pagina mostra il risultato verificato.",
+        }
+        finto = SimpleNamespace(
+            workspace=SimpleNamespace(state="state.yaml"),
+            _load=lambda name: {},
+            _latest_review=lambda *args: review,
+        )
+        tasks_doc = {
+            "tasks": [
+                {"id": "DEMOT", "unit_id": "DEMO", "kind": "independent_verification"}
+            ]
+        }
+        percorso = [
+            {
+                "phase": "DEMOT",
+                "unit": "DEMO",
+                "title": "Verifica della modifica",
+                "consegnata": True,
+                "live": "",
+                "riservata": False,
+                "verdetto": "pass",
+                "attempt": 1,
+                "next_action": {
+                    "code": "run_phase",
+                    "target_phase": "DEMOR",
+                },
+            }
+        ]
+
+        flow = server.ReviewState._flow_snapshot(
+            finto,
+            tasks_doc=tasks_doc,
+            percorso=percorso,
+            activated=[],
+            owed=[],
+            claims=[],
+            queue={},
+        )
+
+        self.assertEqual(flow["primary"]["state"], "needs_acceptance")
+        self.assertEqual(flow["review"]["phase"], "DEMOT")
+        self.assertEqual(flow["items"][0]["review"]["url"], review["url"])
+
     def test_owed_direction_waits_for_acceptance_of_its_source_report(self):
         voce = {
             "from_phase": "FND02T",

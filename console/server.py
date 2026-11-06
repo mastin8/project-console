@@ -30,7 +30,7 @@ import time
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 import yaml
 
@@ -1177,6 +1177,34 @@ class ReviewState:
         contesto_costituzione = ""
         if gate_costituzione["approved"]:
             contesto_costituzione = constitution.prompt_context(self.workspace)
+        percorso_snapshot = activate.prossimi(self.workspace, state, tasks_doc)
+        attivabili_snapshot = activate.attivabili(
+            self.workspace, state, tasks_doc, dovuto=dovuto
+        )
+        owed_snapshot = [
+            self._owed_snapshot(voce, state)
+            for voce in dovuto
+            if voce["from_open"]
+        ]
+        activated_snapshot = [
+            {
+                "phase": fase,
+                "owner": claim_identity.owner(voce),
+                "order": voce.get("order"),
+                "status": voce.get("status"),
+                "since": voce.get("registered_at") or voce.get("taken_at"),
+            }
+            for fase, voce in activate.prese(state).items()
+        ]
+        queue_snapshot = coda.leggi(self.workspace)
+        flow_snapshot = self._flow_snapshot(
+            tasks_doc=tasks_doc,
+            percorso=percorso_snapshot,
+            activated=activated_snapshot,
+            owed=owed_snapshot,
+            claims=claims,
+            queue=queue_snapshot,
+        )
         return {
             "generated": datetime.now().strftime("%Y-%m-%d %H:%M"),
             "constitution_gate": gate_costituzione,
@@ -1241,7 +1269,7 @@ class ReviewState:
             # decisioni o prompt da lanciare. Il calcolo sta in `registers/activate.py`.
             # Una sola lettura delle direzioni dichiarate: la usano sia la coda (per sapere quali
             # fasi hanno la palla altrove) sia il blocco «quello che il registro dice che e' dovuto».
-            "activatable": activate.attivabili(self.workspace, state, tasks_doc, dovuto=dovuto),
+            "activatable": attivabili_snapshot,
             # Cosa c'e' da fare dopo: le direzioni che chi ha finito ha GIA' lasciato nei report,
             # e chi invece non le ha lasciate. Sta qui perche' la pagina non l'ha mai mostrato e
             # l'unico modo di saperlo era leggere i report a mano.
@@ -1268,11 +1296,7 @@ class ReviewState:
             # (NAV03E attempt 4, TODO03T attempt 5, TODO03R attempt 2, UPL04ZT attempt 2) erano
             # invisibili in pagina, perche' ognuno nominava una fase GIA' ACCETTATA e la coda mostra
             # solo le non accettate. Chi cercava «cosa mando adesso?» non aveva risposta.
-            "owed": [
-                self._owed_snapshot(voce, state)
-                for voce in dovuto
-                if voce["from_open"]
-            ],
+            "owed": owed_snapshot,
             # La posta in arrivo: quello che e' arrivato e non e' ancora finito in un report. E'
             # l'unico posto della pagina che non legge i registri — legge una cartella di
             # messaggi — perche' un messaggio non deve morire solo perche' non ha un campo dove
@@ -1303,26 +1327,17 @@ class ReviewState:
             # con lui tutto quello che ci legge sopra, compresa questa pagina. Misurato il
             # 2026-10-16: 129 richieste in coda, 93 depositate da piu' di dodici ore, e una fase
             # consegnata alle 10:53 che il registro leggeva ancora «respinta, attempt 3».
-            "queue": coda.leggi(self.workspace),
+            "queue": queue_snapshot,
             # IL PERCORSO: una riga per unità aperta, col suo prossimo atto. È la sorgente della coda
             # in pagina — non le dichiarazioni dei report, che nominano anche fasi vecchie o di unità
             # mai iniziate (49 «mandabili» su Binche, fra cui la R di un'unità ferma alla A).
-            "percorso": activate.prossimi(self.workspace, state, tasks_doc),
+            "percorso": percorso_snapshot,
             # Lo stato del batch automatico o manuale: la pagina lo mostra mentre lavora e quando ha
             # finito, senza che nessuno debba guardare un terminale.
             "applicazione": dict(self.applicazione),
-            "activated": [
-                {
-                    "phase": fase,
-                    # Chi tiene la fase lo dice `taken_by`; `owner` puo' essere un residuo
-                    # dell'attivazione («NESSUN TITOLARE: …») e non va mostrato come titolare.
-                    "owner": claim_identity.owner(voce),
-                    "order": voce.get("order"),
-                    "status": voce.get("status"),
-                    "since": voce.get("registered_at") or voce.get("taken_at"),
-                }
-                for fase, voce in activate.prese(state).items()
-            ],
+            "activated": activated_snapshot,
+            # Flusso canonico per la UI: il frontend non ricostruisce più priorità e conflitti.
+            "flow": flow_snapshot,
         }
 
     def timeline_payload(self):
@@ -1763,6 +1778,180 @@ class ReviewState:
             "blocked_by_acceptance": str(voce["from_phase"]) if pendente else "",
             "next_after_acceptance": azione.get("after_phase") if pendente else "",
             "next_action": azione,
+        }
+
+    def _latest_review(self, state, tasks_doc):
+        """L'ultima review T pubblicata, già pronta per il frontend."""
+        candidate = None
+        for task in tasks_doc.get("tasks") or []:
+            if str(task.get("kind") or "") != "independent_verification":
+                continue
+            fase = str(task.get("id") or "")
+            percorso, _, puntatore, report = handoff.ultimo_report(
+                self.workspace, state, fase
+            )
+            if percorso is None:
+                continue
+            review = (report or {}).get("review")
+            if not isinstance(review, dict):
+                continue
+            try:
+                ordinamento = percorso.stat().st_mtime
+            except OSError:
+                ordinamento = 0
+            if candidate is None or ordinamento > candidate[0]:
+                route = str(review.get("route") or "")
+                candidate = (
+                    ordinamento,
+                    {
+                        "phase": fase,
+                        "attempt": (report or {}).get("attempt")
+                        or (puntatore or {}).get("attempt"),
+                        "report": str(percorso.relative_to(self.workspace.root)),
+                        "verdict": str((report or {}).get("verdict") or ""),
+                        "app_url": self.workspace.app_url,
+                        "url": (
+                            f"{self.workspace.app_url}/login/?next={quote(route, safe='/')}"
+                            if self.workspace.app_url and route
+                            else ""
+                        ),
+                        **review,
+                    },
+                )
+        return candidate[1] if candidate else None
+
+    def _flow_snapshot(self, *, tasks_doc, percorso, activated, owed, claims, queue):
+        """Una sola risposta alle tre domande: cosa succede, cosa blocca, cosa fare ora."""
+        tipi = {
+            str(t.get("id")): str(t.get("kind") or "")
+            for t in tasks_doc.get("tasks") or []
+            if t.get("id")
+        }
+        review = self._latest_review(self._load(self.workspace.state) or {}, tasks_doc)
+        items = []
+        prossimi_dopo_accettazione = {
+            str(voce.get("blocked_by_acceptance") or ""): str(
+                voce.get("next_after_acceptance") or ""
+            )
+            for voce in owed
+            if voce.get("blocked_by_acceptance")
+        }
+        for voce in percorso:
+            live = str(voce.get("live") or "")
+            consegnata = bool(voce.get("consegnata"))
+            riservata = bool(voce.get("riservata"))
+            verdetto = str(voce.get("verdetto") or "").lower()
+            negativo = bool(re.search(r"needs_changes|fail|rejected|respint", verdetto))
+            if live:
+                stato = "rework_running" if negativo else "running"
+            elif consegnata:
+                stato = "needs_acceptance"
+            elif riservata:
+                stato = "reserved"
+            elif negativo:
+                stato = "needs_rework"
+            elif voce.get("attesa"):
+                stato = "blocked"
+            else:
+                stato = "ready"
+            azione = voce.get("next_action") or {}
+            items.append(
+                {
+                    "kind": "phase",
+                    "phase": voce.get("phase"),
+                    "unit": voce.get("unit"),
+                    "title": voce.get("title"),
+                    "state": stato,
+                    "attempt": voce.get("attempt"),
+                    "owner": voce.get("owner") or "",
+                    "verdict": voce.get("verdetto") or "",
+                    "next_action": azione,
+                    "requires_acceptance": stato == "needs_acceptance",
+                    "next_after_acceptance": prossimi_dopo_accettazione.get(
+                        str(voce.get("phase") or ""), ""
+                    ),
+                    "review": review if str(voce.get("phase", "")).endswith("T") else None,
+                }
+            )
+        for voce in owed:
+            azione = voce.get("next_action") or {}
+            items.append(
+                {
+                    "kind": "handoff",
+                    "phase": voce.get("from_phase"),
+                    "unit": voce.get("from_unit"),
+                    "title": f"Passaggio dopo {voce.get('from_phase')}",
+                    "state": (
+                        "waiting_acceptance"
+                        if voce.get("blocked_by_acceptance")
+                        else "ready"
+                    ),
+                    "attempt": None,
+                    "owner": "",
+                    "verdict": voce.get("from_verdict") or "",
+                    "next_action": azione,
+                    "requires_acceptance": bool(voce.get("blocked_by_acceptance")),
+                    "next_after_acceptance": voce.get("next_after_acceptance") or "",
+                }
+            )
+
+        def priority(item):
+            return {
+                "needs_rework": 0,
+                "needs_acceptance": 1,
+                "reserved": 2,
+                "rework_running": 3,
+                "running": 4,
+                "ready": 5,
+                "waiting_acceptance": 6,
+                "blocked": 7,
+            }.get(item["state"], 9)
+
+        items.sort(key=lambda item: (priority(item), str(item.get("phase") or "")))
+        primario = items[0] if items else None
+        for item in items:
+            # Le review T sono visibili anche quando la fase non è più nel percorso attivo.
+            if item["kind"] == "phase" and tipi.get(item["phase"]) == "independent_verification":
+                item["review"] = review
+        alerts = []
+        if primario:
+            alerts.append(
+                {
+                    "tone": (
+                        "critical"
+                        if primario["state"] == "needs_rework"
+                        else "action"
+                        if primario["state"] in ("needs_acceptance", "reserved")
+                        else "live"
+                    ),
+                    "title": primario["title"] or primario["phase"],
+                    "copy": primario["next_action"].get("reason")
+                    or "Questo è il prossimo passaggio.",
+                    "phase": primario["phase"],
+                }
+            )
+        if queue.get("sospette_totali"):
+            alerts.append(
+                {
+                    "tone": "critical",
+                    "title": "Coda bloccata",
+                    "copy": f"{queue['sospette_totali']} richieste richiedono una decisione.",
+                }
+            )
+        return {
+            "schema": "project-console-flow/1.0",
+            "items": items,
+            "primary": primario,
+            "alerts": alerts,
+            "review": review,
+            "counts": {
+                "running": sum(1 for item in items if item["state"] in ("running", "rework_running")),
+                "reserved": sum(1 for item in items if item["state"] == "reserved"),
+                "acceptance": sum(1 for item in items if item["state"] == "needs_acceptance"),
+                "ready": sum(
+                    1 for item in items if item["kind"] == "phase" and item["state"] == "ready"
+                ),
+            },
         }
 
     def _owed_directions(self, task_id, state=None, tasks_doc=None, *, from_phase=False):
@@ -2395,6 +2584,20 @@ def build_handler(state):
                 if not str(target).startswith(str(state.pack.resolve())) or not target.is_file():
                     return self._send(404, "non trovato", "text/plain; charset=utf-8")
                 return self._send(200, target.read_text("utf-8", errors="replace"), "text/plain; charset=utf-8")
+            if route == "/review-file":
+                wanted = (parse_qs(parsed.query).get("path") or [""])[0]
+                base = state.workspace.path(state.workspace.reviews).resolve()
+                target = (base / wanted.removeprefix("reviews/")).resolve()
+                if not str(target).startswith(str(base)) or not target.is_file():
+                    return self._send(404, "non trovato", "text/plain; charset=utf-8")
+                kind = {
+                    ".png": "image/png",
+                    ".jpg": "image/jpeg",
+                    ".jpeg": "image/jpeg",
+                    ".webp": "image/webp",
+                    ".svg": "image/svg+xml",
+                }.get(target.suffix.lower(), "application/octet-stream")
+                return self._send(200, target.read_bytes(), kind, no_store=True)
             if route == "/logo":
                 # La casella del logo nell'header. Ordine: il file del WORKSPACE (il suo `brand/`)
                 # vince sempre; poi il marchio di serie del coordinatore; senza nemmeno quello si
