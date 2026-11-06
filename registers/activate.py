@@ -504,6 +504,21 @@ def prossimi(ws, state=None, tasks_doc=None):
         for fase in vive
         if unita_di_fase.get(str(fase), "")
     }
+    nuovi_report = {}
+    for fase in unita_di_fase:
+        percorso_report, _, _, documento = handoff.ultimo_report(ws, state, fase)
+        if percorso_report is None:
+            continue
+        try:
+            attempt_report = int((documento or {}).get("attempt") or 0)
+            attempt_registro = int((registrate.get(fase) or {}).get("attempt") or 0)
+            quando_report = percorso_report.stat().st_mtime
+        except (OSError, TypeError, ValueError):
+            continue
+        if attempt_report > attempt_registro:
+            corrente = nuovi_report.get(unita_di_fase[fase])
+            if corrente is None or quando_report > corrente[0]:
+                nuovi_report[unita_di_fase[fase]] = (quando_report, fase)
 
     chiuse = {
         uid
@@ -511,6 +526,7 @@ def prossimi(ws, state=None, tasks_doc=None):
         if fasi_per_unita.get(uid)
         and all(stato_di(fase) == "accepted" for fase in fasi_per_unita[uid])
         and uid not in unita_con_presa
+        and uid not in nuovi_report
     }
     blocca = {}
     for uid, u in unita.items():
@@ -523,8 +539,11 @@ def prossimi(ws, state=None, tasks_doc=None):
             continue
         fasi_unita = fasi_per_unita.get(uid) or []
         fasi_vive = [fase for fase in fasi_unita if fase in vive]
-        fasi_aperte = fasi_vive + [
-            fase for fase in fasi_unita if stato_di(fase) != "accepted" and fase not in fasi_vive
+        riportata = (nuovi_report.get(uid) or (None, ""))[1]
+        fasi_aperte = fasi_vive + ([riportata] if riportata and riportata not in fasi_vive else []) + [
+            fase
+            for fase in fasi_unita
+            if stato_di(fase) != "accepted" and fase not in fasi_vive and fase != riportata
         ]
         if not fasi_aperte:
             continue
@@ -628,6 +647,7 @@ def prossimi(ws, state=None, tasks_doc=None):
                 "title": str(next((t.get("title") for t in tasks_doc.get("tasks") or [] if str(t.get("id")) == prossima), "") or u.get("title") or ""),
                 "status": stato_di(prossima),
                 "attempt": (presa.get("attempt") if stato_presa else None)
+                or ((documento or {}).get("attempt") if riportata == prossima else None)
                 or (registrate.get(prossima) or {}).get("attempt")
                 or 0,
                 "attesa": sorted(set(attesa)),

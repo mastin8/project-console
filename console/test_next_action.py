@@ -228,6 +228,41 @@ class NextActionTests(unittest.TestCase):
             self.assertEqual(percorso[0]["attempt"], 4)
             self.assertEqual(percorso[0]["next_action"]["code"], "wait")
 
+            documento = yaml.safe_load((radice / "state.yaml").read_text(encoding="utf-8"))
+            documento["active_claims"][0]["status"] = "released"
+            documento["active_claims"][0]["released_at"] = "2026-11-06T14:13:01+01:00"
+            (radice / "state.yaml").write_text(
+                yaml.safe_dump(documento, sort_keys=False),
+                encoding="utf-8",
+            )
+            (radice / "reports" / "FND01T").mkdir(parents=True)
+            report = {
+                "task_id": "FND01T",
+                "attempt": 4,
+                "status": "published",
+                "verdict": "pass",
+                "published_at": "2026-11-06T14:12:18+01:00",
+                "next": "Procedere con FND02T.",
+            }
+            (radice / "reports" / "FND01T" / "attempt-4.yaml").write_text(
+                yaml.safe_dump(report, sort_keys=False),
+                encoding="utf-8",
+            )
+            (radice / "reports" / "FND01T.yaml").write_text(
+                yaml.safe_dump(
+                    {**report, "report": "reports/FND01T/attempt-4.yaml"},
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+
+            dopo_consegna = activate.prossimi(workspace)
+
+            self.assertEqual([voce["phase"] for voce in dopo_consegna], ["FND01T"])
+            self.assertTrue(dopo_consegna[0]["consegnata"])
+            self.assertEqual(dopo_consegna[0]["attempt"], 4)
+            self.assertEqual(dopo_consegna[0]["next_action"]["code"], "accept")
+
     def test_completed_fast_lane_without_closure_asks_for_review(self):
         azione = next_action.for_obligation(
             {
