@@ -1721,10 +1721,11 @@ function scegliScheda(chiave, scriviIndirizzo) {
    perche' non chiede niente. */
 function numeriSchede(data) {
   const posta = data.inbox || {};
+  const direzioni = separaDirezioniUnite(data.percorso || [], data.owed || []);
   const coda =
     (data.obligations || []).length +
     (data.independence_debts || []).length +
-    (data.owed || []).length +
+    direzioni.restanti.length +
     (data.activatable || []).filter(
       (voce) => !voce.altrove && !(voce.waiting_on || []).length
     ).length +
@@ -1737,6 +1738,41 @@ function numeriSchede(data) {
     corso: { numero: (data.claims || []).length, tono: "bad", cosa: "in corso" },
     date: { numero: (data.answered || []).length, tono: "ok", cosa: "già risposte" },
   };
+}
+
+/* Una direzione che nomina una fase già presente nella coda non è una seconda azione: è la
+   spiegazione del perché quella fase viene adesso. La teniamo accanto alla riga della fase, così
+   non compaiono due pulsanti identici per lo stesso lavoro. */
+function separaDirezioniUnite(percorso, direzioni) {
+  const fasiPronte = new Set(
+    (percorso || [])
+      .filter(
+        (voce) =>
+          !(voce.attesa || []).length &&
+          !voce.live &&
+          !voce.riservata &&
+          !voce.consegnata
+      )
+      .map((voce) => voce.phase || voce.code)
+      .filter(Boolean)
+  );
+  const perFase = new Map();
+  const restanti = [];
+  (direzioni || []).forEach((voce) => {
+    const azione = voce.next_action || {};
+    const target = azione.target_phase;
+    if (
+      ["run_phase", "dispatch"].includes(azione.code) &&
+      target &&
+      fasiPronte.has(target)
+    ) {
+      if (!perFase.has(target)) perFase.set(target, []);
+      perFase.get(target).push(voce);
+    } else {
+      restanti.push(voce);
+    }
+  });
+  return { perFase, restanti };
 }
 
 function renderTabs(data) {
@@ -2358,6 +2394,7 @@ function renderActivation(data) {
     (voce) =>
       !(voce.attesa || []).length && !voce.live && !voce.riservata && !voce.consegnata
   );
+  const direzioni = separaDirezioniUnite(percorso, dovuti);
   // CONSEGNATE, DA ACCETTARE: l'atto esiste (verdetto positivo) e il registro dice ancora `pending`,
   // perché l'accettazione dell'handoff è un atto a sé. Senza questo gruppo la pagina rimandava la
   // stessa fase — «Attiva e copia il prompt» su un lavoro già consegnato — che è il ciclo peggiore.
@@ -2379,7 +2416,9 @@ function renderActivation(data) {
     debiti.length
       ? `${debiti.length} ${debiti.length === 1 ? "ratifica mancante" : "ratifiche mancanti"}`
       : null,
-    dovuti.length ? `${dovuti.length} direzioni da leggere` : null,
+    direzioni.restanti.length
+      ? `${direzioni.restanti.length} direzioni da leggere`
+      : null,
   ]
     .filter(Boolean)
     .join(" · ");
@@ -2393,14 +2432,24 @@ function renderActivation(data) {
           ? "Il percorso è obbligato: una unità alla volta, e si parte solo con i prerequisiti accettati. Una riga, un'azione — premi e incolla il prompt in una chat."
           : obblighi.length || debiti.length
             ? "Non ci sono fasi da mandare, ma restano obblighi aperti e ratifiche mancanti. Parti dalle rifiniture marcate GATE."
-            : dovuti.length
+            : direzioni.restanti.length
               ? "Non ci sono fasi da mandare, ma restano direzioni dei report da leggere: non eseguirle in serie, solo quelle con «Prompt» sono da rilanciare."
               : "Niente da mandare adesso: il lavoro è in mano a qualcuno, oppure aspetta che un'altra unità sia accettata (vedi «in attesa»)."
       )
     );
   }
   const parti = [];
-  if (pronti.length) parti.push(h("div", { class: "actbox" }, pronti.map(codaRow)));
+  if (pronti.length) {
+    parti.push(
+      h(
+        "div",
+        { class: "actbox" },
+        pronti.map((voce) =>
+          codaRow(voce, direzioni.perFase.get(voce.phase || voce.code) || [])
+        )
+      )
+    );
+  }
   if (daAccettare.length) {
     parti.push(
       h("div", { class: "actbox" }, [
@@ -2466,7 +2515,7 @@ function renderActivation(data) {
   }
   // Dopo l'accettazione, le direzioni sono il passo successivo. Restano prima delle liste lunghe
   // in attesa e non vengono proposte mentre l'esito che le ha generate e' ancora aperto.
-  if (dovuti.length) parti.push(owedGroup(dovuti));
+  if (direzioni.restanti.length) parti.push(owedGroup(direzioni.restanti));
   if (inCorso.length) {
     parti.push(
       h("div", { class: "actbox" }, [
@@ -2576,7 +2625,7 @@ function activationConstitutionGate(gate) {
 
 /* Una riga della coda: il codice, l'eventuale traccia del prompt consegnato, UN pulsante. La
    spiegazione («perche' lo dice X», la misura delle respinte) sta chiusa in un `details`. */
-function codaRow(voce) {
+function codaRow(voce, direzioniOrigine = []) {
   const riga = h("div", { class: "actrow" });
   const testo = h("div", { class: "acttext" });
   const semplice = !strictMode;
@@ -2657,20 +2706,38 @@ function codaRow(voce) {
     reason: "Il motore non ha ricevuto una decisione.",
     target_phase: voce.code,
   };
+  const origini = [
+    ...new Set(
+      direzioniOrigine
+        .map((direzione) => direzione.from_phase)
+        .filter(Boolean)
+    ),
+  ];
+  const conseguenza = origini.length
+    ? `${origini.join(" e ")} ${
+        origini.length === 1 ? "ha" : "hanno"
+      } superato il controllo. Per questo il prossimo passaggio è ${
+        voce.code
+      } (${ruoloFase(voce.code)}), non un secondo tentativo della fase precedente.`
+    : "";
   testo.append(
     h("div", { class: "actnext" }, [
       h("b", {
         text: semplice
-          ? azione.code === "rework_e"
-            ? "Qualcosa non va"
-            : azione.code === "accept"
-              ? "Pronto per l'accettazione"
-              : "Prossimo passo"
+          ? conseguenza
+            ? "Perché ora"
+            : azione.code === "rework_e"
+              ? "Qualcosa non va"
+              : azione.code === "accept"
+                ? "Pronto per l'accettazione"
+                : "Prossimo passo"
           : azione.label || "Prossima azione",
       }),
       document.createTextNode(
         semplice
-          ? ` — ${humanActionReason(voce, azione, voce.verdetto)}`
+          ? ` — ${
+              conseguenza || humanActionReason(voce, azione, voce.verdetto)
+            }`
           : azione.reason
             ? ` — ${azione.reason}`
             : ""
