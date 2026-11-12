@@ -431,8 +431,16 @@ def _blocco_testimone(ws, fase, voce, titolo="COSA HA LASCIATO CHI È VENUTO PRI
             if not isinstance(finding, dict):
                 continue
             gravita = str(finding.get("severity") or "").lower()
+            stato = str(finding.get("status") or "open").lower()
             proprietario = str(finding.get("owner") or "")
-            if "block" in gravita and (not proprietario or str(fase) in proprietario):
+            if (
+                stato in ("", "open")
+                and (
+                    "block" in gravita
+                    or gravita in ("critical", "high")
+                )
+                and (not proprietario or str(fase) in proprietario)
+            ):
                 bloccanti.append(f"{finding.get('id') or '—'} ({finding.get('severity')})")
     except (OSError, yaml.YAMLError):
         bloccanti = []
@@ -496,11 +504,17 @@ def _perche(ws, fase, state=None):
 
     Vale per un rifacimento E per un handoff normale: `HIST02A` consegna un design con tre finding
     bloccanti per `HIST02E`, e senza questo blocco il prompt di E sarebbe identico a quello di una
-    fase mai cominciata. Se nessun report nomina la fase ma la verifica dell'unità è rossa e più
-    recente, si cita quella: è il caso di A11Y01T che descrive i difetti senza scrivere «E».
+    fase mai cominciata. Se l'unità ha una verifica rossa più recente dell'ultimo atto della fase,
+    quella viene prima delle direzioni precedenti: è il lavoro da correggere adesso.
     """
     if not isinstance(state, dict):
         return ""
+    # Dopo una T rossa, il corpo del prompt E deve partire dalla verifica che ha respinto
+    # l'unità. Una direzione più vecchia (per esempio quella della A) resta storia utile, ma
+    # non è il lavoro da correggere adesso.
+    voce = _verifica_respinta(ws, fase, state)
+    if voce:
+        return _blocco_testimone(ws, fase, voce, "COSA HA LASCIATO LA VERIFICA", nomina=False)
     try:
         import handoff  # import locale: `handoff` legge i report, `mandate` compone il prompt
 
@@ -513,9 +527,6 @@ def _perche(ws, fase, state=None):
         blocco = _blocco_testimone(ws, fase, voce)
         if blocco:
             return blocco
-    voce = _verifica_respinta(ws, fase, state)
-    if voce:
-        return _blocco_testimone(ws, fase, voce, "COSA HA LASCIATO LA VERIFICA", nomina=False)
     return ""
 
 
@@ -673,7 +684,13 @@ def da_ordine(ws, fase):
     E' il testo che un esecutore ha ricevuto: si legge da li' invece di ricomporlo, perche' un
     prompt che cambia dopo essere stato consegnato e' un prompt perso.
     """
+    stati = activate.mandati(ws)
     for nome in sorted(activate.ordini_aperti(ws).get(fase) or []):
+        stato = stati.get(nome) or {}
+        # Un ordine consumato o dichiarato scaduto appartiene alla storia: riconsegnarlo
+        # ripeterebbe un attempt già chiuso, con l'ancora e la consegna di allora.
+        if stato.get("consumato_da") or stato.get("scaduto"):
+            continue
         percorso = ws.root / nome
         if not percorso.is_file():
             continue

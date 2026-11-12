@@ -8,6 +8,7 @@ from contextlib import redirect_stdout
 from io import StringIO
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import patch
 
 import yaml
 
@@ -22,6 +23,67 @@ from workspace import Workspace  # noqa: E402
 
 
 class NextActionTests(unittest.TestCase):
+    def test_consumed_order_is_not_reused_for_a_new_prompt(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            radice = Path(tmp)
+            coda = radice / "dispatch-queue"
+            coda.mkdir()
+            (coda / "DEMOE-attivazione.yaml").write_text(
+                yaml.safe_dump(
+                    {
+                        "schema": "project-console-work-order/1.0",
+                        "code": "DEMOE",
+                        "activated_at": "2026-11-12T16:57:20+01:00",
+                        "prompt": "CONSEGNA: reports/DEMOE/attempt-1.yaml",
+                    },
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+            (radice / "reports" / "DEMOE").mkdir(parents=True)
+            (radice / "reports" / "DEMOE" / "attempt-1.yaml").write_text(
+                yaml.safe_dump(
+                    {
+                        "task_id": "DEMOE",
+                        "attempt": 1,
+                        "status": "published",
+                        "verdict": "accepted",
+                        "published_at": "2026-11-12T17:07:41+01:00",
+                    },
+                    sort_keys=False,
+                ),
+                encoding="utf-8",
+            )
+
+            workspace = Workspace.load(radice)
+
+            self.assertIsNone(mandate.da_ordine(workspace, "DEMOE"))
+
+    def test_rework_prompt_prioritizes_the_red_verification_over_an_older_direction(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            radice = Path(tmp)
+            workspace = Workspace.load(radice)
+            vecchia = {
+                "from_phase": "DEMOA",
+                "source": "reports/DEMOA/attempt-1.yaml",
+                "when": "2026-11-12T10:00:00+01:00",
+                "text": "Aprire DEMOE.",
+            }
+            verifica = {
+                "source": "reports/DEMOT/attempt-1.yaml",
+                "when": "2026-11-12T12:00:00+01:00",
+                "text": "Correggere DEMOT-F01 prima del nuovo tentativo.",
+            }
+
+            with patch.object(handoff, "dovuto", return_value=[vecchia]), patch.object(
+                mandate, "_verifica_respinta", return_value=verifica
+            ):
+                testo = mandate._perche(workspace, "DEMOE", {"tasks": {}})
+
+            self.assertIn("reports/DEMOT/attempt-1.yaml", testo)
+            self.assertIn("DEMOT-F01", testo)
+            self.assertNotIn("reports/DEMOA/attempt-1.yaml", testo)
+
     def test_accepted_phase_is_not_reoffered_by_an_older_direction(self):
         with tempfile.TemporaryDirectory() as tmp:
             radice = Path(tmp)
