@@ -177,6 +177,12 @@ class NextActionTests(unittest.TestCase):
             self.assertEqual(azione["code"], "rework_e")
             self.assertEqual(azione["target_phase"], "E")
 
+    def test_short_fail_verdict_returns_to_e(self):
+        azione = next_action.decide_report("T", "fail")
+        self.assertEqual(azione["code"], "rework_e")
+        self.assertEqual(azione["target_phase"], "E")
+        self.assertIn("fail", azione["reason"])
+
     def test_positive_e_asks_acceptance_then_t(self):
         azione = next_action.decide_report("E", "pass")
         self.assertEqual(azione["code"], "accept")

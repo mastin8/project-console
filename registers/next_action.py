@@ -45,6 +45,7 @@ NEGATIVE_MARKERS = (
     "needs_changes",
     "needs-changes",
     "rejected",
+    "fail",
     "failed",
     "failure",
 )
